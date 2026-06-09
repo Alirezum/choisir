@@ -1,7 +1,9 @@
+#!/usr/bin/env python3
 import os
 import random
 import sys
 from datetime import datetime
+
 
 def get_logged_items(log_file="selected_items.txt"):
     if not os.path.exists(log_file):
@@ -19,21 +21,24 @@ def get_logged_items(log_file="selected_items.txt"):
             items.add(item)
         return items
 
+
 def log_selection(item, log_file="selected_items.txt"):
     with open(log_file, "a", encoding="utf-8") as f:
         f.write(f"{datetime.now()} - {item}\n")
 
+
 def get_unselected_item(directory, log_file="selected_items.txt"):
     all_items = set(os.listdir(directory))
     if not all_items:
-        return None  
+        return None
 
     logged_items = get_logged_items(log_file)
     available_items = list(all_items - logged_items)
 
     if not available_items:
-        return None 
+        return None
     return random.choice(available_items)
+
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
