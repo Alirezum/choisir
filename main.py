@@ -23,8 +23,12 @@ def get_logged_items(log_file="selected_items.txt"):
 
 
 def log_selection(item, log_file="selected_items.txt"):
-    with open(log_file, "a", encoding="utf-8") as f:
-        f.write(f"{datetime.now()} - {item}\n")
+    try:
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(f"{datetime.now()} - {item}\n")
+    except OSError as e:
+        print(f"Error writing log: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 def get_unselected_item(directory, log_file="selected_items.txt"):
