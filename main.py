@@ -3,9 +3,10 @@ import os
 import random
 import sys
 from datetime import datetime, timezone
+from typing import Optional, Set, Tuple
 
 
-def get_logged_items(log_file="selected_items.txt"):
+def get_logged_items(log_file: str = "selected_items.txt") -> Set[str]:
     if not os.path.exists(log_file):
         return set()
     with open(log_file, "r", encoding="utf-8") as f:
@@ -32,7 +33,9 @@ def log_selection(item: str, log_file: str = "selected_items.txt") -> None:
         sys.exit(1)
 
 
-def get_unselected_item(directory, log_file="selected_items.txt"):
+def get_unselected_item(
+    directory: str, log_file: str = "selected_items.txt"
+) -> Optional[str]:
     all_items = set(os.listdir(directory))
     if not all_items:
         return None
