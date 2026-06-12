@@ -31,6 +31,15 @@ def log_selection(item: str, log_file: str = "selected_items.txt") -> None:
     except OSError as e:
         print(f"Error writing log: {e}", file=sys.stderr)
         sys.exit(1)
+    _maybe_rotate_log(log_file)
+
+
+def _maybe_rotate_log(log_file: str = "selected_items.txt") -> None:
+    try:
+        if os.path.getsize(log_file) > 1_000_000:
+            os.rename(log_file, log_file + ".old")
+    except OSError:
+        pass
 
 
 def get_unselected_item(
