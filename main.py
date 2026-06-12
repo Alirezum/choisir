@@ -2,7 +2,7 @@
 import os
 import random
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 def get_logged_items(log_file="selected_items.txt"):
@@ -22,10 +22,11 @@ def get_logged_items(log_file="selected_items.txt"):
         return items
 
 
-def log_selection(item, log_file="selected_items.txt"):
+def log_selection(item: str, log_file: str = "selected_items.txt") -> None:
     try:
         with open(log_file, "a", encoding="utf-8") as f:
-            f.write(f"{datetime.now()} - {item}\n")
+            ts = datetime.now(timezone.utc).isoformat()
+            f.write(f"{ts} - {item}\n")
     except OSError as e:
         print(f"Error writing log: {e}", file=sys.stderr)
         sys.exit(1)
