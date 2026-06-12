@@ -52,6 +52,7 @@ if __name__ == "__main__":
 
     if not os.path.isdir(dir_path):
         print("Invalid Path.", file=sys.stderr)
+        sys.exit(1)
     else:
         random_item = get_unselected_item(dir_path)
         if random_item is None:
