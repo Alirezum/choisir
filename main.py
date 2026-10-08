@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
+import fnmatch
 import json
 import random
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-DEFAULT_LOG_NAME = "selected_items.jsonl"
+DEFAULT_LOG_FILENAME = ".choosier.jsonl"
 LOG_ROTATE_BYTES = 1_000_000
 
 
@@ -26,7 +27,7 @@ def _parse_log_line(line: str) -> str | None:
     return line
 
 
-def get_logged_items(log_file: str | Path = DEFAULT_LOG_NAME) -> set[str]:
+def get_logged_items(log_file: str | Path = DEFAULT_LOG_FILENAME) -> set[str]:
     log_path = Path(log_file).expanduser()
     if not log_path.exists():
         return set()
@@ -40,7 +41,7 @@ def get_logged_items(log_file: str | Path = DEFAULT_LOG_NAME) -> set[str]:
         return items
 
 
-def log_selection(item: str, log_file: str | Path = DEFAULT_LOG_NAME) -> None:
+def log_selection(item: str, log_file: str | Path = DEFAULT_LOG_FILENAME) -> None:
     log_path = Path(log_file).expanduser()
     try:
         with open(log_path, "a", encoding="utf-8") as f:
@@ -52,7 +53,7 @@ def log_selection(item: str, log_file: str | Path = DEFAULT_LOG_NAME) -> None:
     _maybe_rotate_log(log_path)
 
 
-def _maybe_rotate_log(log_file: str | Path = DEFAULT_LOG_NAME) -> None:
+def _maybe_rotate_log(log_file: str | Path = DEFAULT_LOG_FILENAME) -> None:
     log_path = Path(log_file).expanduser()
     try:
         if log_path.stat().st_size <= LOG_ROTATE_BYTES:
@@ -73,16 +74,63 @@ def _maybe_rotate_log(log_file: str | Path = DEFAULT_LOG_NAME) -> None:
         pass
 
 
+def resolve_default_log(directory: str | Path) -> Path:
+    """Default history file colocated with the target directory.
+
+    Colocating (instead of CWD-relative) keeps history stable when the
+    tool is run from different working directories. The dot-prefix keeps
+    it out of default listings.
+    """
+    return Path(directory).expanduser() / DEFAULT_LOG_FILENAME
+
+
+def _is_managed_file(name: str, log_path: Path) -> bool:
+    if name == log_path.name:
+        return True
+    return fnmatch.fnmatch(name, f"{log_path.stem}-*{log_path.suffix}.old")
+
+
 def get_unselected_item(
-    directory: str | Path, log_file: str | Path = DEFAULT_LOG_NAME
+    directory: str | Path,
+    log_file: str | Path | None = None,
+    *,
+    include_hidden: bool = False,
+    files_only: bool = False,
+    dirs_only: bool = False,
 ) -> str | None:
+    if files_only and dirs_only:
+        raise ValueError("files_only and dirs_only are mutually exclusive")
     dir_path = Path(directory).expanduser()
-    all_items = {p.name for p in dir_path.iterdir()}
-    if not all_items:
+    log_path = (
+        Path(log_file).expanduser()
+        if log_file is not None
+        else resolve_default_log(dir_path)
+    )
+
+    try:
+        entries = list(dir_path.iterdir())
+    except FileNotFoundError:
+        return None
+    if not entries:
         return None
 
-    logged_items = get_logged_items(log_file)
-    available_items = list(all_items - logged_items)
+    candidates: set[str] = set()
+    for entry in entries:
+        name = entry.name
+        if not include_hidden and name.startswith("."):
+            continue
+        if _is_managed_file(name, log_path):
+            continue
+        if files_only and not entry.is_file():
+            continue
+        if dirs_only and not entry.is_dir():
+            continue
+        candidates.add(name)
+    if not candidates:
+        return None
+
+    logged_items = get_logged_items(log_path)
+    available_items = list(candidates - logged_items)
 
     if not available_items:
         return None
@@ -100,7 +148,8 @@ if __name__ == "__main__":
         print("Invalid Path.", file=sys.stderr)
         sys.exit(1)
     else:
-        random_item = get_unselected_item(target)
+        log_path = resolve_default_log(target)
+        random_item = get_unselected_item(target, log_path)
         if random_item is None:
             all_items = [p.name for p in target.iterdir()]
             if not all_items:
@@ -109,5 +158,5 @@ if __name__ == "__main__":
                 print("All choices have been selected. Delete log to reset.")
         else:
             print(f"The choice: {random_item}")
-            log_selection(random_item)
-            print(f"Added in {DEFAULT_LOG_NAME} with timestamp.\n")
+            log_selection(random_item, log_path)
+            print(f"Added in {log_path} with timestamp.\n")
