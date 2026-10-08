@@ -10,4 +10,10 @@ wheels/
 .venv
 
 
+# Caches
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+
 selected_items.txt
