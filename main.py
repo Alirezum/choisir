@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-import os
 import random
 import sys
-from datetime import datetime, timezone
-from typing import Optional, Set, Tuple
+from datetime import UTC, datetime
+from pathlib import Path
 
 
-def get_logged_items(log_file: str = "selected_items.txt") -> Set[str]:
-    if not os.path.exists(log_file):
+def get_logged_items(log_file: str | Path = "selected_items.txt") -> set[str]:
+    log_path = Path(log_file).expanduser()
+    if not log_path.exists():
         return set()
-    with open(log_file, "r", encoding="utf-8") as f:
+    with open(log_path, encoding="utf-8") as f:
         items = set()
         for line in f:
             line = line.strip()
@@ -23,29 +23,32 @@ def get_logged_items(log_file: str = "selected_items.txt") -> Set[str]:
         return items
 
 
-def log_selection(item: str, log_file: str = "selected_items.txt") -> None:
+def log_selection(item: str, log_file: str | Path = "selected_items.txt") -> None:
+    log_path = Path(log_file).expanduser()
     try:
-        with open(log_file, "a", encoding="utf-8") as f:
-            ts = datetime.now(timezone.utc).isoformat()
+        with open(log_path, "a", encoding="utf-8") as f:
+            ts = datetime.now(UTC).isoformat()
             f.write(f"{ts} - {item}\n")
     except OSError as e:
         print(f"Error writing log: {e}", file=sys.stderr)
         sys.exit(1)
-    _maybe_rotate_log(log_file)
+    _maybe_rotate_log(log_path)
 
 
-def _maybe_rotate_log(log_file: str = "selected_items.txt") -> None:
+def _maybe_rotate_log(log_file: str | Path = "selected_items.txt") -> None:
+    log_path = Path(log_file).expanduser()
     try:
-        if os.path.getsize(log_file) > 1_000_000:
-            os.rename(log_file, log_file + ".old")
+        if log_path.stat().st_size > 1_000_000:
+            log_path.rename(str(log_path) + ".old")
     except OSError:
         pass
 
 
 def get_unselected_item(
-    directory: str, log_file: str = "selected_items.txt"
-) -> Optional[str]:
-    all_items = set(os.listdir(directory))
+    directory: str | Path, log_file: str | Path = "selected_items.txt"
+) -> str | None:
+    dir_path = Path(directory).expanduser()
+    all_items = {p.name for p in dir_path.iterdir()}
     if not all_items:
         return None
 
@@ -63,13 +66,14 @@ if __name__ == "__main__":
     else:
         dir_path = input("Enter Path: ")
 
-    if not os.path.isdir(dir_path):
+    target = Path(dir_path).expanduser()
+    if not target.is_dir():
         print("Invalid Path.", file=sys.stderr)
         sys.exit(1)
     else:
-        random_item = get_unselected_item(dir_path)
+        random_item = get_unselected_item(target)
         if random_item is None:
-            all_items = os.listdir(dir_path)
+            all_items = [p.name for p in target.iterdir()]
             if not all_items:
                 print("Path Empty.")
             else:
@@ -77,4 +81,4 @@ if __name__ == "__main__":
         else:
             print(f"The choice: {random_item}")
             log_selection(random_item)
-            print(f"Added in selected_items.txt with timestamp.\n")
+            print("Added in selected_items.txt with timestamp.\n")
