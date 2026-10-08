@@ -1,41 +1,57 @@
 #!/usr/bin/env python3
+import json
 import random
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+DEFAULT_LOG_NAME = "selected_items.jsonl"
 
-def get_logged_items(log_file: str | Path = "selected_items.txt") -> set[str]:
+
+def _parse_log_line(line: str) -> str | None:
+    line = line.strip()
+    if not line:
+        return None
+    try:
+        obj = json.loads(line)
+    except json.JSONDecodeError:
+        pass
+    else:
+        if isinstance(obj, dict) and isinstance(obj.get("item"), str):
+            return obj["item"]
+        return None
+    if " - " in line:
+        return line.split(" - ", 1)[1]
+    return line
+
+
+def get_logged_items(log_file: str | Path = DEFAULT_LOG_NAME) -> set[str]:
     log_path = Path(log_file).expanduser()
     if not log_path.exists():
         return set()
     with open(log_path, encoding="utf-8") as f:
         items = set()
         for line in f:
-            line = line.strip()
-            if not line:
+            item = _parse_log_line(line)
+            if item is None:
                 continue
-            if " - " in line:
-                item = line.split(" - ", 1)[1]
-            else:
-                item = line
             items.add(item)
         return items
 
 
-def log_selection(item: str, log_file: str | Path = "selected_items.txt") -> None:
+def log_selection(item: str, log_file: str | Path = DEFAULT_LOG_NAME) -> None:
     log_path = Path(log_file).expanduser()
     try:
         with open(log_path, "a", encoding="utf-8") as f:
             ts = datetime.now(UTC).isoformat()
-            f.write(f"{ts} - {item}\n")
+            f.write(json.dumps({"ts": ts, "item": item}, ensure_ascii=False) + "\n")
     except OSError as e:
         print(f"Error writing log: {e}", file=sys.stderr)
         sys.exit(1)
     _maybe_rotate_log(log_path)
 
 
-def _maybe_rotate_log(log_file: str | Path = "selected_items.txt") -> None:
+def _maybe_rotate_log(log_file: str | Path = DEFAULT_LOG_NAME) -> None:
     log_path = Path(log_file).expanduser()
     try:
         if log_path.stat().st_size > 1_000_000:
@@ -45,7 +61,7 @@ def _maybe_rotate_log(log_file: str | Path = "selected_items.txt") -> None:
 
 
 def get_unselected_item(
-    directory: str | Path, log_file: str | Path = "selected_items.txt"
+    directory: str | Path, log_file: str | Path = DEFAULT_LOG_NAME
 ) -> str | None:
     dir_path = Path(directory).expanduser()
     all_items = {p.name for p in dir_path.iterdir()}
@@ -81,4 +97,4 @@ if __name__ == "__main__":
         else:
             print(f"The choice: {random_item}")
             log_selection(random_item)
-            print("Added in selected_items.txt with timestamp.\n")
+            print(f"Added in {DEFAULT_LOG_NAME} with timestamp.\n")
