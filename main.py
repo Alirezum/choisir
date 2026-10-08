@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 DEFAULT_LOG_NAME = "selected_items.jsonl"
+LOG_ROTATE_BYTES = 1_000_000
 
 
 def _parse_log_line(line: str) -> str | None:
@@ -54,8 +55,20 @@ def log_selection(item: str, log_file: str | Path = DEFAULT_LOG_NAME) -> None:
 def _maybe_rotate_log(log_file: str | Path = DEFAULT_LOG_NAME) -> None:
     log_path = Path(log_file).expanduser()
     try:
-        if log_path.stat().st_size > 1_000_000:
-            log_path.rename(str(log_path) + ".old")
+        if log_path.stat().st_size <= LOG_ROTATE_BYTES:
+            return
+    except OSError:
+        return
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    backup = log_path.with_name(f"{log_path.stem}-{stamp}{log_path.suffix}.old")
+    counter = 1
+    while backup.exists():
+        counter += 1
+        backup = log_path.with_name(
+            f"{log_path.stem}-{stamp}_{counter}{log_path.suffix}.old"
+        )
+    try:
+        log_path.rename(backup)
     except OSError:
         pass
 
