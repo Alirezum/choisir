@@ -1,10 +1,13 @@
 """Terminal UI for choosier (requires the `ui` extra)."""
 
+import json
 import random
 from pathlib import Path
 
+from rich.markup import escape
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.screen import ModalScreen
 from textual.widgets import (
     Button,
     Checkbox,
@@ -15,10 +18,16 @@ from textual.widgets import (
     RadioButton,
     RadioSet,
     Static,
+    TabbedContent,
+    TabPane,
 )
 
-from choosier.chooser import get_unselected_item, resolve_default_log
-from choosier.storage import log_selection
+from choosier.chooser import (
+    get_unselected_item,
+    list_available_items,
+    resolve_default_log,
+)
+from choosier.storage import log_selection, reset_log
 
 NO_CHOICE_TEXT = "No choice yet — enter a directory and press Pick."
 MODE_LABELS = ("all", "files", "dirs")
@@ -39,6 +48,64 @@ def resolve_log_path(target: Path, override: str) -> Path:
     return resolve_default_log(target)
 
 
+def read_history(log_path: Path) -> list[str]:
+    """Display lines for the history view (oldest first)."""
+    try:
+        raw_lines = log_path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    lines: list[str] = []
+    for raw in raw_lines:
+        line = raw.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            lines.append(line)
+            continue
+        if isinstance(obj, dict) and isinstance(obj.get("item"), str):
+            lines.append(f"{obj.get('ts', '?')}  {obj['item']}")
+    return lines
+
+
+def render_panel(lines: list[str], empty_text: str) -> str:
+    """Render view lines, markup-escaped so filenames display literally."""
+    if not lines:
+        return empty_text
+    return "\n".join(escape(line) for line in lines)
+
+
+class ConfirmScreen(ModalScreen[bool]):
+    """Yes/no confirmation dialog."""
+
+    CSS = """
+    ConfirmScreen {
+        align: center middle;
+    }
+    #confirm-box {
+        width: 60;
+        height: auto;
+        border: solid red;
+        padding: 1 2;
+    }
+    """
+
+    def __init__(self, message: str) -> None:
+        super().__init__()
+        self._message = message
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="confirm-box"):
+            yield Static(self._message)
+            with Horizontal():
+                yield Button("Yes, delete", id="yes", variant="error")
+                yield Button("Cancel", id="no", variant="primary")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        self.dismiss(event.button.id == "yes")
+
+
 class ChooserApp(App[None]):
     """Interactive directory picker with persistent history."""
 
@@ -53,10 +120,16 @@ class ChooserApp(App[None]):
         height: 3;
     }
     #browser {
-        height: 1fr;
+        height: 10;
     }
     #options {
         height: auto;
+    }
+    #checks {
+        height: 3;
+    }
+    #tabs {
+        height: 10;
     }
     """
 
@@ -87,7 +160,7 @@ class ChooserApp(App[None]):
                 id="log-input",
             )
             yield Input(placeholder="Seed (empty = random)", id="seed-input")
-            with Horizontal():
+            with Horizontal(id="checks"):
                 yield Checkbox("Dry run (don't log)", id="dry-run")
                 yield Checkbox("Include hidden", id="include-hidden")
             yield RadioSet(
@@ -96,14 +169,31 @@ class ChooserApp(App[None]):
                 RadioButton("Dirs only"),
                 id="mode",
             )
+        with TabbedContent(id="tabs"):
+            with TabPane("Remaining", id="remaining-tab"):
+                yield Static("(none)", id="remaining")
+            with TabPane("History", id="history-tab"):
+                yield Static("(no history yet)", id="history")
+                yield Button("Reset history", id="reset", variant="error")
         yield Footer()
+
+    def on_mount(self) -> None:
+        self._refresh_panels()
 
     @property
     def _target(self) -> Path:
         return Path(self.query_one("#path-input", Input).value).expanduser()
 
-    def _mode(self) -> str:
-        return MODE_LABELS[self.query_one("#mode", RadioSet).pressed_index]
+    def _current_log_path(self) -> Path:
+        return resolve_log_path(self._target, self.query_one("#log-input", Input).value)
+
+    def _picker_flags(self) -> dict[str, bool]:
+        mode = MODE_LABELS[self.query_one("#mode", RadioSet).pressed_index]
+        return {
+            "include_hidden": self.query_one("#include-hidden", Checkbox).value,
+            "files_only": mode == "files",
+            "dirs_only": mode == "dirs",
+        }
 
     def _set_status(self, message: str) -> None:
         self.query_one("#status", Static).update(message)
@@ -111,9 +201,25 @@ class ChooserApp(App[None]):
     def _show_choice(self, message: str) -> None:
         self.query_one("#choice", Static).update(message)
 
+    def _refresh_panels(self) -> None:
+        target = self._target
+        if target.is_dir():
+            log_path = self._current_log_path()
+            remaining = list_available_items(target, log_path, **self._picker_flags())
+            history = read_history(log_path)
+        else:
+            remaining = []
+            history = []
+        self.query_one("#remaining", Static).update(render_panel(remaining, "(none)"))
+        self.query_one("#history", Static).update(
+            render_panel(history, "(no history yet)")
+        )
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "pick":
             self.do_pick()
+        elif event.button.id == "reset":
+            self._ask_reset()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id in ("path-input", "seed-input", "log-input"):
@@ -124,39 +230,73 @@ class ChooserApp(App[None]):
     ) -> None:
         self.query_one("#path-input", Input).value = str(event.path)
         self._set_status(f"Directory: {event.path}")
+        self._refresh_panels()
+
+    def on_tabbed_content_tab_activated(
+        self, event: TabbedContent.TabActivated
+    ) -> None:
+        self._refresh_panels()
+
+    def _ask_reset(self) -> None:
+        target = self._target
+        if not target.is_dir():
+            self._set_status("Invalid Path.")
+            return
+        log_path = self._current_log_path()
+        self.push_screen(
+            ConfirmScreen(f"Delete history log?\n{log_path}"),
+            self._do_reset,
+        )
+
+    def _do_reset(self, confirmed: bool | None) -> None:
+        if not confirmed:
+            self._set_status("Reset cancelled.")
+            return
+        target = self._target
+        if not target.is_dir():
+            self._set_status("Invalid Path.")
+            return
+        log_path = self._current_log_path()
+        try:
+            removed = reset_log(log_path)
+        except OSError as e:
+            self._set_status(f"Error resetting log: {e}")
+            return
+        if removed:
+            self._set_status(f"Removed {log_path}.")
+        else:
+            self._set_status(f"No log at {log_path}.")
+        self._refresh_panels()
 
     def do_pick(self) -> None:
         """Pick one unselected entry, log it, and display the result."""
         target = self._target
         if not target.is_dir():
             self._set_status("Invalid Path.")
+            self._refresh_panels()
             return
         try:
             seed = parse_seed(self.query_one("#seed-input", Input).value)
         except ValueError:
             self._set_status("Invalid seed (must be an integer).")
             return
-        log_path = resolve_log_path(target, self.query_one("#log-input", Input).value)
+        log_path = self._current_log_path()
         dry_run = self.query_one("#dry-run", Checkbox).value
-        mode = self._mode()
         rng = random.Random(seed) if seed is not None else None
         random_item = get_unselected_item(
-            target,
-            log_path,
-            include_hidden=self.query_one("#include-hidden", Checkbox).value,
-            files_only=mode == "files",
-            dirs_only=mode == "dirs",
-            rng=rng,
+            target, log_path, rng=rng, **self._picker_flags()
         )
         if random_item is None:
             if any(target.iterdir()):
                 self._set_status("All choices have been selected. Delete log to reset.")
             else:
                 self._set_status("Path Empty.")
+            self._refresh_panels()
             return
         if dry_run:
             self._show_choice(random_item)
             self._set_status("Dry run: selection not logged.")
+            self._refresh_panels()
             return
         try:
             log_selection(random_item, log_path)
@@ -165,6 +305,7 @@ class ChooserApp(App[None]):
             return
         self._show_choice(random_item)
         self._set_status(f"Logged in {log_path}.")
+        self._refresh_panels()
 
 
 def run(initial_path: str = "", log_file: str | None = None) -> int:
