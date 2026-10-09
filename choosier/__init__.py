@@ -11,6 +11,7 @@ from choosier.storage import (
     LOG_ROTATE_BYTES,
     get_logged_items,
     log_selection,
+    reset_log,
 )
 
 __all__ = [
@@ -21,5 +22,6 @@ __all__ = [
     "list_available_items",
     "list_candidates",
     "log_selection",
+    "reset_log",
     "resolve_default_log",
 ]

@@ -6,6 +6,9 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = []
 
+[project.scripts]
+choosier = "choosier.cli:main"
+
 [dependency-groups]
 dev = [
   "mypy>=1.11",
@@ -28,3 +31,4 @@ warn_unused_configs = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]

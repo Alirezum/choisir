@@ -72,3 +72,17 @@ def _maybe_rotate_log(log_file: str | Path = DEFAULT_LOG_FILENAME) -> None:
         log_path.rename(backup)
     except OSError:
         pass
+
+
+def reset_log(log_file: str | Path = DEFAULT_LOG_FILENAME) -> bool:
+    """Delete a history log file.
+
+    Returns True if a file was removed, False if there was nothing to delete.
+    Other OSErrors propagate to the caller.
+    """
+    log_path = Path(log_file).expanduser()
+    try:
+        log_path.unlink()
+    except FileNotFoundError:
+        return False
+    return True

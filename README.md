@@ -1,12 +1,47 @@
-# chooser
+# choosier
 
-### This is a simple Python project called "chooser"  a random file chooser.
+A random file-or-directory chooser with persistent history. Each run picks a
+random unselected entry from a directory and records it, so repeats are
+avoided until every choice has been selected.
 
+## Usage
 
+```sh
+python -m choosier PATH
+python main.py PATH
+choosier PATH            # after installing the project scripts
+```
 
-1. Takes a directory path (CLI arg or input)
-2. Lists all items in the directory
-3. Filters out items already logged in selected_items.txt
-4. Picks a random unselected item
-5. Logs the selection with a timestamp
-6. Prints the choice
+With no `PATH`, the tool prompts with `Enter Path:`.
+
+| Flag | Effect |
+| --- | --- |
+| `--log-file PATH` | History log (default: `<target>/.choosier.jsonl`) |
+| `--reset` | Delete the history log and exit |
+| `--dry-run` | Pick without recording the selection |
+| `--seed N` | Deterministic picks |
+| `--include-hidden` | Consider dotfiles |
+| `--files-only` / `--dirs-only` | Restrict to files or directories |
+| `--list` | Print remaining picks instead of choosing |
+
+Exit codes: `0` success, `1` runtime error (invalid path, unwritable log),
+`3` directory empty, `4` all choices already selected (`2` is argparse usage
+errors).
+
+## History log
+
+Selections are stored as JSON Lines (`{"ts": ..., "item": ...}`) in
+`<target>/.choosier.jsonl`, colocated with the target so history is shared
+across working directories. Legacy `<timestamp> - <item>` lines are still
+read. Logs over 1MB rotate to timestamped `.old` backups.
+
+## Development
+
+```sh
+uv sync --group dev
+uv run pytest
+uv run ruff check .
+uv run ruff format --check .
+```
+
+`python -m unittest` also runs the suite (tests use stdlib `unittest`).
