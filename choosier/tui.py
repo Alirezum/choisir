@@ -1,15 +1,19 @@
 """Terminal UI for choosier (requires the `ui` extra)."""
 
+import random
 from pathlib import Path
 
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import (
     Button,
+    Checkbox,
     DirectoryTree,
     Footer,
     Header,
     Input,
+    RadioButton,
+    RadioSet,
     Static,
 )
 
@@ -17,6 +21,22 @@ from choosier.chooser import get_unselected_item, resolve_default_log
 from choosier.storage import log_selection
 
 NO_CHOICE_TEXT = "No choice yet — enter a directory and press Pick."
+MODE_LABELS = ("all", "files", "dirs")
+
+
+def parse_seed(text: str) -> int | None:
+    """Parse a seed input; blank means random. Raises ValueError if invalid."""
+    stripped = text.strip()
+    if not stripped:
+        return None
+    return int(stripped)
+
+
+def resolve_log_path(target: Path, override: str) -> Path:
+    """Effective history log: explicit override or colocated default."""
+    if override.strip():
+        return Path(override).expanduser()
+    return resolve_default_log(target)
 
 
 class ChooserApp(App[None]):
@@ -35,6 +55,9 @@ class ChooserApp(App[None]):
     #browser {
         height: 1fr;
     }
+    #options {
+        height: auto;
+    }
     """
 
     BINDINGS = [("q", "quit", "Quit")]
@@ -42,7 +65,7 @@ class ChooserApp(App[None]):
     def __init__(self, initial_path: str = "", log_file: str | None = None) -> None:
         super().__init__()
         self._initial_path = initial_path
-        self._log_file_override = log_file
+        self._initial_log = log_file or ""
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -57,16 +80,30 @@ class ChooserApp(App[None]):
                 yield Button("Pick", id="pick", variant="primary")
                 yield Static("", id="status")
             yield DirectoryTree(Path.home(), id="browser")
+        with Vertical(id="options"):
+            yield Input(
+                value=self._initial_log,
+                placeholder="Log file (empty = <directory>/.choosier.jsonl)",
+                id="log-input",
+            )
+            yield Input(placeholder="Seed (empty = random)", id="seed-input")
+            with Horizontal():
+                yield Checkbox("Dry run (don't log)", id="dry-run")
+                yield Checkbox("Include hidden", id="include-hidden")
+            yield RadioSet(
+                RadioButton("Files and dirs", value=True),
+                RadioButton("Files only"),
+                RadioButton("Dirs only"),
+                id="mode",
+            )
         yield Footer()
 
     @property
     def _target(self) -> Path:
         return Path(self.query_one("#path-input", Input).value).expanduser()
 
-    def _log_path(self, target: Path) -> Path:
-        if self._log_file_override is not None:
-            return Path(self._log_file_override).expanduser()
-        return resolve_default_log(target)
+    def _mode(self) -> str:
+        return MODE_LABELS[self.query_one("#mode", RadioSet).pressed_index]
 
     def _set_status(self, message: str) -> None:
         self.query_one("#status", Static).update(message)
@@ -79,7 +116,7 @@ class ChooserApp(App[None]):
             self.do_pick()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
-        if event.input.id == "path-input":
+        if event.input.id in ("path-input", "seed-input", "log-input"):
             self.do_pick()
 
     def on_directory_tree_directory_selected(
@@ -94,13 +131,32 @@ class ChooserApp(App[None]):
         if not target.is_dir():
             self._set_status("Invalid Path.")
             return
-        log_path = self._log_path(target)
-        random_item = get_unselected_item(target, log_path)
+        try:
+            seed = parse_seed(self.query_one("#seed-input", Input).value)
+        except ValueError:
+            self._set_status("Invalid seed (must be an integer).")
+            return
+        log_path = resolve_log_path(target, self.query_one("#log-input", Input).value)
+        dry_run = self.query_one("#dry-run", Checkbox).value
+        mode = self._mode()
+        rng = random.Random(seed) if seed is not None else None
+        random_item = get_unselected_item(
+            target,
+            log_path,
+            include_hidden=self.query_one("#include-hidden", Checkbox).value,
+            files_only=mode == "files",
+            dirs_only=mode == "dirs",
+            rng=rng,
+        )
         if random_item is None:
             if any(target.iterdir()):
                 self._set_status("All choices have been selected. Delete log to reset.")
             else:
                 self._set_status("Path Empty.")
+            return
+        if dry_run:
+            self._show_choice(random_item)
+            self._set_status("Dry run: selection not logged.")
             return
         try:
             log_selection(random_item, log_path)
