@@ -17,3 +17,7 @@ wheels/
 
 
 selected_items.txt
+selected_items.jsonl
+selected_items-*.old
+.choosier.jsonl
+.choosier-*.old
