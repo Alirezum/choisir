@@ -28,6 +28,19 @@ Exit codes: `0` success, `1` runtime error (invalid path, unwritable log),
 `3` directory empty, `4` all choices already selected (`2` is argparse usage
 errors).
 
+## Terminal UI
+
+Full-parity interactive UI (pick loop, filters, seed, dry-run, log-file
+control, remaining/history views, guarded reset):
+
+```sh
+pip install "choosier[ui]"
+choosier --ui [PATH]
+```
+
+`python -m choosier --ui` works too. Edge states that are CLI exit codes
+appear as status-bar messages in the UI.
+
 ## History log
 
 Selections are stored as JSON Lines (`{"ts": ..., "item": ...}`) in
