@@ -9,6 +9,9 @@ dependencies = []
 [project.scripts]
 choosier = "choosier.cli:main"
 
+[project.optional-dependencies]
+ui = ["textual>=8"]
+
 [dependency-groups]
 dev = [
   "mypy>=1.11",

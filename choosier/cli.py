@@ -77,6 +77,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="List remaining picks instead of choosing.",
     )
+    parser.add_argument(
+        "--ui",
+        action="store_true",
+        help="Launch the interactive terminal UI.",
+    )
     return parser
 
 
@@ -92,6 +97,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Run the chooser. Returns a process exit code."""
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.ui:
+        try:
+            from choosier.tui import run
+        except ImportError:
+            print(
+                "The UI needs the 'ui' extra: pip install 'choosier[ui]'.",
+                file=sys.stderr,
+            )
+            return 1
+        return run(
+            initial_path=args.path or "",
+            log_file=args.log_file,
+        )
     if args.files_only and args.dirs_only:
         parser.error("--files-only and --dirs-only are mutually exclusive")
 
