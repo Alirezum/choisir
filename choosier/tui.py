@@ -1,7 +1,10 @@
 """Terminal UI for choosier (requires the `ui` extra)."""
 
 import json
+import os
 import random
+import subprocess
+import sys
 from pathlib import Path
 
 from rich.markup import escape
@@ -76,6 +79,25 @@ def render_panel(lines: list[str], empty_text: str) -> str:
     if not lines:
         return empty_text
     return "\n".join(escape(line) for line in lines)
+
+
+def launch_path(entry: Path) -> None:
+    """Open an entry with the OS default handler (non-blocking).
+
+    Raises:
+        OSError: If no handler is available or launching fails.
+    """
+    if sys.platform == "win32":
+        os.startfile(str(entry))
+        return
+    if sys.platform == "darwin":
+        cmd = ["open", str(entry)]
+    else:
+        cmd = ["xdg-open", str(entry)]
+    try:
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except FileNotFoundError as e:
+        raise OSError(f"No program available to open files ({cmd[0]})") from e
 
 
 def preview_entry(
@@ -172,6 +194,9 @@ class ChooserApp(App[None]):
     #checks {
         height: 3;
     }
+    #actions {
+        height: 3;
+    }
     #tabs {
         height: 10;
     }
@@ -197,7 +222,9 @@ class ChooserApp(App[None]):
                 yield Static(NO_CHOICE_TEXT, id="choice")
                 with Vertical(id="preview-wrap"):
                     yield Static("(preview appears here)", id="preview")
-                yield Button("Pick", id="pick", variant="primary")
+                with Horizontal(id="actions"):
+                    yield Button("Pick", id="pick", variant="primary")
+                    yield Button("Open", id="open")
                 yield Static("", id="status")
             yield DirectoryTree(Path.home(), id="browser")
         with Vertical(id="options"):
@@ -225,6 +252,7 @@ class ChooserApp(App[None]):
         yield Footer()
 
     def on_mount(self) -> None:
+        self.query_one("#open", Button).disabled = True
         self._refresh_panels()
 
     @property
@@ -247,6 +275,7 @@ class ChooserApp(App[None]):
 
     def _show_choice(self, message: str) -> None:
         self.query_one("#choice", Static).update(message)
+        self.query_one("#open", Button).disabled = False
 
     def _update_preview(self) -> None:
         if self._current_choice is None:
@@ -272,6 +301,8 @@ class ChooserApp(App[None]):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "pick":
             self.do_pick()
+        elif event.button.id == "open":
+            self._open_current()
         elif event.button.id == "reset":
             self._ask_reset()
 
@@ -321,6 +352,21 @@ class ChooserApp(App[None]):
         else:
             self._set_status(f"No log at {log_path}.")
         self._refresh_panels()
+
+    def _open_current(self) -> None:
+        """Open the current choice with the OS default handler."""
+        if self._current_choice is None:
+            self._set_status("Pick something first.")
+            return
+        if not self._current_choice.exists():
+            self._set_status(f"Gone: {self._current_choice.name}")
+            return
+        try:
+            launch_path(self._current_choice)
+        except OSError as e:
+            self._set_status(f"Cannot open: {e}")
+            return
+        self._set_status(f"Opened {self._current_choice.name}.")
 
     def do_pick(self) -> None:
         """Pick one unselected entry, log it, and display the result."""

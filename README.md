@@ -40,7 +40,10 @@ choosier --ui [PATH]
 
 `python -m choosier --ui` works too. Edge states that are CLI exit codes
 appear as status-bar messages in the UI. Each pick also shows a short
-preview (text head, directory entry count, or binary/empty notice).
+preview (text head, directory entry count, or binary/empty notice). The
+`Open` button launches the current choice with the OS default program
+(`xdg-open` / `open` / file association) — only use it on directories
+you trust, since opening a file runs its associated application.
 
 ## History log
 

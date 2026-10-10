@@ -3,9 +3,11 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 try:
     from choosier.tui import (
+        launch_path,
         parse_seed,
         preview_entry,
         read_history,
@@ -132,6 +134,44 @@ class PreviewEntryTest(unittest.TestCase):
         lonely.mkdir()
         (lonely / "only").touch()
         self.assertEqual(preview_entry(lonely), "<directory with 1 entry>")
+
+
+@unittest.skipUnless(HAS_TEXTUAL, "ui extra (textual) not installed")
+class LaunchPathTest(unittest.TestCase):
+    def test_linux_uses_xdg_open(self) -> None:
+        with (
+            patch("choosier.tui.sys.platform", "linux"),
+            patch("choosier.tui.subprocess.Popen") as popen,
+        ):
+            launch_path(Path("/tmp/picked.txt"))
+        self.assertEqual(popen.call_args[0][0], ["xdg-open", "/tmp/picked.txt"])
+
+    def test_macos_uses_open(self) -> None:
+        with (
+            patch("choosier.tui.sys.platform", "darwin"),
+            patch("choosier.tui.subprocess.Popen") as popen,
+        ):
+            launch_path(Path("/tmp/picked.txt"))
+        self.assertEqual(popen.call_args[0][0], ["open", "/tmp/picked.txt"])
+
+    def test_missing_handler_raises_oserror(self) -> None:
+        with (
+            patch("choosier.tui.sys.platform", "linux"),
+            patch(
+                "choosier.tui.subprocess.Popen",
+                side_effect=FileNotFoundError("xdg-open"),
+            ),
+        ):
+            with self.assertRaises(OSError):
+                launch_path(Path("/tmp/picked.txt"))
+
+    def test_windows_uses_startfile(self) -> None:
+        with (
+            patch("choosier.tui.sys.platform", "win32"),
+            patch("os.startfile", create=True) as startfile,
+        ):
+            launch_path(Path("/tmp/picked.txt"))
+        startfile.assert_called_once_with("/tmp/picked.txt")
 
 
 if __name__ == "__main__":
