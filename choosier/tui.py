@@ -237,7 +237,7 @@ class ChooserApp(App[None]):
                 with TabPane("History", id="history-tab"):
                     yield Static("(no history yet)", id="history")
                     yield Button("Archive history", id="archive")
-                    yield Button("Reset history", id="reset", variant="error")
+                    yield Button("Clear history", id="clear", variant="error")
                 with TabPane("Options", id="options-tab"):
                     yield Input(
                         value=self._initial_log,
@@ -311,8 +311,8 @@ class ChooserApp(App[None]):
             self._open_current()
         elif event.button.id == "archive":
             self._archive_history()
-        elif event.button.id == "reset":
-            self._ask_reset()
+        elif event.button.id == "clear":
+            self._ask_clear()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id in ("path-input", "seed-input", "log-input"):
@@ -348,20 +348,20 @@ class ChooserApp(App[None]):
             self._set_status(f"Archived to {backup.name}.")
         self._refresh_panels()
 
-    def _ask_reset(self) -> None:
+    def _ask_clear(self) -> None:
         target = self._target
         if not target.is_dir():
             self._set_status("Invalid Path.")
             return
         log_path = self._current_log_path()
         self.push_screen(
-            ConfirmScreen(f"Delete history log?\n{log_path}"),
-            self._do_reset,
+            ConfirmScreen(f"Clear all history?\n{log_path}"),
+            self._do_clear,
         )
 
-    def _do_reset(self, confirmed: bool | None) -> None:
+    def _do_clear(self, confirmed: bool | None) -> None:
         if not confirmed:
-            self._set_status("Reset cancelled.")
+            self._set_status("Clear cancelled.")
             return
         target = self._target
         if not target.is_dir():

@@ -45,7 +45,7 @@ preview (text head, directory entry count, or binary/empty notice). The
 (`xdg-open` / `open` / file association) — only use it on directories
 you trust, since opening a file runs its associated application.
 `Archive history` files the current log away as a timestamped backup;
-`Reset history` deletes it (with confirmation).
+`Clear history` deletes it (with confirmation).
 
 ## History log
 
