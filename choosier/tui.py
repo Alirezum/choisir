@@ -30,7 +30,7 @@ from choosier.chooser import (
     list_available_items,
     resolve_default_log,
 )
-from choosier.storage import log_selection, reset_log
+from choosier.storage import archive_log, log_selection, reset_log
 
 NO_CHOICE_TEXT = "No choice yet — enter a directory and press Pick."
 MODE_LABELS = ("all", "files", "dirs")
@@ -236,6 +236,7 @@ class ChooserApp(App[None]):
                     yield Static("(none)", id="remaining")
                 with TabPane("History", id="history-tab"):
                     yield Static("(no history yet)", id="history")
+                    yield Button("Archive history", id="archive")
                     yield Button("Reset history", id="reset", variant="error")
                 with TabPane("Options", id="options-tab"):
                     yield Input(
@@ -308,6 +309,8 @@ class ChooserApp(App[None]):
             self.do_pick()
         elif event.button.id == "open":
             self._open_current()
+        elif event.button.id == "archive":
+            self._archive_history()
         elif event.button.id == "reset":
             self._ask_reset()
 
@@ -325,6 +328,24 @@ class ChooserApp(App[None]):
     def on_tabbed_content_tab_activated(
         self, event: TabbedContent.TabActivated
     ) -> None:
+        self._refresh_panels()
+
+    def _archive_history(self) -> None:
+        """Move the history log to a timestamped backup (no confirm needed)."""
+        target = self._target
+        if not target.is_dir():
+            self._set_status("Invalid Path.")
+            return
+        log_path = self._current_log_path()
+        try:
+            backup = archive_log(log_path)
+        except OSError as e:
+            self._set_status(f"Error archiving log: {e}")
+            return
+        if backup is None:
+            self._set_status(f"No log at {log_path}.")
+        else:
+            self._set_status(f"Archived to {backup.name}.")
         self._refresh_panels()
 
     def _ask_reset(self) -> None:

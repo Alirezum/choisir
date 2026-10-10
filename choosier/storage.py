@@ -53,13 +53,8 @@ def log_selection(item: str, log_file: str | Path = DEFAULT_LOG_FILENAME) -> Non
     _maybe_rotate_log(log_path)
 
 
-def _maybe_rotate_log(log_file: str | Path = DEFAULT_LOG_FILENAME) -> None:
-    log_path = Path(log_file).expanduser()
-    try:
-        if log_path.stat().st_size <= LOG_ROTATE_BYTES:
-            return
-    except OSError:
-        return
+def _backup_path(log_path: Path) -> Path:
+    """Timestamped backup name for a log file, with a counter on collision."""
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     backup = log_path.with_name(f"{log_path.stem}-{stamp}{log_path.suffix}.old")
     counter = 1
@@ -68,10 +63,36 @@ def _maybe_rotate_log(log_file: str | Path = DEFAULT_LOG_FILENAME) -> None:
         backup = log_path.with_name(
             f"{log_path.stem}-{stamp}_{counter}{log_path.suffix}.old"
         )
+    return backup
+
+
+def _maybe_rotate_log(log_file: str | Path = DEFAULT_LOG_FILENAME) -> None:
+    log_path = Path(log_file).expanduser()
     try:
-        log_path.rename(backup)
+        if log_path.stat().st_size <= LOG_ROTATE_BYTES:
+            return
+    except OSError:
+        return
+    try:
+        log_path.rename(_backup_path(log_path))
     except OSError:
         pass
+
+
+def archive_log(log_file: str | Path = DEFAULT_LOG_FILENAME) -> Path | None:
+    """Move the history log to a timestamped backup, starting fresh.
+
+    Returns the backup path, or None if there was nothing to archive.
+    Other OSErrors propagate to the caller.
+    """
+    log_path = Path(log_file).expanduser()
+    if not log_path.exists():
+        return None
+    if log_path.is_dir():
+        raise IsADirectoryError(f"Not a history file: {log_path}")
+    backup = _backup_path(log_path)
+    log_path.rename(backup)
+    return backup
 
 
 def reset_log(log_file: str | Path = DEFAULT_LOG_FILENAME) -> bool:

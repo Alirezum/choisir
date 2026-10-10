@@ -10,6 +10,7 @@ from unittest.mock import patch
 from choosier.storage import (
     _maybe_rotate_log,
     _parse_log_line,
+    archive_log,
     get_logged_items,
     log_selection,
     reset_log,
@@ -145,6 +146,31 @@ class ResetLogTest(unittest.TestCase):
     def test_unremovable_path_raises(self) -> None:
         with self.assertRaises(OSError):
             reset_log(Path(self.tmp.name))
+
+
+class ArchiveLogTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.log = Path(self.tmp.name) / "history.jsonl"
+
+    def test_moves_log_to_timestamped_backup(self) -> None:
+        log_selection("a", self.log)
+        backup = archive_log(self.log)
+        self.assertIsNotNone(backup)
+        assert backup is not None
+        self.assertFalse(self.log.exists())
+        self.assertTrue(backup.exists())
+        self.assertIn("history-", backup.name)
+        self.assertTrue(backup.name.endswith(".jsonl.old"))
+        self.assertEqual(get_logged_items(backup), {"a"})
+
+    def test_missing_log_returns_none(self) -> None:
+        self.assertIsNone(archive_log(self.log))
+
+    def test_unarchivable_path_raises(self) -> None:
+        with self.assertRaises(OSError):
+            archive_log(Path(self.tmp.name))
 
 
 if __name__ == "__main__":

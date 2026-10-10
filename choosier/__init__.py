@@ -9,6 +9,7 @@ from choosier.chooser import (
 from choosier.storage import (
     DEFAULT_LOG_FILENAME,
     LOG_ROTATE_BYTES,
+    archive_log,
     get_logged_items,
     log_selection,
     reset_log,
@@ -17,6 +18,7 @@ from choosier.storage import (
 __all__ = [
     "DEFAULT_LOG_FILENAME",
     "LOG_ROTATE_BYTES",
+    "archive_log",
     "get_logged_items",
     "get_unselected_item",
     "list_available_items",
