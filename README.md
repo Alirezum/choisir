@@ -39,7 +39,8 @@ choosier --ui [PATH]
 ```
 
 `python -m choosier --ui` works too. Edge states that are CLI exit codes
-appear as status-bar messages in the UI.
+appear as status-bar messages in the UI. Each pick also shows a short
+preview (text head, directory entry count, or binary/empty notice).
 
 ## History log
 

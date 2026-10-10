@@ -7,6 +7,7 @@ from pathlib import Path
 try:
     from choosier.tui import (
         parse_seed,
+        preview_entry,
         read_history,
         render_panel,
         resolve_log_path,
@@ -86,6 +87,51 @@ class RenderPanelTest(unittest.TestCase):
 
     def test_names_joined_and_escaped(self) -> None:
         self.assertEqual(render_panel(["a", "b[weird]"], "(none)"), "a\nb\\[weird]")
+
+
+@unittest.skipUnless(HAS_TEXTUAL, "ui extra (textual) not installed")
+class PreviewEntryTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+
+    def test_text_file_shows_first_lines(self) -> None:
+        target = self.root / "doc.txt"
+        target.write_text("one\ntwo\nthree\n", encoding="utf-8")
+        self.assertEqual(preview_entry(target), "one\ntwo\nthree")
+
+    def test_long_file_truncates(self) -> None:
+        target = self.root / "long.txt"
+        target.write_text("\n".join(f"line{i}" for i in range(30)), encoding="utf-8")
+        preview = preview_entry(target)
+        self.assertIn("line0", preview)
+        self.assertNotIn("line29", preview)
+        self.assertIn("truncated", preview)
+
+    def test_binary_file_reports_size(self) -> None:
+        target = self.root / "blob.bin"
+        target.write_bytes(b"\x00\x01\x02binary")
+        self.assertEqual(preview_entry(target), "<binary file, 9 bytes>")
+
+    def test_empty_file(self) -> None:
+        target = self.root / "empty.txt"
+        target.write_text("", encoding="utf-8")
+        self.assertEqual(preview_entry(target), "(empty file)")
+
+    def test_missing_entry(self) -> None:
+        self.assertEqual(preview_entry(self.root / "gone"), "(gone)")
+
+    def test_directory_reports_count(self) -> None:
+        sub = self.root / "sub"
+        sub.mkdir()
+        (sub / "a").touch()
+        (sub / "b").touch()
+        self.assertEqual(preview_entry(sub), "<directory with 2 entries>")
+        lonely = self.root / "lonely"
+        lonely.mkdir()
+        (lonely / "only").touch()
+        self.assertEqual(preview_entry(lonely), "<directory with 1 entry>")
 
 
 if __name__ == "__main__":

@@ -31,6 +31,8 @@ from choosier.storage import log_selection, reset_log
 
 NO_CHOICE_TEXT = "No choice yet — enter a directory and press Pick."
 MODE_LABELS = ("all", "files", "dirs")
+PREVIEW_MAX_LINES = 10
+PREVIEW_MAX_BYTES = 8_192
 
 
 def parse_seed(text: str) -> int | None:
@@ -76,6 +78,44 @@ def render_panel(lines: list[str], empty_text: str) -> str:
     return "\n".join(escape(line) for line in lines)
 
 
+def preview_entry(
+    entry: Path,
+    max_lines: int = PREVIEW_MAX_LINES,
+    max_bytes: int = PREVIEW_MAX_BYTES,
+) -> str:
+    """Short display text for a picked entry (never reads much)."""
+    try:
+        if not entry.exists():
+            return "(gone)"
+        if entry.is_dir():
+            try:
+                count = sum(1 for _ in entry.iterdir())
+            except OSError:
+                return "<directory>"
+            noun = "entry" if count == 1 else "entries"
+            return f"<directory with {count} {noun}>"
+        try:
+            with open(entry, "rb") as f:
+                chunk = f.read(max_bytes + 1)
+        except OSError as e:
+            return f"(unreadable: {e})"
+        truncated = len(chunk) > max_bytes
+        head = chunk[:max_bytes]
+        if b"\x00" in head:
+            size = f"{max_bytes}+" if truncated else str(len(head))
+            return f"<binary file, {size} bytes>"
+        lines = head.decode("utf-8", errors="replace").splitlines()
+        if not lines:
+            return "(empty file)"
+        shown = lines[:max_lines]
+        out = "\n".join(shown)
+        if len(lines) > max_lines or truncated:
+            out += "\n… (truncated)"
+        return out
+    except OSError as e:
+        return f"(unreadable: {e})"
+
+
 class ConfirmScreen(ModalScreen[bool]):
     """Yes/no confirmation dialog."""
 
@@ -119,6 +159,10 @@ class ChooserApp(App[None]):
     #status {
         height: 3;
     }
+    #preview-wrap {
+        height: 10;
+        overflow-y: auto;
+    }
     #browser {
         height: 10;
     }
@@ -139,6 +183,7 @@ class ChooserApp(App[None]):
         super().__init__()
         self._initial_path = initial_path
         self._initial_log = log_file or ""
+        self._current_choice: Path | None = None
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -150,6 +195,8 @@ class ChooserApp(App[None]):
         with Horizontal():
             with Vertical():
                 yield Static(NO_CHOICE_TEXT, id="choice")
+                with Vertical(id="preview-wrap"):
+                    yield Static("(preview appears here)", id="preview")
                 yield Button("Pick", id="pick", variant="primary")
                 yield Static("", id="status")
             yield DirectoryTree(Path.home(), id="browser")
@@ -200,6 +247,13 @@ class ChooserApp(App[None]):
 
     def _show_choice(self, message: str) -> None:
         self.query_one("#choice", Static).update(message)
+
+    def _update_preview(self) -> None:
+        if self._current_choice is None:
+            text = "(preview appears here)"
+        else:
+            text = preview_entry(self._current_choice)
+        self.query_one("#preview", Static).update(escape(text))
 
     def _refresh_panels(self) -> None:
         target = self._target
@@ -295,6 +349,8 @@ class ChooserApp(App[None]):
             return
         if dry_run:
             self._show_choice(random_item)
+            self._current_choice = target / random_item
+            self._update_preview()
             self._set_status("Dry run: selection not logged.")
             self._refresh_panels()
             return
@@ -304,6 +360,8 @@ class ChooserApp(App[None]):
             self._set_status(f"Error writing log: {e}")
             return
         self._show_choice(random_item)
+        self._current_choice = target / random_item
+        self._update_preview()
         self._set_status(f"Logged in {log_path}.")
         self._refresh_panels()
 
