@@ -173,7 +173,7 @@ class ChooserApp(App[None]):
 
     CSS = """
     #choice {
-        height: 5;
+        height: 3;
         content-align: center middle;
         text-style: bold;
         border: solid green;
@@ -181,15 +181,17 @@ class ChooserApp(App[None]):
     #status {
         height: 3;
     }
+    #main {
+        height: 1fr;
+    }
+    #left {
+        width: 1fr;
+        height: 100%;
+    }
     #preview-wrap {
-        height: 10;
+        height: 1fr;
+        min-height: 4;
         overflow-y: auto;
-    }
-    #browser {
-        height: 10;
-    }
-    #options {
-        height: auto;
     }
     #checks {
         height: 3;
@@ -198,7 +200,8 @@ class ChooserApp(App[None]):
         height: 3;
     }
     #tabs {
-        height: 10;
+        width: 1fr;
+        height: 100%;
     }
     """
 
@@ -217,8 +220,8 @@ class ChooserApp(App[None]):
             placeholder="Directory path",
             id="path-input",
         )
-        with Horizontal():
-            with Vertical():
+        with Horizontal(id="main"):
+            with Vertical(id="left"):
                 yield Static(NO_CHOICE_TEXT, id="choice")
                 with Vertical(id="preview-wrap"):
                     yield Static("(preview appears here)", id="preview")
@@ -226,33 +229,35 @@ class ChooserApp(App[None]):
                     yield Button("Pick", id="pick", variant="primary")
                     yield Button("Open", id="open")
                 yield Static("", id="status")
-            yield DirectoryTree(Path.home(), id="browser")
-        with Vertical(id="options"):
-            yield Input(
-                value=self._initial_log,
-                placeholder="Log file (empty = <directory>/.choosier.jsonl)",
-                id="log-input",
-            )
-            yield Input(placeholder="Seed (empty = random)", id="seed-input")
-            with Horizontal(id="checks"):
-                yield Checkbox("Dry run (don't log)", id="dry-run")
-                yield Checkbox("Include hidden", id="include-hidden")
-            yield RadioSet(
-                RadioButton("Files and dirs", value=True),
-                RadioButton("Files only"),
-                RadioButton("Dirs only"),
-                id="mode",
-            )
-        with TabbedContent(id="tabs"):
-            with TabPane("Remaining", id="remaining-tab"):
-                yield Static("(none)", id="remaining")
-            with TabPane("History", id="history-tab"):
-                yield Static("(no history yet)", id="history")
-                yield Button("Reset history", id="reset", variant="error")
+            with TabbedContent(id="tabs"):
+                with TabPane("Browse", id="browse-tab"):
+                    yield DirectoryTree(Path.home(), id="browser")
+                with TabPane("Remaining", id="remaining-tab"):
+                    yield Static("(none)", id="remaining")
+                with TabPane("History", id="history-tab"):
+                    yield Static("(no history yet)", id="history")
+                    yield Button("Reset history", id="reset", variant="error")
+                with TabPane("Options", id="options-tab"):
+                    yield Input(
+                        value=self._initial_log,
+                        placeholder="Log file (empty = <directory>/.choosier.jsonl)",
+                        id="log-input",
+                    )
+                    yield Input(placeholder="Seed (empty = random)", id="seed-input")
+                    with Horizontal(id="checks"):
+                        yield Checkbox("Dry run (don't log)", id="dry-run")
+                        yield Checkbox("Include hidden", id="include-hidden")
+                    yield RadioSet(
+                        RadioButton("Files and dirs", value=True),
+                        RadioButton("Files only"),
+                        RadioButton("Dirs only"),
+                        id="mode",
+                    )
         yield Footer()
 
     def on_mount(self) -> None:
         self.query_one("#open", Button).disabled = True
+        self.query_one("#pick", Button).focus()
         self._refresh_panels()
 
     @property
