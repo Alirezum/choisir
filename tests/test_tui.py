@@ -8,6 +8,7 @@ from unittest.mock import patch
 try:
     from choosier.tui import (
         launch_path,
+        load_log,
         parse_seed,
         preview_entry,
         read_history,
@@ -172,6 +173,35 @@ class LaunchPathTest(unittest.TestCase):
         ):
             launch_path(Path("/tmp/picked.txt"))
         startfile.assert_called_once_with("/tmp/picked.txt")
+
+
+@unittest.skipUnless(HAS_TEXTUAL, "ui extra (textual) not installed")
+class LoadLogTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.log = Path(self.tmp.name) / "history.jsonl"
+
+    def test_missing_file_returns_empties(self) -> None:
+        self.assertEqual(load_log(self.log), (set(), []))
+
+    def test_single_read_yields_names_and_display(self) -> None:
+        self.log.write_text(
+            '{"ts": "2026-01-01T00:00:00+00:00", "item": "new"}\n'
+            "2026-01-02T00:00:00+00:00 - old - item\n"
+            "\n"
+            "[1, 2]\n",
+            encoding="utf-8",
+        )
+        names, display = load_log(self.log)
+        self.assertEqual(names, {"new", "old - item"})
+        self.assertEqual(
+            display,
+            [
+                "2026-01-01T00:00:00+00:00  new",
+                "2026-01-02T00:00:00+00:00 - old - item",
+            ],
+        )
 
 
 if __name__ == "__main__":

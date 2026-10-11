@@ -12,6 +12,7 @@ from choosier.storage import (
     archive_log,
     get_logged_items,
     log_selection,
+    parse_log_line,
     reset_log,
 )
 
@@ -24,6 +25,7 @@ __all__ = [
     "list_available_items",
     "list_candidates",
     "log_selection",
+    "parse_log_line",
     "reset_log",
     "resolve_default_log",
 ]

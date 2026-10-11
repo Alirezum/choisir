@@ -8,21 +8,31 @@ DEFAULT_LOG_FILENAME = ".choosier.jsonl"
 LOG_ROTATE_BYTES = 1_000_000
 
 
-def _parse_log_line(line: str) -> str | None:
-    line = line.strip()
-    if not line:
-        return None
+def parse_log_line(line: str) -> tuple[str | None, str | None]:
+    """Parse one history line into (timestamp, item).
+
+    Returns (None, None) for blank or malformed lines. Legacy
+    '<ts> - <item>' and plain lines yield a None timestamp.
+    """
+    stripped = line.strip()
+    if not stripped:
+        return None, None
     try:
-        obj = json.loads(line)
+        obj = json.loads(stripped)
     except json.JSONDecodeError:
         pass
     else:
         if isinstance(obj, dict) and isinstance(obj.get("item"), str):
-            return obj["item"]
-        return None
-    if " - " in line:
-        return line.split(" - ", 1)[1]
-    return line
+            ts = obj.get("ts")
+            return (ts if isinstance(ts, str) else None, obj["item"])
+        return None, None
+    if " - " in stripped:
+        return None, stripped.split(" - ", 1)[1]
+    return None, stripped
+
+
+def _parse_log_line(line: str) -> str | None:
+    return parse_log_line(line)[1]
 
 
 def get_logged_items(log_file: str | Path = DEFAULT_LOG_FILENAME) -> set[str]:

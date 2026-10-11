@@ -1,6 +1,5 @@
 """Terminal UI for choosier (requires the `ui` extra)."""
 
-import json
 import os
 import random
 import subprocess
@@ -27,10 +26,15 @@ from textual.widgets import (
 
 from choosier.chooser import (
     get_unselected_item,
-    list_available_items,
+    list_candidates,
     resolve_default_log,
 )
-from choosier.storage import archive_log, log_selection, reset_log
+from choosier.storage import (
+    archive_log,
+    log_selection,
+    parse_log_line,
+    reset_log,
+)
 
 NO_CHOICE_TEXT = "No choice yet — enter a directory and press Pick."
 MODE_LABELS = ("all", "files", "dirs")
@@ -55,23 +59,27 @@ def resolve_log_path(target: Path, override: str) -> Path:
 
 def read_history(log_path: Path) -> list[str]:
     """Display lines for the history view (oldest first)."""
+    return load_log(log_path)[1]
+
+
+def load_log(log_path: Path) -> tuple[set[str], list[str]]:
+    """Read a history log once: (logged names, history display lines)."""
     try:
         raw_lines = log_path.read_text(encoding="utf-8").splitlines()
     except OSError:
-        return []
-    lines: list[str] = []
+        return set(), []
+    names: set[str] = set()
+    display: list[str] = []
     for raw in raw_lines:
-        line = raw.strip()
-        if not line:
+        stripped = raw.strip()
+        if not stripped:
             continue
-        try:
-            obj = json.loads(line)
-        except json.JSONDecodeError:
-            lines.append(line)
+        ts, item = parse_log_line(stripped)
+        if item is None:
             continue
-        if isinstance(obj, dict) and isinstance(obj.get("item"), str):
-            lines.append(f"{obj.get('ts', '?')}  {obj['item']}")
-    return lines
+        names.add(item)
+        display.append(f"{ts}  {item}" if ts is not None else stripped)
+    return names, display
 
 
 def render_panel(lines: list[str], empty_text: str) -> str:
@@ -294,8 +302,13 @@ class ChooserApp(App[None]):
         target = self._target
         if target.is_dir():
             log_path = self._current_log_path()
-            remaining = list_available_items(target, log_path, **self._picker_flags())
-            history = read_history(log_path)
+            flags = self._picker_flags()
+            try:
+                candidates = list_candidates(target, log_path, **flags)
+            except FileNotFoundError:
+                candidates = set()
+            logged, history = load_log(log_path)
+            remaining = sorted(candidates - logged)
         else:
             remaining = []
             history = []
