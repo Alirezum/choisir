@@ -40,6 +40,7 @@ NO_CHOICE_TEXT = "No choice yet — enter a directory and press Pick."
 MODE_LABELS = ("all", "files", "dirs")
 PREVIEW_MAX_LINES = 10
 PREVIEW_MAX_BYTES = 8_192
+PANEL_MAX_LINES = 200
 
 
 def parse_seed(text: str) -> int | None:
@@ -82,11 +83,22 @@ def load_log(log_path: Path) -> tuple[set[str], list[str]]:
     return names, display
 
 
-def render_panel(lines: list[str], empty_text: str) -> str:
-    """Render view lines, markup-escaped so filenames display literally."""
+def render_panel(
+    lines: list[str], empty_text: str, max_lines: int = PANEL_MAX_LINES
+) -> str:
+    """Render view lines, markup-escaped so filenames display literally.
+
+    Long views are capped to the newest entries with a count header.
+    """
     if not lines:
         return empty_text
-    return "\n".join(escape(line) for line in lines)
+    if len(lines) > max_lines:
+        shown = lines[-max_lines:]
+        header = f"(showing last {max_lines} of {len(lines)})\n"
+    else:
+        shown = lines
+        header = ""
+    return header + "\n".join(escape(line) for line in shown)
 
 
 def launch_path(entry: Path) -> None:

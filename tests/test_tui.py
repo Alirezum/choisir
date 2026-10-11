@@ -91,6 +91,14 @@ class RenderPanelTest(unittest.TestCase):
     def test_names_joined_and_escaped(self) -> None:
         self.assertEqual(render_panel(["a", "b[weird]"], "(none)"), "a\nb\\[weird]")
 
+    def test_long_views_capped_with_count(self) -> None:
+        lines = [f"item{i}" for i in range(5)]
+        self.assertEqual(
+            render_panel(lines, "(none)", max_lines=3),
+            "(showing last 3 of 5)\nitem2\nitem3\nitem4",
+        )
+        self.assertEqual(render_panel(lines, "(none)", max_lines=5), "\n".join(lines))
+
 
 @unittest.skipUnless(HAS_TEXTUAL, "ui extra (textual) not installed")
 class PreviewEntryTest(unittest.TestCase):
