@@ -159,7 +159,7 @@ class ConfirmScreen(ModalScreen[bool]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="confirm-box"):
-            yield Static(self._message)
+            yield Static(escape(self._message))
             with Horizontal():
                 yield Button("Yes, delete", id="yes", variant="error")
                 yield Button("Cancel", id="no", variant="primary")
@@ -277,7 +277,7 @@ class ChooserApp(App[None]):
         }
 
     def _set_status(self, message: str) -> None:
-        self.query_one("#status", Static).update(message)
+        self.query_one("#status", Static).update(escape(message))
 
     def _show_choice(self, message: str) -> None:
         self.query_one("#choice", Static).update(message)
