@@ -40,6 +40,7 @@ NO_CHOICE_TEXT = "No choice yet — enter a directory and press Pick."
 MODE_LABELS = ("all", "files", "dirs")
 PREVIEW_MAX_LINES = 10
 PREVIEW_MAX_BYTES = 8_192
+PREVIEW_MAX_COUNT = 1_000
 PANEL_MAX_LINES = 200
 
 
@@ -131,7 +132,11 @@ def preview_entry(
             return "(gone)"
         if entry.is_dir():
             try:
-                count = sum(1 for _ in entry.iterdir())
+                count = 0
+                for _ in entry.iterdir():
+                    count += 1
+                    if count > PREVIEW_MAX_COUNT:
+                        return f"<directory with {PREVIEW_MAX_COUNT}+ entries>"
             except OSError:
                 return "<directory>"
             noun = "entry" if count == 1 else "entries"

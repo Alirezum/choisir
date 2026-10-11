@@ -144,6 +144,13 @@ class PreviewEntryTest(unittest.TestCase):
         (lonely / "only").touch()
         self.assertEqual(preview_entry(lonely), "<directory with 1 entry>")
 
+    def test_huge_directory_count_is_bounded(self) -> None:
+        big = self.root / "big"
+        big.mkdir()
+        for i in range(1005):
+            (big / f"f{i}").touch()
+        self.assertEqual(preview_entry(big), "<directory with 1000+ entries>")
+
 
 @unittest.skipUnless(HAS_TEXTUAL, "ui extra (textual) not installed")
 class LaunchPathTest(unittest.TestCase):
