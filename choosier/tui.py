@@ -358,7 +358,8 @@ class ChooserApp(App[None]):
     def on_tabbed_content_tab_activated(
         self, event: TabbedContent.TabActivated
     ) -> None:
-        self._refresh_panels()
+        if event.pane.id in ("browse-tab", "remaining-tab", "history-tab"):
+            self._refresh_panels()
 
     def _archive_history(self) -> None:
         """Move the history log to a timestamped backup (no confirm needed)."""
