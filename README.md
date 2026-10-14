@@ -61,6 +61,7 @@ uv sync --group dev
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .
+uv run mypy choosier main.py tests
 ```
 
 `python -m unittest` also runs the suite (tests use stdlib `unittest`).

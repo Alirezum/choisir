@@ -1,0 +1,16 @@
+# Changelog
+
+## 0.2.0 — 2026-10-14
+
+- Storage: JSONL history colocated with the target directory, legacy
+  `<timestamp> - <item>` lines still readable, timestamped rotation
+  backups, `pathlib` throughout, archive helper.
+- CLI: `argparse` interface (`--log-file`, `--reset`, `--dry-run`,
+  `--seed`, `--include-hidden`, `--files-only`/`--dirs-only`, `--list`),
+  exit codes 0/1/3/4, `choosier` console script.
+- TUI (`choosier --ui`, optional `ui` extra): pick loop with large
+  choice display, text/binary/directory preview, system open button,
+  remaining/history views, archive and guarded clear, layout fitting
+  80x24 terminals, `ctrl+n` Pick shortcut.
+- Quality: 70-test suite (stdlib `unittest`, pytest-compatible), ruff
+  lint/format clean, mypy strict clean, CI workflow.
