@@ -461,21 +461,21 @@ class ChooserApp(App[None]):
             self._refresh_panels()
             return
         if dry_run:
-            self._show_choice(random_item)
-            self._current_choice = target / random_item
-            self._update_preview()
-            self._set_status("Dry run: selection not logged.")
-            self._refresh_panels()
+            self._finish_pick(target, random_item, "Dry run: selection not logged.")
             return
         try:
             log_selection(random_item, log_path)
         except OSError as e:
             self._set_status(f"Error writing log: {e}")
             return
-        self._show_choice(random_item)
-        self._current_choice = target / random_item
+        self._finish_pick(target, random_item, f"Logged in {log_path}.")
+
+    def _finish_pick(self, target: Path, item: str, message: str) -> None:
+        """Display a successful pick, update preview, and refresh panels."""
+        self._show_choice(item)
+        self._current_choice = target / item
         self._update_preview()
-        self._set_status(f"Logged in {log_path}.")
+        self._set_status(message)
         self._refresh_panels()
 
 
