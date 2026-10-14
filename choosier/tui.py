@@ -439,6 +439,9 @@ class ChooserApp(App[None]):
             self._set_status("Invalid Path.")
             self._refresh_panels()
             return
+        browser = self.query_one("#browser", DirectoryTree)
+        if browser.path != target:
+            browser.path = target
         try:
             seed = parse_seed(self.query_one("#seed-input", Input).value)
         except ValueError:
