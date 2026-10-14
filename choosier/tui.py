@@ -230,7 +230,10 @@ class ChooserApp(App[None]):
     }
     """
 
-    BINDINGS = [("q", "quit", "Quit")]
+    BINDINGS = [
+        ("q", "quit", "Quit"),
+        ("ctrl+n", "pick", "Pick"),
+    ]
 
     def __init__(self, initial_path: str = "", log_file: str | None = None) -> None:
         super().__init__()
@@ -285,6 +288,10 @@ class ChooserApp(App[None]):
         self.query_one("#open", Button).disabled = True
         self.query_one("#pick", Button).focus()
         self._refresh_panels()
+
+    def action_pick(self) -> None:
+        """Pick action, also bound to ctrl+n (ctrl+p is the palette)."""
+        self.do_pick()
 
     @property
     def _target(self) -> Path:
