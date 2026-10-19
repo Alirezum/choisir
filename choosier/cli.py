@@ -77,10 +77,22 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="List remaining picks instead of choosing.",
     )
-    parser.add_argument(
+    ui_group = parser.add_mutually_exclusive_group()
+    ui_group.add_argument(
         "--ui",
         action="store_true",
         help="Launch the interactive terminal UI.",
+    )
+    ui_group.add_argument(
+        "--web",
+        action="store_true",
+        help="Launch the local web UI.",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=None,
+        help="Port for --web (default: 8765).",
     )
     return parser
 
@@ -109,6 +121,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run(
             initial_path=args.path or "",
             log_file=args.log_file,
+        )
+    if args.web:
+        try:
+            from choosier.web import DEFAULT_PORT
+            from choosier.web import run as run_web
+        except ImportError:
+            print(
+                "The web UI needs the 'web' extra: pip install 'choosier[web]'.",
+                file=sys.stderr,
+            )
+            return 1
+        return run_web(
+            initial_path=args.path or "",
+            log_file=args.log_file,
+            port=DEFAULT_PORT if args.port is None else args.port,
         )
     if args.files_only and args.dirs_only:
         parser.error("--files-only and --dirs-only are mutually exclusive")
