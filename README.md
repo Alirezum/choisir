@@ -47,6 +47,23 @@ you trust, since opening a file runs its associated application.
 `Archive history` files the current log away as a timestamped backup;
 `Clear history` deletes it (with confirmation).
 
+## Web UI
+
+Local-only FastAPI server with a Vue single-page frontend covering the
+same features as the TUI (pick loop, filters, seed, dry-run, log-file
+control, browse/remaining/history views, previews, archive, guarded
+clear, and Open):
+
+```sh
+pip install "choosier[web]"
+choosier --web [PATH] [--port 8765]
+```
+
+The server binds to `127.0.0.1` only. For frontend development, run
+`choosier --web` and `npm run dev` in `frontend/` (Vite proxies `/api`);
+`npm run build` writes the bundle to `choosier/web_static/`, which the
+server serves on the same origin.
+
 ## History log
 
 Selections are stored as JSON Lines (`{"ts": ..., "item": ...}`) in
@@ -57,11 +74,14 @@ read. Logs over 1MB rotate to timestamped `.old` backups.
 ## Development
 
 ```sh
-uv sync --group dev
+uv sync --group dev --extra ui --extra web
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy choosier main.py tests
+
+# Static-serving tests need a frontend build.
+cd frontend && npm ci && npm run build && cd ..
 ```
 
 `python -m unittest` also runs the suite (tests use stdlib `unittest`).
