@@ -17,6 +17,21 @@ def resolve_default_log(directory: str | Path) -> Path:
     return Path(directory).expanduser() / DEFAULT_LOG_FILENAME
 
 
+def resolve_log_path(target: str | Path, override: str) -> Path:
+    """Effective history log: explicit override or colocated default."""
+    if override.strip():
+        return Path(override).expanduser()
+    return resolve_default_log(target)
+
+
+def parse_seed(text: str) -> int | None:
+    """Parse a seed input; blank means random. Raises ValueError if invalid."""
+    stripped = text.strip()
+    if not stripped:
+        return None
+    return int(stripped)
+
+
 def _is_managed_file(name: str, log_path: Path) -> bool:
     if name == log_path.name:
         return True

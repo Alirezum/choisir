@@ -8,7 +8,9 @@ from pathlib import Path
 from choosier.chooser import (
     get_unselected_item,
     list_available_items,
+    parse_seed,
     resolve_default_log,
+    resolve_log_path,
 )
 from choosier.storage import log_selection
 
@@ -113,6 +115,39 @@ class ChooserTest(unittest.TestCase):
         self.assertEqual(get_unselected_item(self.target), "file0")
         # picking alone writes nothing; history lives next to the target
         self.assertFalse(log_path.exists())
+
+
+class ParseSeedTest(unittest.TestCase):
+    def test_blank_means_random(self) -> None:
+        self.assertIsNone(parse_seed(""))
+        self.assertIsNone(parse_seed("   "))
+
+    def test_valid_integer(self) -> None:
+        self.assertEqual(parse_seed("7"), 7)
+        self.assertEqual(parse_seed("  42 "), 42)
+
+    def test_invalid_raises(self) -> None:
+        for bad in ["abc", "1.5", "12a"]:
+            with self.assertRaises(ValueError, msg=bad):
+                parse_seed(bad)
+
+
+class ResolveLogPathTest(unittest.TestCase):
+    def test_blank_uses_colocated_default(self) -> None:
+        self.assertEqual(
+            resolve_log_path(Path("/target"), ""),
+            Path("/target/.choosier.jsonl"),
+        )
+        self.assertEqual(
+            resolve_log_path(Path("/target"), "   "),
+            Path("/target/.choosier.jsonl"),
+        )
+
+    def test_explicit_override(self) -> None:
+        self.assertEqual(
+            resolve_log_path(Path("/target"), "/elsewhere/history.jsonl"),
+            Path("/elsewhere/history.jsonl"),
+        )
 
 
 if __name__ == "__main__":

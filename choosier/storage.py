@@ -35,6 +35,29 @@ def _parse_log_line(line: str) -> str | None:
     return parse_log_line(line)[1]
 
 
+def load_log(
+    log_file: str | Path = DEFAULT_LOG_FILENAME,
+) -> tuple[set[str], list[str]]:
+    """Read a history log once: (logged names, history display lines)."""
+    log_path = Path(log_file).expanduser()
+    try:
+        raw_lines = log_path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return set(), []
+    names: set[str] = set()
+    display: list[str] = []
+    for raw in raw_lines:
+        stripped = raw.strip()
+        if not stripped:
+            continue
+        ts, item = parse_log_line(stripped)
+        if item is None:
+            continue
+        names.add(item)
+        display.append(f"{ts}  {item}" if ts is not None else stripped)
+    return names, display
+
+
 def get_logged_items(log_file: str | Path = DEFAULT_LOG_FILENAME) -> set[str]:
     """Read previously selected item names from a JSONL log file."""
     log_path = Path(log_file).expanduser()

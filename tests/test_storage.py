@@ -12,6 +12,7 @@ from choosier.storage import (
     _parse_log_line,
     archive_log,
     get_logged_items,
+    load_log,
     log_selection,
     reset_log,
 )
@@ -146,6 +147,34 @@ class ResetLogTest(unittest.TestCase):
     def test_unremovable_path_raises(self) -> None:
         with self.assertRaises(OSError):
             reset_log(Path(self.tmp.name))
+
+
+class LoadLogTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.log = Path(self.tmp.name) / "history.jsonl"
+
+    def test_missing_file_returns_empties(self) -> None:
+        self.assertEqual(load_log(self.log), (set(), []))
+
+    def test_single_read_yields_names_and_display(self) -> None:
+        self.log.write_text(
+            '{"ts": "2026-01-01T00:00:00+00:00", "item": "new"}\n'
+            "2026-01-02T00:00:00+00:00 - old - item\n"
+            "\n"
+            "[1, 2]\n",
+            encoding="utf-8",
+        )
+        names, display = load_log(self.log)
+        self.assertEqual(names, {"new", "old - item"})
+        self.assertEqual(
+            display,
+            [
+                "2026-01-01T00:00:00+00:00  new",
+                "2026-01-02T00:00:00+00:00 - old - item",
+            ],
+        )
 
 
 class ArchiveLogTest(unittest.TestCase):

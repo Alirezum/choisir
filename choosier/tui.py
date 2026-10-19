@@ -1,9 +1,6 @@
 """Terminal UI for choosier (requires the `ui` extra)."""
 
-import os
 import random
-import subprocess
-import sys
 from pathlib import Path
 
 from rich.markup import escape
@@ -27,61 +24,21 @@ from textual.widgets import (
 from choosier.chooser import (
     get_unselected_item,
     list_candidates,
-    resolve_default_log,
+    parse_seed,
+    resolve_log_path,
 )
+from choosier.launcher import launch_path
+from choosier.preview import preview_entry
 from choosier.storage import (
     archive_log,
+    load_log,
     log_selection,
-    parse_log_line,
     reset_log,
 )
 
 NO_CHOICE_TEXT = "No choice yet — enter a directory and press Pick."
 MODE_LABELS = ("all", "files", "dirs")
-PREVIEW_MAX_LINES = 10
-PREVIEW_MAX_BYTES = 8_192
-PREVIEW_MAX_COUNT = 1_000
 PANEL_MAX_LINES = 200
-
-
-def parse_seed(text: str) -> int | None:
-    """Parse a seed input; blank means random. Raises ValueError if invalid."""
-    stripped = text.strip()
-    if not stripped:
-        return None
-    return int(stripped)
-
-
-def resolve_log_path(target: Path, override: str) -> Path:
-    """Effective history log: explicit override or colocated default."""
-    if override.strip():
-        return Path(override).expanduser()
-    return resolve_default_log(target)
-
-
-def read_history(log_path: Path) -> list[str]:
-    """Display lines for the history view (oldest first)."""
-    return load_log(log_path)[1]
-
-
-def load_log(log_path: Path) -> tuple[set[str], list[str]]:
-    """Read a history log once: (logged names, history display lines)."""
-    try:
-        raw_lines = log_path.read_text(encoding="utf-8").splitlines()
-    except OSError:
-        return set(), []
-    names: set[str] = set()
-    display: list[str] = []
-    for raw in raw_lines:
-        stripped = raw.strip()
-        if not stripped:
-            continue
-        ts, item = parse_log_line(stripped)
-        if item is None:
-            continue
-        names.add(item)
-        display.append(f"{ts}  {item}" if ts is not None else stripped)
-    return names, display
 
 
 def render_panel(
@@ -100,67 +57,6 @@ def render_panel(
         shown = lines
         header = ""
     return header + "\n".join(escape(line) for line in shown)
-
-
-def launch_path(entry: Path) -> None:
-    """Open an entry with the OS default handler (non-blocking).
-
-    Raises:
-        OSError: If no handler is available or launching fails.
-    """
-    if sys.platform == "win32":
-        os.startfile(str(entry))
-        return
-    if sys.platform == "darwin":
-        cmd = ["open", str(entry)]
-    else:
-        cmd = ["xdg-open", str(entry)]
-    try:
-        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except FileNotFoundError as e:
-        raise OSError(f"No program available to open files ({cmd[0]})") from e
-
-
-def preview_entry(
-    entry: Path,
-    max_lines: int = PREVIEW_MAX_LINES,
-    max_bytes: int = PREVIEW_MAX_BYTES,
-) -> str:
-    """Short display text for a picked entry (never reads much)."""
-    try:
-        if not entry.exists():
-            return "(gone)"
-        if entry.is_dir():
-            try:
-                count = 0
-                for _ in entry.iterdir():
-                    count += 1
-                    if count > PREVIEW_MAX_COUNT:
-                        return f"<directory with {PREVIEW_MAX_COUNT}+ entries>"
-            except OSError:
-                return "<directory>"
-            noun = "entry" if count == 1 else "entries"
-            return f"<directory with {count} {noun}>"
-        try:
-            with open(entry, "rb") as f:
-                chunk = f.read(max_bytes + 1)
-        except OSError as e:
-            return f"(unreadable: {e})"
-        truncated = len(chunk) > max_bytes
-        head = chunk[:max_bytes]
-        if b"\x00" in head:
-            size = f"{max_bytes}+" if truncated else str(len(head))
-            return f"<binary file, {size} bytes>"
-        lines = head.decode("utf-8", errors="replace").splitlines()
-        if not lines:
-            return "(empty file)"
-        shown = lines[:max_lines]
-        out = "\n".join(shown)
-        if len(lines) > max_lines or truncated:
-            out += "\n… (truncated)"
-        return out
-    except OSError as e:
-        return f"(unreadable: {e})"
 
 
 class ConfirmScreen(ModalScreen[bool]):
@@ -319,7 +215,7 @@ class ChooserApp(App[None]):
         if self._current_choice is None:
             text = "(preview appears here)"
         else:
-            text = preview_entry(self._current_choice)
+            text = preview_entry(self._current_choice).text
         self.query_one("#preview", Static).update(escape(text))
 
     def _refresh_panels(self) -> None:
