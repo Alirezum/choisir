@@ -21,3 +21,6 @@ selected_items.jsonl
 selected_items-*.old
 .choosier.jsonl
 .choosier-*.old
+
+# Built web assets (run `npm run build` in frontend/)
+choosier/web_static/
