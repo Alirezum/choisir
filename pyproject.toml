@@ -25,6 +25,9 @@ dev = [
   "ruff>=0.8",
 ]
 
+[tool.setuptools.package-data]
+choosier = ["web_static/*", "web_static/assets/*"]
+
 [tool.ruff]
 target-version = "py312"
 line-length = 88
