@@ -32,6 +32,7 @@ const status = ref('Enter a directory and press Pick.')
 const state = ref<StateResponse | null>(null)
 const activeTab = ref<TabId>('remaining')
 const clearing = ref(false)
+const pathInput = ref<HTMLInputElement | null>(null)
 
 const filters = computed(() => ({
   include_hidden: includeHidden.value,
@@ -76,6 +77,11 @@ function scheduleRefresh(): void {
 watch([path, logFile, includeHidden, mode], scheduleRefresh)
 
 async function pick(): Promise<void> {
+  if (path.value.trim() === '') {
+    status.value = 'Enter a directory.'
+    pathInput.value?.focus()
+    return
+  }
   const rawSeed = seed.value.trim()
   let seedValue: number | null = null
   if (rawSeed !== '') {
@@ -171,6 +177,8 @@ onMounted(async () => {
     status.value = describeError(error)
   }
   await refresh()
+  pathInput.value?.focus()
+  pathInput.value?.select()
 })
 
 onUnmounted(() => {
@@ -186,6 +194,7 @@ onUnmounted(() => {
   </header>
   <div class="pathbar">
     <input
+      ref="pathInput"
       v-model="path"
       class="path-input"
       placeholder="Directory path"

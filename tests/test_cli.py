@@ -1,5 +1,6 @@
 """Tests for choosier.cli: flags, exit codes, and output."""
 
+import importlib.util
 import io
 import tempfile
 import unittest
@@ -9,6 +10,8 @@ from unittest.mock import patch
 
 from choosier.cli import main
 from choosier.storage import get_logged_items
+
+HAS_WEB = importlib.util.find_spec("fastapi") is not None
 
 
 class CliTest(unittest.TestCase):
@@ -114,6 +117,22 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertTrue(custom.exists())
         self.assertFalse(self.log.exists())
+
+    @unittest.skipUnless(HAS_WEB, "web extra (fastapi) not installed")
+    def test_web_without_path_defaults_to_cwd(self) -> None:
+        with patch("choosier.web.run", return_value=0) as run_web:
+            code = main(["--web"])
+        self.assertEqual(code, 0)
+        self.assertEqual(run_web.call_args.kwargs["initial_path"], str(Path.cwd()))
+
+    @unittest.skipUnless(HAS_WEB, "web extra (fastapi) not installed")
+    def test_web_passes_path_and_port_through(self) -> None:
+        with patch("choosier.web.run", return_value=0) as run_web:
+            code = main(["--web", str(self.target), "--port", "9999"])
+        self.assertEqual(code, 0)
+        kwargs = run_web.call_args.kwargs
+        self.assertEqual(kwargs["initial_path"], str(self.target))
+        self.assertEqual(kwargs["port"], 9999)
 
 
 if __name__ == "__main__":

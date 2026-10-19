@@ -59,10 +59,12 @@ pip install "choosier[web]"
 choosier --web [PATH] [--port 8765]
 ```
 
-The server binds to `127.0.0.1` only. For frontend development, run
-`choosier --web` and `npm run dev` in `frontend/` (Vite proxies `/api`);
-`npm run build` writes the bundle to `choosier/web_static/`, which the
-server serves on the same origin.
+The server binds to `127.0.0.1` only. Without `PATH` it starts in the
+current directory, and the path box stays editable in the browser (type
+a path or browse and press *Use this folder*). For frontend
+development, run `choosier --web` and `npm run dev` in `frontend/`
+(Vite proxies `/api`); `npm run build` writes the bundle to
+`choosier/web_static/`, which the server serves on the same origin.
 
 ## History log
 

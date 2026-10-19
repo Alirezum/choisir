@@ -133,7 +133,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             return 1
         return run_web(
-            initial_path=args.path or "",
+            initial_path=args.path if args.path is not None else str(Path.cwd()),
             log_file=args.log_file,
             port=DEFAULT_PORT if args.port is None else args.port,
         )

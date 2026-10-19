@@ -5,7 +5,9 @@
 - Web UI (`choosier --web`, optional `web` extra): localhost-bound
   FastAPI JSON API with a Vue 3 single-page frontend covering the pick
   loop, filters, seed, dry-run, log-file control, browse/remaining/
-  history views, previews, archive, guarded clear, and Open.
+  history views, previews, archive, guarded clear, and Open. Without a
+  path argument it starts in the current directory, with the path box
+  focused so any directory can be typed in the browser.
 - Core: UI-agnostic helpers (`launcher`, `preview`, `load_log`,
   `parse_seed`, `resolve_log_path`) extracted from the TUI so CLI, TUI,
   and web share one implementation; `preview_entry` returns structured
