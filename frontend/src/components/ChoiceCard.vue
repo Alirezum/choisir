@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import { ref, watch } from 'vue'
+
 import { api } from '../api'
 import type { PreviewModel } from '../types'
+import ImageViewer from './ImageViewer.vue'
 
 const props = defineProps<{
   item: string | null
@@ -10,8 +13,25 @@ const props = defineProps<{
 
 const emit = defineEmits<{ open: [] }>()
 
-function imageUrl(index: number | null): string {
-  return api.imageUrl(props.path, index)
+const viewerIndex = ref<number | null>(null)
+
+watch(
+  () => props.preview,
+  () => {
+    viewerIndex.value = null
+  },
+)
+
+function thumbUrl(index: number | null): string {
+  return api.imageUrl(props.path, index, true)
+}
+
+function openViewer(index: number): void {
+  viewerIndex.value = index
+}
+
+function closeViewer(): void {
+  viewerIndex.value = null
 }
 </script>
 
@@ -34,20 +54,32 @@ function imageUrl(index: number | null): string {
       <pre class="preview">{{ preview?.text ?? '(preview appears here)' }}</pre>
       <div v-if="(preview?.images.length ?? 0) > 0" class="image-grid">
         <figure
-          v-for="image in preview?.images ?? []"
+          v-for="(image, index) in preview?.images ?? []"
           :key="`${image.index}-${image.name}`"
         >
-          <a :href="imageUrl(image.index)" target="_blank" rel="noopener">
+          <button
+            class="thumb-button"
+            type="button"
+            :aria-label="`View ${image.name}`"
+            @click="openViewer(index)"
+          >
             <img
-              :src="imageUrl(image.index)"
+              :src="thumbUrl(image.index)"
               :alt="image.name"
               loading="lazy"
               decoding="async"
             />
-          </a>
+          </button>
           <figcaption :title="image.name">{{ image.name }}</figcaption>
         </figure>
       </div>
     </div>
   </div>
+  <ImageViewer
+    v-if="viewerIndex !== null && (preview?.images.length ?? 0) > 0"
+    :images="preview?.images ?? []"
+    :path="path"
+    :start="viewerIndex"
+    @close="closeViewer"
+  />
 </template>
