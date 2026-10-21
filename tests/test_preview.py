@@ -6,7 +6,7 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from choosier.preview import PREVIEW_MAX_IMAGES, preview_entry
+from choosier.preview import preview_entry
 
 PNG = b"\x89PNG\r\n\x1a\npngdata"
 JPEG = b"\xff\xd8\xffjpegdata"
@@ -130,12 +130,20 @@ class PreviewEntryTest(unittest.TestCase):
         self.assertIn("2 entries", preview.text)
 
     def test_archive_caps_listed_images(self) -> None:
+        with patch("choosier.preview.PREVIEW_MAX_IMAGES", 3):
+            archive = self._zip("many.zip", {f"img{i:02d}.png": PNG for i in range(5)})
+            preview = preview_entry(archive)
+        self.assertEqual(preview.image_total, 5)
+        self.assertEqual(len(preview.images), 3)
+        self.assertTrue(preview.truncated)
+        self.assertIn("showing first 3 of 5 images", preview.text)
+
+    def test_archive_lists_every_image_under_the_cap(self) -> None:
         archive = self._zip("many.zip", {f"img{i:02d}.png": PNG for i in range(15)})
         preview = preview_entry(archive)
         self.assertEqual(preview.image_total, 15)
-        self.assertEqual(len(preview.images), PREVIEW_MAX_IMAGES)
-        self.assertTrue(preview.truncated)
-        self.assertIn(f"showing first {PREVIEW_MAX_IMAGES} of 15 images", preview.text)
+        self.assertEqual(len(preview.images), 15)
+        self.assertFalse(preview.truncated)
 
     def test_archive_skips_oversized_images(self) -> None:
         with patch("choosier.preview.PREVIEW_MAX_IMAGE_BYTES", 8):
