@@ -9,7 +9,7 @@ from choosier.chooser import (
     resolve_log_path,
 )
 from choosier.launcher import launch_path
-from choosier.preview import Preview, preview_entry
+from choosier.preview import Preview, PreviewImage, preview_entry
 from choosier.storage import (
     DEFAULT_LOG_FILENAME,
     LOG_ROTATE_BYTES,
@@ -25,6 +25,7 @@ __all__ = [
     "DEFAULT_LOG_FILENAME",
     "LOG_ROTATE_BYTES",
     "Preview",
+    "PreviewImage",
     "archive_log",
     "get_logged_items",
     "get_unselected_item",

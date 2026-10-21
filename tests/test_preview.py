@@ -2,9 +2,15 @@
 
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
-from choosier.preview import preview_entry
+from choosier.preview import PREVIEW_MAX_IMAGES, preview_entry
+
+PNG = b"\x89PNG\r\n\x1a\npngdata"
+JPEG = b"\xff\xd8\xffjpegdata"
+WEBP = b"RIFF\x00\x00\x00\x00WEBPdata"
 
 
 class PreviewEntryTest(unittest.TestCase):
@@ -74,6 +80,99 @@ class PreviewEntryTest(unittest.TestCase):
         self.assertTrue(preview.truncated)
         self.assertIsNone(preview.entry_count)
         self.assertEqual(preview.text, "<directory with 1000+ entries>")
+
+    def _zip(self, name: str, members: dict[str, bytes]) -> Path:
+        archive = self.root / name
+        with zipfile.ZipFile(archive, "w") as handle:
+            for member, data in members.items():
+                handle.writestr(member, data)
+        return archive
+
+    def test_zip_archive_lists_images(self) -> None:
+        archive = self._zip(
+            "pics.zip",
+            {
+                "a.png": PNG,
+                "sub/b.JPG": JPEG,
+                "page.webp": WEBP,
+                "notes.txt": b"hello",
+                "__MACOSX/._a.png": b"junk",
+            },
+        )
+        preview = preview_entry(archive)
+        self.assertEqual(preview.kind, "archive")
+        self.assertEqual(preview.image_total, 3)
+        self.assertEqual(
+            [image.name for image in preview.images],
+            ["a.png", "sub/b.JPG", "page.webp"],
+        )
+        self.assertEqual(
+            [image.media_type for image in preview.images],
+            ["image/png", "image/jpeg", "image/webp"],
+        )
+        self.assertFalse(preview.truncated)
+        self.assertIn("3 images", preview.text)
+        self.assertIn("1 other entry", preview.text)
+
+    def test_cbz_is_treated_as_archive(self) -> None:
+        archive = self._zip("book.cbz", {"page1.gif": b"GIF89a" + b"data"})
+        preview = preview_entry(archive)
+        self.assertEqual(preview.kind, "archive")
+        self.assertEqual(preview.image_total, 1)
+        self.assertEqual(preview.images[0].media_type, "image/gif")
+
+    def test_zip_without_images_reports_entries(self) -> None:
+        archive = self._zip("docs.zip", {"readme.txt": b"hi", "data.bin": b"\x00\x01"})
+        preview = preview_entry(archive)
+        self.assertEqual(preview.kind, "archive")
+        self.assertEqual(preview.image_total, 0)
+        self.assertEqual(preview.images, ())
+        self.assertIn("2 entries", preview.text)
+
+    def test_archive_caps_listed_images(self) -> None:
+        archive = self._zip("many.zip", {f"img{i:02d}.png": PNG for i in range(15)})
+        preview = preview_entry(archive)
+        self.assertEqual(preview.image_total, 15)
+        self.assertEqual(len(preview.images), PREVIEW_MAX_IMAGES)
+        self.assertTrue(preview.truncated)
+        self.assertIn(f"showing first {PREVIEW_MAX_IMAGES} of 15 images", preview.text)
+
+    def test_archive_skips_oversized_images(self) -> None:
+        with patch("choosier.preview.PREVIEW_MAX_IMAGE_BYTES", 8):
+            archive = self._zip(
+                "large.zip",
+                {"big.png": PNG, "small.png": b"\x89PNG\r\n\x1a\n"},
+            )
+            preview = preview_entry(archive)
+        self.assertEqual(preview.image_total, 2)
+        self.assertEqual([image.name for image in preview.images], ["small.png"])
+        self.assertTrue(preview.truncated)
+        self.assertIn("1 skipped", preview.text)
+
+    def test_broken_zip_falls_back_to_binary(self) -> None:
+        target = self.root / "broken.zip"
+        target.write_bytes(b"PK\x03\x04broken\x00")
+        preview = preview_entry(target)
+        self.assertEqual(preview.kind, "binary")
+
+    def test_standalone_image_gets_preview(self) -> None:
+        target = self.root / "photo.png"
+        target.write_bytes(PNG)
+        preview = preview_entry(target)
+        self.assertEqual(preview.kind, "image")
+        self.assertEqual(preview.image_total, 1)
+        self.assertEqual(preview.size, len(PNG))
+        image = preview.images[0]
+        self.assertIsNone(image.index)
+        self.assertEqual(image.name, "photo.png")
+        self.assertEqual(image.media_type, "image/png")
+        self.assertIn("image/png", preview.text)
+
+    def test_fake_image_extension_falls_back_to_binary(self) -> None:
+        target = self.root / "fake.png"
+        target.write_bytes(b"\x00not an image")
+        preview = preview_entry(target)
+        self.assertEqual(preview.kind, "binary")
 
 
 if __name__ == "__main__":
