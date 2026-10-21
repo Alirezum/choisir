@@ -2,6 +2,7 @@
 
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -13,6 +14,9 @@ try:
     HAS_WEB = True
 except ImportError:
     HAS_WEB = False
+
+PNG = b"\x89PNG\r\n\x1a\npngdata"
+JPEG = b"\xff\xd8\xffjpegdata"
 
 
 @unittest.skipUnless(HAS_WEB, "web extra (fastapi) not installed")
@@ -32,6 +36,18 @@ class WebApiTest(unittest.TestCase):
         params = {"path": str(self.target)}
         params.update(extra)
         return params
+
+    def _archive(
+        self, members: dict[str, bytes] | None = None, name: str = "pics.zip"
+    ) -> Path:
+        folder = Path(self.tmp.name) / "archives"
+        folder.mkdir(exist_ok=True)
+        archive = folder / name
+        contents = {"one.png": PNG} if members is None else members
+        with zipfile.ZipFile(archive, "w") as handle:
+            for member, data in contents.items():
+                handle.writestr(member, data)
+        return archive
 
     def test_defaults_echo_initial_values(self) -> None:
         client = TestClient(create_app("/somewhere", "/tmp/history.jsonl"))
@@ -166,6 +182,74 @@ class WebApiTest(unittest.TestCase):
             ).json()["kind"],
             "gone",
         )
+
+    def test_preview_archive_lists_images(self) -> None:
+        archive = self._archive({"one.png": PNG, "two.jpg": JPEG, "notes.txt": b"hi"})
+        body = self.client.get("/api/preview", params={"path": str(archive)}).json()
+        self.assertEqual(body["kind"], "archive")
+        self.assertEqual(body["image_total"], 2)
+        self.assertEqual(
+            [image["name"] for image in body["images"]], ["one.png", "two.jpg"]
+        )
+        self.assertEqual(body["images"][0]["index"], 0)
+        self.assertEqual(body["images"][0]["media_type"], "image/png")
+
+    def test_image_endpoint_serves_archive_member(self) -> None:
+        archive = self._archive()
+        response = self.client.get(
+            "/api/image", params={"path": str(archive), "index": 0}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, PNG)
+        self.assertEqual(response.headers["content-type"], "image/png")
+        self.assertEqual(response.headers["x-content-type-options"], "nosniff")
+
+    def test_image_endpoint_serves_standalone_image(self) -> None:
+        image = Path(self.tmp.name) / "photo.jpg"
+        image.write_bytes(JPEG)
+        response = self.client.get("/api/image", params={"path": str(image)})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, JPEG)
+        self.assertEqual(response.headers["content-type"], "image/jpeg")
+
+    def test_image_endpoint_rejects_bad_index(self) -> None:
+        archive = self._archive()
+        response = self.client.get(
+            "/api/image", params={"path": str(archive), "index": 99}
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_image_endpoint_rejects_non_image_member(self) -> None:
+        archive = self._archive({"notes.txt": b"hi"})
+        response = self.client.get(
+            "/api/image", params={"path": str(archive), "index": 0}
+        )
+        self.assertEqual(response.status_code, 415)
+
+    def test_image_endpoint_rejects_oversized_image(self) -> None:
+        image = Path(self.tmp.name) / "big.png"
+        image.write_bytes(PNG)
+        with patch("choosier.web.PREVIEW_MAX_IMAGE_BYTES", 8):
+            response = self.client.get("/api/image", params={"path": str(image)})
+        self.assertEqual(response.status_code, 413)
+
+    def test_image_endpoint_rejects_missing_image(self) -> None:
+        response = self.client.get(
+            "/api/image", params={"path": str(self.target / "gone.png")}
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_image_endpoint_rejects_non_image_file(self) -> None:
+        doc = self.target / "doc.txt"
+        doc.write_text("hello\n", encoding="utf-8")
+        response = self.client.get("/api/image", params={"path": str(doc)})
+        self.assertEqual(response.status_code, 415)
+
+    def test_image_endpoint_rejects_non_archive(self) -> None:
+        fake = Path(self.tmp.name) / "fake.zip"
+        fake.write_bytes(b"not a zip")
+        response = self.client.get("/api/image", params={"path": str(fake), "index": 0})
+        self.assertEqual(response.status_code, 400)
 
     def test_browse_lists_dirs_first(self) -> None:
         response = self.client.get("/api/browse", params={"path": str(self.target)})

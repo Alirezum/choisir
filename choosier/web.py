@@ -7,13 +7,14 @@ TUI use. When the Vue frontend has been built (`frontend/` with Vite),
 """
 
 import random
+import zipfile
 from pathlib import Path
 from typing import Literal
 
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from choosier.chooser import (
     get_unselected_item,
@@ -21,12 +22,26 @@ from choosier.chooser import (
     resolve_log_path,
 )
 from choosier.launcher import launch_path
-from choosier.preview import preview_entry
+from choosier.preview import (
+    PREVIEW_MAX_IMAGE_BYTES,
+    image_media_type,
+    preview_entry,
+    sniff_image_media_type,
+)
 from choosier.storage import archive_log, load_log, log_selection, reset_log
 
 DEFAULT_PORT = 8765
 PANEL_MAX_LINES = 200
 STATIC_DIR = Path(__file__).resolve().parent / "web_static"
+
+
+class PreviewImageModel(BaseModel):
+    """One previewable image inside an archive or a standalone file."""
+
+    index: int | None = None
+    name: str
+    media_type: str
+    size: int
 
 
 class PreviewModel(BaseModel):
@@ -37,6 +52,8 @@ class PreviewModel(BaseModel):
     truncated: bool = False
     entry_count: int | None = None
     size: int | None = None
+    images: list[PreviewImageModel] = Field(default_factory=list)
+    image_total: int = 0
 
 
 class DefaultsResponse(BaseModel):
@@ -113,7 +130,80 @@ def _preview_model(entry: Path) -> PreviewModel:
         truncated=preview.truncated,
         entry_count=preview.entry_count,
         size=preview.size,
+        images=[
+            PreviewImageModel(
+                index=image.index,
+                name=image.name,
+                media_type=image.media_type,
+                size=image.size,
+            )
+            for image in preview.images
+        ],
+        image_total=preview.image_total,
     )
+
+
+def _read_standalone_image(path: Path) -> tuple[bytes, str]:
+    """Read a supported image file, bounded by the preview size limit."""
+    if image_media_type(path.name) is None:
+        raise HTTPException(status_code=415, detail="Not a supported image")
+    try:
+        size = path.stat().st_size
+    except OSError as e:
+        raise HTTPException(status_code=404, detail=f"Image is gone: {e}")
+    if size > PREVIEW_MAX_IMAGE_BYTES:
+        raise HTTPException(status_code=413, detail="Image is too large to preview")
+    try:
+        with open(path, "rb") as f:
+            data = f.read(PREVIEW_MAX_IMAGE_BYTES + 1)
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Cannot read image: {e}")
+    if len(data) > PREVIEW_MAX_IMAGE_BYTES:
+        raise HTTPException(status_code=413, detail="Image is too large to preview")
+    media_type = sniff_image_media_type(data[:32])
+    if media_type is None:
+        raise HTTPException(status_code=415, detail="Not a supported image")
+    return data, media_type
+
+
+def _read_archived_image(path: Path, index: int) -> tuple[bytes, str]:
+    """Read one image member by position, never by client-supplied name."""
+    if not zipfile.is_zipfile(path):
+        raise HTTPException(status_code=400, detail="Not a zip archive")
+    data = b""
+    try:
+        with zipfile.ZipFile(path) as archive:
+            infos = archive.infolist()
+            if index < 0 or index >= len(infos):
+                raise HTTPException(
+                    status_code=404, detail="Image not found in archive"
+                )
+            info = infos[index]
+            if info.is_dir() or image_media_type(info.filename) is None:
+                raise HTTPException(status_code=415, detail="Not a supported image")
+            if info.flag_bits & 0x1:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Encrypted archive members are not supported",
+                )
+            if info.file_size > PREVIEW_MAX_IMAGE_BYTES:
+                raise HTTPException(
+                    status_code=413, detail="Image is too large to preview"
+                )
+            with archive.open(info) as member:
+                data = member.read(PREVIEW_MAX_IMAGE_BYTES + 1)
+    except zipfile.BadZipFile as e:
+        raise HTTPException(status_code=400, detail=f"Not a valid archive: {e}")
+    except (RuntimeError, NotImplementedError) as e:
+        raise HTTPException(status_code=400, detail=f"Cannot read archive member: {e}")
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Cannot read archive: {e}")
+    if len(data) > PREVIEW_MAX_IMAGE_BYTES:
+        raise HTTPException(status_code=413, detail="Image is too large to preview")
+    media_type = sniff_image_media_type(data[:32])
+    if media_type is None:
+        raise HTTPException(status_code=415, detail="Not a supported image")
+    return data, media_type
 
 
 def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
@@ -240,6 +330,25 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
     def preview(path: str) -> PreviewModel:
         """Structured preview for an entry path."""
         return _preview_model(Path(path).expanduser())
+
+    @app.get("/api/image")
+    def image(path: str, index: int | None = None) -> Response:
+        """Serve a standalone image or one image member of a zip archive."""
+        entry = Path(path).expanduser()
+        if not entry.is_file():
+            raise HTTPException(status_code=404, detail="Image is gone")
+        if index is None:
+            data, media_type = _read_standalone_image(entry)
+        else:
+            data, media_type = _read_archived_image(entry, index)
+        return Response(
+            content=data,
+            media_type=media_type,
+            headers={
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
 
     @app.post("/api/open")
     def open_entry(request: OpenRequest) -> OpenResponse:
