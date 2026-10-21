@@ -65,7 +65,9 @@ a path or browse and press *Use this folder*). Picked image files
 (PNG, JPEG, GIF, WebP, BMP) and up to 1,000 images inside `.zip`/`.cbz`
 archives are shown as a lazy-loaded thumbnail grid, resized to ~320px
 WebP thumbnails with Pillow. Click a thumbnail for a fullscreen viewer
-with `‹`/`›` buttons, arrow-key navigation, and `Esc` to close.
+with `‹`/`›` buttons, arrow-key navigation, and `Esc` to close. Zoom
+from fit to 8× with the toolbar controls or mouse wheel, drag to pan,
+double-click to toggle fit/200%, and press `0` to reset.
 Full-size images are capped at 20 MB. Archive members are served on
 demand by index and never extracted to disk. For frontend development,
 run `choosier --web` and `npm run dev` in `frontend/` (Vite proxies

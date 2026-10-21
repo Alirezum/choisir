@@ -8,6 +8,9 @@
   prev/next buttons, arrow keys, and `Esc`. Archive members are served
   on demand by index with size/type validation; nothing is extracted to
   disk.
+- Web UI: the fullscreen image viewer supports zooming from fit to 8×
+  with toolbar buttons, keyboard shortcuts, or the mouse wheel; drag to
+  pan while zoomed, double-click to toggle fit/200%, and `0` to reset.
 - Core: previews expose structured `PreviewImage` metadata and support
   `image`/`archive` kinds with bounded scanning (1,000 images, 20 MB
   each).
