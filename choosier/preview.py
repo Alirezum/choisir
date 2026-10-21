@@ -175,6 +175,15 @@ def _preview_image(entry: Path, head: bytes) -> Preview | None:
         size = entry.stat().st_size
     except OSError:
         size = len(head)
+    if size > PREVIEW_MAX_IMAGE_BYTES:
+        return Preview(
+            kind="image",
+            text=(
+                f"<image: {media_type}, {_format_size(size)} (too large to preview)>"
+            ),
+            size=size,
+            image_total=1,
+        )
     image = PreviewImage(
         index=None,
         name=entry.name,

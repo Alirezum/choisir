@@ -174,6 +174,15 @@ class PreviewEntryTest(unittest.TestCase):
         preview = preview_entry(target)
         self.assertEqual(preview.kind, "binary")
 
+    def test_oversized_standalone_image_is_not_listed(self) -> None:
+        target = self.root / "huge.png"
+        target.write_bytes(PNG)
+        with patch("choosier.preview.PREVIEW_MAX_IMAGE_BYTES", 8):
+            preview = preview_entry(target)
+        self.assertEqual(preview.kind, "image")
+        self.assertEqual(preview.images, ())
+        self.assertIn("too large to preview", preview.text)
+
 
 if __name__ == "__main__":
     unittest.main()
