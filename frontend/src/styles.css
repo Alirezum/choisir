@@ -191,15 +191,55 @@ main {
   padding: 8px 12px 0;
 }
 
-.preview {
+.preview-body {
   flex: 1;
-  margin: 0;
+  min-height: 0;
   padding: 8px 12px 12px;
   overflow: auto;
+}
+
+.preview {
+  margin: 0;
   font-family: var(--mono);
   font-size: 12.5px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.image-grid figure {
+  min-width: 0;
+  margin: 0;
+}
+
+.image-grid a {
+  display: block;
+}
+
+.image-grid img {
+  display: block;
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.image-grid figcaption {
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .status {

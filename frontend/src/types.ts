@@ -39,6 +39,15 @@ export type PreviewKind =
   | 'empty'
   | 'gone'
   | 'unreadable'
+  | 'archive'
+  | 'image'
+
+export interface PreviewImage {
+  index: number | null
+  name: string
+  media_type: string
+  size: number
+}
 
 export interface PreviewModel {
   kind: PreviewKind
@@ -46,6 +55,8 @@ export interface PreviewModel {
   truncated: boolean
   entry_count: number | null
   size: number | null
+  images: PreviewImage[]
+  image_total: number
 }
 
 export type PickStatus = 'picked' | 'empty' | 'exhausted' | 'invalid_path'

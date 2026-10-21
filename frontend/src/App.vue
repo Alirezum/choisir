@@ -27,7 +27,11 @@ const dryRun = ref(false)
 const includeHidden = ref(false)
 const mode = ref<'all' | 'files' | 'dirs'>('all')
 
-const choice = ref<{ item: string; preview: PreviewModel | null } | null>(null)
+const choice = ref<{
+  item: string
+  path: string
+  preview: PreviewModel | null
+} | null>(null)
 const status = ref('Enter a directory and press Pick.')
 const state = ref<StateResponse | null>(null)
 const activeTab = ref<TabId>('remaining')
@@ -106,7 +110,13 @@ async function pick(): Promise<void> {
     } else if (result.status === 'exhausted') {
       status.value = 'All choices have been selected. Delete log to reset.'
     } else {
-      choice.value = { item: result.item ?? '', preview: result.preview }
+      const item = result.item ?? ''
+      const base = path.value.replace(/[/\\]+$/, '')
+      choice.value = {
+        item,
+        path: `${base}/${item}`,
+        preview: result.preview,
+      }
       status.value = result.logged
         ? `Logged in ${result.log_file}.`
         : 'Dry run: selection not logged.'
@@ -123,9 +133,8 @@ async function openCurrent(): Promise<void> {
     status.value = 'Pick something first.'
     return
   }
-  const base = path.value.replace(/[/\\]+$/, '')
   try {
-    const result = await api.open(`${base}/${choice.value.item}`)
+    const result = await api.open(choice.value.path)
     status.value = `Opened ${result.opened}.`
   } catch (error) {
     status.value = describeError(error)
@@ -207,6 +216,7 @@ onUnmounted(() => {
     <section class="left">
       <ChoiceCard
         :item="choice?.item ?? null"
+        :path="choice?.path ?? ''"
         :preview="choice?.preview ?? null"
         @open="openCurrent"
       />

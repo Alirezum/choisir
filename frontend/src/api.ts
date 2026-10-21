@@ -11,7 +11,7 @@ import type {
   StateResponse,
 } from './types'
 
-type QueryValue = string | boolean | undefined | null
+type QueryValue = string | number | boolean | undefined | null
 
 function query(params: Record<string, QueryValue>): string {
   const search = new URLSearchParams()
@@ -63,6 +63,9 @@ export const api = {
   state: (params: StateQuery) => request<StateResponse>(`/api/state${query({ ...params })}`),
 
   preview: (path: string) => request<PreviewModel>(`/api/preview${query({ path })}`),
+
+  imageUrl: (path: string, index: number | null = null) =>
+    `/api/image${query({ path, index })}`,
 
   pick: (body: PickRequest) => postJson<PickResponse>('/api/pick', body),
 
