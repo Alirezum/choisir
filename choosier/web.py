@@ -8,12 +8,14 @@ TUI use. When the Vue frontend has been built (`frontend/` with Vite),
 
 import random
 import zipfile
+from io import BytesIO
 from pathlib import Path
 from typing import Literal
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.staticfiles import StaticFiles
+from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
 
 from choosier.chooser import (
@@ -32,6 +34,8 @@ from choosier.storage import archive_log, load_log, log_selection, reset_log
 
 DEFAULT_PORT = 8765
 PANEL_MAX_LINES = 200
+THUMBNAIL_MAX_SIZE = (320, 240)
+THUMBNAIL_QUALITY = 80
 STATIC_DIR = Path(__file__).resolve().parent / "web_static"
 
 
@@ -206,6 +210,21 @@ def _read_archived_image(path: Path, index: int) -> tuple[bytes, str]:
     return data, media_type
 
 
+def _make_thumbnail(data: bytes) -> bytes:
+    """Downscale image bytes to a small WebP for the thumbnail grid."""
+    try:
+        with Image.open(BytesIO(data)) as source:
+            image = ImageOps.exif_transpose(source)
+            image.thumbnail(THUMBNAIL_MAX_SIZE)
+            if image.mode not in ("RGB", "RGBA"):
+                image = image.convert("RGBA")
+            output = BytesIO()
+            image.save(output, format="WEBP", quality=THUMBNAIL_QUALITY)
+            return output.getvalue()
+    except (UnidentifiedImageError, Image.DecompressionBombError, OSError) as e:
+        raise HTTPException(status_code=415, detail=f"Cannot decode image: {e}")
+
+
 def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
     """Build the web app; initial values seed the defaults endpoint."""
     app = FastAPI(title="choosier")
@@ -332,8 +351,12 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
         return _preview_model(Path(path).expanduser())
 
     @app.get("/api/image")
-    def image(path: str, index: int | None = None) -> Response:
-        """Serve a standalone image or one image member of a zip archive."""
+    def image(path: str, index: int | None = None, thumb: bool = False) -> Response:
+        """Serve a standalone image or one image member of a zip archive.
+
+        `thumb=true` returns a downscaled WebP for the thumbnail grid;
+        otherwise the original bytes are served for the full-size viewer.
+        """
         entry = Path(path).expanduser()
         if not entry.is_file():
             raise HTTPException(status_code=404, detail="Image is gone")
@@ -341,6 +364,9 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
             data, media_type = _read_standalone_image(entry)
         else:
             data, media_type = _read_archived_image(entry, index)
+        if thumb:
+            data = _make_thumbnail(data)
+            media_type = "image/webp"
         return Response(
             content=data,
             media_type=media_type,

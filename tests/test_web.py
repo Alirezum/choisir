@@ -3,6 +3,7 @@
 import tempfile
 import unittest
 import zipfile
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -48,6 +49,13 @@ class WebApiTest(unittest.TestCase):
             for member, data in contents.items():
                 handle.writestr(member, data)
         return archive
+
+    def _real_png(self, size: tuple[int, int] = (640, 480)) -> bytes:
+        from PIL import Image
+
+        buffer = BytesIO()
+        Image.new("RGB", size, (40, 120, 200)).save(buffer, "PNG")
+        return buffer.getvalue()
 
     def test_defaults_echo_initial_values(self) -> None:
         client = TestClient(create_app("/somewhere", "/tmp/history.jsonl"))
@@ -211,6 +219,40 @@ class WebApiTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, JPEG)
         self.assertEqual(response.headers["content-type"], "image/jpeg")
+
+    def test_thumbnail_endpoint_returns_small_webp(self) -> None:
+        from PIL import Image
+
+        image = Path(self.tmp.name) / "photo.png"
+        original = self._real_png()
+        image.write_bytes(original)
+        response = self.client.get(
+            "/api/image", params={"path": str(image), "thumb": "true"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["content-type"], "image/webp")
+        self.assertEqual(response.content[:4], b"RIFF")
+        self.assertEqual(response.content[8:12], b"WEBP")
+        self.assertLess(len(response.content), len(original))
+        with Image.open(BytesIO(response.content)) as thumbnail:
+            self.assertLessEqual(max(thumbnail.size), 320)
+
+    def test_thumbnail_endpoint_serves_archive_member(self) -> None:
+        archive = self._archive({"one.png": self._real_png()})
+        response = self.client.get(
+            "/api/image",
+            params={"path": str(archive), "index": 0, "thumb": "true"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["content-type"], "image/webp")
+
+    def test_thumbnail_endpoint_rejects_undecodable_image(self) -> None:
+        fake = Path(self.tmp.name) / "fake.png"
+        fake.write_bytes(PNG)
+        response = self.client.get(
+            "/api/image", params={"path": str(fake), "thumb": "true"}
+        )
+        self.assertEqual(response.status_code, 415)
 
     def test_image_endpoint_rejects_bad_index(self) -> None:
         archive = self._archive()
