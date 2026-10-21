@@ -62,12 +62,15 @@ choosier --web [PATH] [--port 8765]
 The server binds to `127.0.0.1` only. Without `PATH` it starts in the
 current directory, and the path box stays editable in the browser (type
 a path or browse and press *Use this folder*). Picked image files
-(PNG, JPEG, GIF, WebP, BMP) and images inside `.zip`/`.cbz` archives are
-shown as a thumbnail grid: the first 12 images, up to 20 MB each.
-Archive members are served on demand by index and never extracted to
-disk. For frontend development, run `choosier --web` and `npm run dev`
-in `frontend/` (Vite proxies `/api`); `npm run build` writes the bundle
-to `choosier/web_static/`, which the server serves on the same origin.
+(PNG, JPEG, GIF, WebP, BMP) and up to 1,000 images inside `.zip`/`.cbz`
+archives are shown as a lazy-loaded thumbnail grid, resized to ~320px
+WebP thumbnails with Pillow. Click a thumbnail for a fullscreen viewer
+with `‹`/`›` buttons, arrow-key navigation, and `Esc` to close.
+Full-size images are capped at 20 MB. Archive members are served on
+demand by index and never extracted to disk. For frontend development,
+run `choosier --web` and `npm run dev` in `frontend/` (Vite proxies
+`/api`); `npm run build` writes the bundle to `choosier/web_static/`,
+which the server serves on the same origin.
 
 ## History log
 

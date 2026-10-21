@@ -2,11 +2,15 @@
 
 ## Unreleased
 
-- Web UI: picked image files and images inside `.zip`/`.cbz` archives are
-  shown as lazy-loaded thumbnails. Archive members are served on demand
-  by index with size/type validation; nothing is extracted to disk.
+- Web UI: picked image files and up to 1,000 images inside `.zip`/`.cbz`
+  archives are shown as lazy-loaded thumbnails. Thumbnails are resized
+  to WebP with Pillow; clicking one opens a fullscreen viewer with
+  prev/next buttons, arrow keys, and `Esc`. Archive members are served
+  on demand by index with size/type validation; nothing is extracted to
+  disk.
 - Core: previews expose structured `PreviewImage` metadata and support
-  `image`/`archive` kinds with bounded scanning (12 images, 20 MB each).
+  `image`/`archive` kinds with bounded scanning (1,000 images, 20 MB
+  each).
 
 ## 0.3.0 — 2026-10-19
 
