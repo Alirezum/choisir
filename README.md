@@ -61,10 +61,13 @@ choosier --web [PATH] [--port 8765]
 
 The server binds to `127.0.0.1` only. Without `PATH` it starts in the
 current directory, and the path box stays editable in the browser (type
-a path or browse and press *Use this folder*). For frontend
-development, run `choosier --web` and `npm run dev` in `frontend/`
-(Vite proxies `/api`); `npm run build` writes the bundle to
-`choosier/web_static/`, which the server serves on the same origin.
+a path or browse and press *Use this folder*). Picked image files
+(PNG, JPEG, GIF, WebP, BMP) and images inside `.zip`/`.cbz` archives are
+shown as a thumbnail grid: the first 12 images, up to 20 MB each.
+Archive members are served on demand by index and never extracted to
+disk. For frontend development, run `choosier --web` and `npm run dev`
+in `frontend/` (Vite proxies `/api`); `npm run build` writes the bundle
+to `choosier/web_static/`, which the server serves on the same origin.
 
 ## History log
 

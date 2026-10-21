@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Web UI: picked image files and images inside `.zip`/`.cbz` archives are
+  shown as lazy-loaded thumbnails. Archive members are served on demand
+  by index with size/type validation; nothing is extracted to disk.
+- Core: previews expose structured `PreviewImage` metadata and support
+  `image`/`archive` kinds with bounded scanning (12 images, 20 MB each).
+
 ## 0.3.0 — 2026-10-19
 
 - Web UI (`choosier --web`, optional `web` extra): localhost-bound
