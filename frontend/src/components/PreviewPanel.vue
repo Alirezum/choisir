@@ -61,8 +61,12 @@ watch(
   },
 )
 
-function thumbUrl(index: number | null): string {
-  return api.imageUrl(props.path, index, true)
+function previewImageUrl(index: number | null): string {
+  return api.imageUrl(
+    props.path,
+    index,
+    images.value.length === 1 ? 'preview' : 'thumb',
+  )
 }
 
 function frameLabel(image: PreviewImage, index: number): string {
@@ -110,7 +114,7 @@ function closeViewer(): void {
               </span>
               <span class="frame-shot">
                 <img
-                  :src="thumbUrl(image.index)"
+                  :src="previewImageUrl(image.index)"
                   :alt="image.name"
                   loading="lazy"
                   decoding="async"

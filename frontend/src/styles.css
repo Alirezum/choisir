@@ -543,7 +543,7 @@ kbd {
 }
 
 .image-grid.is-single {
-  grid-template-columns: minmax(0, 560px);
+  grid-template-columns: minmax(0, 760px);
 }
 
 .image-grid figure {
@@ -551,6 +551,17 @@ kbd {
   margin: 0;
   content-visibility: auto;
   contain-intrinsic-size: 148px 166px;
+}
+
+.image-grid.is-single figure {
+  width: fit-content;
+  max-width: 100%;
+  content-visibility: visible;
+}
+
+.image-grid.is-single .frame-shot {
+  width: fit-content;
+  max-width: 100%;
 }
 
 .frame-button {
@@ -595,6 +606,14 @@ kbd {
   aspect-ratio: 4 / 3;
   object-fit: cover;
   transition: opacity 120ms ease;
+}
+
+.image-grid.is-single img {
+  width: auto;
+  max-width: 100%;
+  max-height: min(52vh, 620px);
+  aspect-ratio: auto;
+  object-fit: contain;
 }
 
 .frame-button:hover img {
@@ -1322,6 +1341,10 @@ kbd {
 
   .image-grid {
     grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  }
+
+  .image-grid.is-single img {
+    max-height: min(38dvh, 420px);
   }
 
   .viewer-overlay {

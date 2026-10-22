@@ -238,7 +238,7 @@ class WebApiTest(unittest.TestCase):
         original = self._real_png()
         image.write_bytes(original)
         response = self.client.get(
-            "/api/image", params={"path": str(image), "thumb": "true"}
+            "/api/image", params={"path": str(image), "variant": "thumb"}
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers["content-type"], "image/webp")
@@ -246,13 +246,26 @@ class WebApiTest(unittest.TestCase):
         self.assertEqual(response.content[8:12], b"WEBP")
         self.assertLess(len(response.content), len(original))
         with Image.open(BytesIO(response.content)) as thumbnail:
-            self.assertLessEqual(max(thumbnail.size), 320)
+            self.assertLessEqual(max(thumbnail.size), 480)
+
+    def test_preview_variant_returns_large_webp(self) -> None:
+        from PIL import Image
+
+        image = Path(self.tmp.name) / "photo.png"
+        image.write_bytes(self._real_png((2400, 1800)))
+        response = self.client.get(
+            "/api/image", params={"path": str(image), "variant": "preview"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["content-type"], "image/webp")
+        with Image.open(BytesIO(response.content)) as preview:
+            self.assertEqual(preview.size, (1600, 1200))
 
     def test_thumbnail_endpoint_serves_archive_member(self) -> None:
         archive = self._archive({"one.png": self._real_png()})
         response = self.client.get(
             "/api/image",
-            params={"path": str(archive), "index": 0, "thumb": "true"},
+            params={"path": str(archive), "index": 0, "variant": "thumb"},
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers["content-type"], "image/webp")
@@ -261,7 +274,7 @@ class WebApiTest(unittest.TestCase):
         fake = Path(self.tmp.name) / "fake.png"
         fake.write_bytes(PNG)
         response = self.client.get(
-            "/api/image", params={"path": str(fake), "thumb": "true"}
+            "/api/image", params={"path": str(fake), "variant": "thumb"}
         )
         self.assertEqual(response.status_code, 415)
 
