@@ -61,15 +61,20 @@ choosier --web [PATH] [--port 8765]
 
 The server binds to `127.0.0.1` only. Without `PATH` it starts in the
 current directory, and the path box stays editable in the browser (type
-a path or browse and press *Use this folder*). Picked image files
-(PNG, JPEG, GIF, WebP, BMP) and up to 1,000 images inside `.zip`/`.cbz`
-archives are shown as a lazy-loaded thumbnail grid, resized to ~320px
-WebP thumbnails with Pillow. Click a thumbnail for a fullscreen viewer
-with `‹`/`›` buttons, arrow-key navigation, and `Esc` to close. Zoom
-from fit to 8× with the toolbar controls or mouse wheel, drag to pan,
-double-click to toggle fit/200%, and press `0` to reset.
-Full-size images are capped at 20 MB. Archive members are served on
-demand by index and never extracted to disk. In the History tab, each
+a path or browse and press *Use this folder*). The current choice lands
+on a split-flap board, with *Pick* and *Open* controls attached to it.
+Remaining, History, Browse, and Options share one workspace below the
+preview; the tabs support arrow-key navigation, and `Ctrl+N` picks again.
+The layout collapses from two columns to one on narrow screens.
+
+Picked image files (PNG, JPEG, GIF, WebP, BMP) and up to 1,000 images
+inside `.zip`/`.cbz` archives are shown as a lazy-loaded contact sheet,
+resized to ~320px WebP thumbnails with Pillow. Click a thumbnail for a
+fullscreen viewer with previous/next buttons, arrow-key navigation, and
+`Esc` to close. Zoom from fit to 8× with the toolbar controls or mouse
+wheel, drag to pan, double-click to toggle fit/200%, and press `0` to
+reset. Full-size images are capped at 20 MB. Archive members are served
+on demand by index and never extracted to disk. In the History tab, each
 row has a delete button that removes every log entry for that item, so
 it becomes eligible to be picked again without touching other history.
 For frontend development, run `choosier --web` and `npm run dev` in

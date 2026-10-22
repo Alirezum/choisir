@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Web UI: redesigned the interface around a split-flap board, with a
+  bundled Archivo/Archivo Narrow type system, paper-and-ink palette,
+  responsive two-column workspace, contact-sheet previews with archive
+  frame numbers, and matching full-screen viewer chrome. Pick, Open,
+  archive, clear, and per-item history deletion keep their existing
+  behavior.
+- Web UI: Remaining/History/Browse/Options now use keyboard-navigable
+  tabs, compact 24-hour history timestamps, and clearer empty states;
+  `Ctrl+N` picks again from anywhere.
 - Web UI: picked image files and up to 1,000 images inside `.zip`/`.cbz`
   archives are shown as lazy-loaded thumbnails. Thumbnails are resized
   to WebP with Pillow; clicking one opens a fullscreen viewer with
