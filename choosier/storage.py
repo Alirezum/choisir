@@ -1,11 +1,24 @@
 """Persistent JSONL history of selected items."""
 
 import json
+import os
+import stat
+import tempfile
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
 DEFAULT_LOG_FILENAME = ".choosier.jsonl"
 LOG_ROTATE_BYTES = 1_000_000
+
+
+@dataclass(frozen=True)
+class LogEntry:
+    """One valid history line: parsed timestamp, item, and display text."""
+
+    timestamp: str | None
+    item: str
+    display: str
 
 
 def parse_log_line(line: str) -> tuple[str | None, str | None]:
@@ -35,17 +48,16 @@ def _parse_log_line(line: str) -> str | None:
     return parse_log_line(line)[1]
 
 
-def load_log(
+def read_log_entries(
     log_file: str | Path = DEFAULT_LOG_FILENAME,
-) -> tuple[set[str], list[str]]:
-    """Read a history log once: (logged names, history display lines)."""
+) -> list[LogEntry]:
+    """Read a history log into structured entries, one per valid line."""
     log_path = Path(log_file).expanduser()
     try:
         raw_lines = log_path.read_text(encoding="utf-8").splitlines()
     except OSError:
-        return set(), []
-    names: set[str] = set()
-    display: list[str] = []
+        return []
+    entries: list[LogEntry] = []
     for raw in raw_lines:
         stripped = raw.strip()
         if not stripped:
@@ -53,9 +65,17 @@ def load_log(
         ts, item = parse_log_line(stripped)
         if item is None:
             continue
-        names.add(item)
-        display.append(f"{ts}  {item}" if ts is not None else stripped)
-    return names, display
+        display = f"{ts}  {item}" if ts is not None else stripped
+        entries.append(LogEntry(timestamp=ts, item=item, display=display))
+    return entries
+
+
+def load_log(
+    log_file: str | Path = DEFAULT_LOG_FILENAME,
+) -> tuple[set[str], list[str]]:
+    """Read a history log once: (logged names, history display lines)."""
+    entries = read_log_entries(log_file)
+    return {entry.item for entry in entries}, [entry.display for entry in entries]
 
 
 def get_logged_items(log_file: str | Path = DEFAULT_LOG_FILENAME) -> set[str]:
@@ -110,6 +130,53 @@ def _maybe_rotate_log(log_file: str | Path = DEFAULT_LOG_FILENAME) -> None:
         log_path.rename(_backup_path(log_path))
     except OSError:
         pass
+
+
+def _rewrite_log(log_path: Path, lines: list[str]) -> None:
+    """Replace the log file with `lines` atomically (temp file + rename)."""
+    content = "".join(lines)
+    handle_fd, temp_name = tempfile.mkstemp(
+        dir=log_path.parent, prefix=f".{log_path.name}.", suffix=".tmp"
+    )
+    temp_path = Path(temp_name)
+    try:
+        with os.fdopen(handle_fd, "w", encoding="utf-8", newline="") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.chmod(temp_path, stat.S_IMODE(log_path.stat().st_mode))
+        except OSError:
+            pass
+        os.replace(temp_path, log_path)
+    except BaseException:
+        temp_path.unlink(missing_ok=True)
+        raise
+
+
+def remove_log_item(item: str, log_file: str | Path = DEFAULT_LOG_FILENAME) -> int:
+    """Remove every log entry for `item`, keeping all other lines verbatim.
+
+    Returns the number of entries removed (0 if the log is missing or the
+    item is not logged). Rewrites the log atomically so a crash cannot
+    leave a truncated file behind.
+    """
+    log_path = Path(log_file).expanduser()
+    try:
+        raw_lines = log_path.read_text(encoding="utf-8").splitlines(keepends=True)
+    except FileNotFoundError:
+        return 0
+    kept: list[str] = []
+    removed = 0
+    for line in raw_lines:
+        if parse_log_line(line)[1] == item:
+            removed += 1
+        else:
+            kept.append(line)
+    if removed == 0:
+        return 0
+    _rewrite_log(log_path, kept)
+    return removed
 
 
 def archive_log(log_file: str | Path = DEFAULT_LOG_FILENAME) -> Path | None:
