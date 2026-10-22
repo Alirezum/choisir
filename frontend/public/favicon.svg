@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="4" fill="#12181c" />
-  <rect x="4" y="4" width="24" height="24" rx="1.5" fill="#212a31" />
-  <path d="M4 16h24" stroke="#0b0f12" stroke-width="1" />
+  <rect width="32" height="32" rx="4" fill="#080d10" />
+  <rect x="4" y="4" width="24" height="24" rx="1.5" fill="#1b242a" />
+  <path d="M4 16h24" stroke="#05090b" stroke-width="1" />
   <text
     x="16"
     y="23"
@@ -9,6 +9,6 @@
     font-family="Archivo Narrow, Arial Narrow, sans-serif"
     font-size="22"
     font-weight="700"
-    fill="#f2b544"
+    fill="#d9a23a"
   >c</text>
 </svg>
