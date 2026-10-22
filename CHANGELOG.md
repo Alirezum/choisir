@@ -3,7 +3,7 @@
 ## Unreleased
 
 - Web UI: redesigned the interface around a split-flap board, with a
-  bundled Archivo/Archivo Narrow type system, paper-and-ink palette,
+  bundled Archivo/Archivo Narrow type system, dark graphite palette,
   responsive two-column workspace, contact-sheet previews with archive
   frame numbers, and matching full-screen viewer chrome. Pick, Open,
   archive, clear, and per-item history deletion keep their existing
@@ -12,20 +12,28 @@
   tabs, compact 24-hour history timestamps, and clearer empty states;
   `Ctrl+N` picks again from anywhere.
 - Web UI: picked image files and up to 1,000 images inside `.zip`/`.cbz`
-  archives are shown as lazy-loaded thumbnails. Thumbnails are resized
-  to WebP with Pillow; clicking one opens a fullscreen viewer with
-  prev/next buttons, arrow keys, and `Esc`. Archive members are served
-  on demand by index with size/type validation; nothing is extracted to
-  disk.
+  archives are shown as lazy-loaded thumbnails. Single-image previews
+  now use a high-resolution (~1600 px) WebP rendition at the image's
+  native aspect ratio, while archive grids use ~480 px thumbnails.
+  Clicking a thumbnail opens a fullscreen viewer with prev/next buttons,
+  arrow keys, and `Esc`; the viewer loads the original image bytes.
+  Archive members are served on demand by index with size/type
+  validation; nothing is extracted to disk.
+- Web UI: standalone MP4, WebM, MOV, and MKV files play in a native
+  video preview with metadata and byte-range streaming. If the browser
+  cannot decode the container or codec, the preview falls back to the
+  existing Open action; nothing is transcoded, and videos inside
+  archives remain binary.
 - Web UI: the fullscreen image viewer supports zooming from fit to 8×
   with toolbar buttons, keyboard shortcuts, or the mouse wheel; drag to
   pan while zoomed, double-click to toggle fit/200%, and `0` to reset.
 - Web UI: each History row has a delete button that removes every log
   entry for that item, returning it to Remaining without touching other
   history.
-- Core: previews expose structured `PreviewImage` metadata and support
-  `image`/`archive` kinds with bounded scanning (1,000 images, 20 MB
-  each).
+- Core: previews expose structured `PreviewImage` and `PreviewVideo`
+  metadata and support `image`/`archive`/`video` kinds, with bounded
+  image scanning (1,000 images, 20 MB each) and video container sniffing
+  for MP4, WebM, MOV, and MKV.
 
 ## 0.3.0 — 2026-10-19
 
