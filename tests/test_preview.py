@@ -11,6 +11,10 @@ from choosier.preview import preview_entry
 PNG = b"\x89PNG\r\n\x1a\npngdata"
 JPEG = b"\xff\xd8\xffjpegdata"
 WEBP = b"RIFF\x00\x00\x00\x00WEBPdata"
+MP4 = b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom"
+WEBM = b"\x1aE\xdf\xa3webmdata"
+MOV = b"\x00\x00\x00\x14ftypqt  \x00\x00\x00\x00qt  "
+OGG = b"OggSvideo-data"
 
 
 class PreviewEntryTest(unittest.TestCase):
@@ -179,6 +183,43 @@ class PreviewEntryTest(unittest.TestCase):
     def test_fake_image_extension_falls_back_to_binary(self) -> None:
         target = self.root / "fake.png"
         target.write_bytes(b"\x00not an image")
+        preview = preview_entry(target)
+        self.assertEqual(preview.kind, "binary")
+
+    def test_video_file_gets_preview(self) -> None:
+        target = self.root / "clip.mp4"
+        target.write_bytes(MP4)
+        preview = preview_entry(target)
+        self.assertEqual(preview.kind, "video")
+        self.assertEqual(preview.size, len(MP4))
+        self.assertIsNotNone(preview.video)
+        video = preview.video
+        assert video is not None
+        self.assertEqual(video.name, "clip.mp4")
+        self.assertEqual(video.media_type, "video/mp4")
+        self.assertEqual(video.size, len(MP4))
+        self.assertIn("video/mp4", preview.text)
+
+    def test_video_containers_are_detected(self) -> None:
+        cases = {
+            "clip.m4v": (MP4, "video/mp4"),
+            "clip.mov": (MOV, "video/quicktime"),
+            "clip.webm": (WEBM, "video/webm"),
+            "clip.mkv": (WEBM, "video/x-matroska"),
+            "clip.ogv": (OGG, "video/ogg"),
+        }
+        for name, (data, media_type) in cases.items():
+            with self.subTest(name=name):
+                target = self.root / name
+                target.write_bytes(data)
+                preview = preview_entry(target)
+                self.assertEqual(preview.kind, "video")
+                assert preview.video is not None
+                self.assertEqual(preview.video.media_type, media_type)
+
+    def test_fake_video_extension_falls_back_to_binary(self) -> None:
+        target = self.root / "fake.mp4"
+        target.write_bytes(b"\x00not a video")
         preview = preview_entry(target)
         self.assertEqual(preview.kind, "binary")
 

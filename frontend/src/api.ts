@@ -71,6 +71,8 @@ export const api = {
     variant: 'thumb' | 'preview' | null = null,
   ) => `/api/image${query({ path, index, variant })}`,
 
+  videoUrl: (path: string) => `/api/video${query({ path })}`,
+
   pick: (body: PickRequest) => postJson<PickResponse>('/api/pick', body),
 
   open: (path: string) => postJson<OpenResponse>('/api/open', { path }),

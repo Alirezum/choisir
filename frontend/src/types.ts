@@ -47,9 +47,16 @@ export type PreviewKind =
   | 'unreadable'
   | 'archive'
   | 'image'
+  | 'video'
 
 export interface PreviewImage {
   index: number | null
+  name: string
+  media_type: string
+  size: number
+}
+
+export interface PreviewVideo {
   name: string
   media_type: string
   size: number
@@ -63,6 +70,7 @@ export interface PreviewModel {
   size: number | null
   images: PreviewImage[]
   image_total: number
+  video: PreviewVideo | null
 }
 
 export type PickStatus = 'picked' | 'empty' | 'exhausted' | 'invalid_path'
