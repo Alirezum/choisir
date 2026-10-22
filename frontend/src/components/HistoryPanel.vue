@@ -11,39 +11,78 @@ const props = defineProps<{
 const emit = defineEmits<{ archive: []; clear: []; remove: [item: string] }>()
 
 const header = computed(() => {
-  if (props.total === 0) return 'No history yet.'
   if (props.entries.length < props.total) {
-    return `${props.total} logged (showing last ${props.entries.length})`
+    return `${props.total} picked (showing the last ${props.entries.length})`
   }
-  return `${props.total} logged`
+  return `${props.total} picked`
 })
+
+function formatTimestamp(timestamp: string | null): string {
+  if (timestamp === null) return ''
+  const date = new Date(timestamp)
+  if (Number.isNaN(date.getTime())) return ''
+  const today = new Date()
+  if (date.toDateString() === today.toDateString()) {
+    return date.toLocaleTimeString(undefined, {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    })
+  }
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+}
+
+const rows = computed(() =>
+  props.entries.map((entry, index) => ({
+    ...entry,
+    key: `${index}-${entry.timestamp ?? 'legacy'}-${entry.item}`,
+    time: formatTimestamp(entry.timestamp),
+  })),
+)
 </script>
 
 <template>
   <div class="panel">
     <div class="panel-header">{{ header }}</div>
-    <ul class="list">
-      <li
-        v-for="(entry, index) in entries"
-        :key="`${index}-${entry.display}`"
-        class="history-row mono muted"
-      >
-        <span class="history-text" :title="entry.display">{{ entry.display }}</span>
-        <button
-          class="history-delete"
-          type="button"
-          :aria-label="`Remove ${entry.item} from history`"
-          title="Remove from history (item becomes pickable again)"
-          :disabled="busyItem !== null"
-          @click="emit('remove', entry.item)"
-        >
-          ✕
-        </button>
+    <ul v-if="rows.length > 0" class="list history-list">
+      <li v-for="row in rows" :key="row.key">
+        <div class="history-row">
+          <time
+            v-if="row.time !== ''"
+            class="history-time"
+            :datetime="row.timestamp ?? undefined"
+          >
+            {{ row.time }}
+          </time>
+          <span v-else class="history-time" aria-hidden="true"></span>
+          <span class="history-text" :title="row.item">{{ row.item }}</span>
+          <button
+            class="history-delete"
+            type="button"
+            :aria-label="`Remove ${row.item} from history`"
+            title="Remove from history (it becomes pickable again)"
+            :disabled="busyItem !== null"
+            @click="emit('remove', row.item)"
+          >
+            ×
+          </button>
+        </div>
       </li>
     </ul>
+    <p v-else class="panel-empty">
+      Picked items land here. Remove one to make it available again.
+    </p>
     <div class="panel-actions">
-      <button @click="emit('archive')">Archive history</button>
-      <button class="danger" @click="emit('clear')">Clear history</button>
+      <button type="button" @click="emit('archive')">Archive history</button>
+      <button class="danger" type="button" @click="emit('clear')">
+        Clear history
+      </button>
     </div>
   </div>
 </template>

@@ -1,3 +1,5 @@
+import '@fontsource-variable/archivo'
+import '@fontsource/archivo-narrow/latin-700.css'
 import { createApp } from 'vue'
 
 import App from './App.vue'

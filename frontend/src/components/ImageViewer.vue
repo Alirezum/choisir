@@ -187,59 +187,64 @@ onUnmounted(() => {
     @click.self="close"
   >
     <header class="viewer-top">
-      <span class="viewer-name" :title="current?.name ?? ''">
-        {{ current?.name ?? '' }}
-      </span>
-      <span class="viewer-count">{{ counter }}</span>
-      <div class="viewer-zoom" role="group" aria-label="Zoom">
-        <button
-          class="viewer-zoom-out"
-          type="button"
-          aria-label="Zoom out"
-          title="Zoom out (-)"
-          :disabled="zoom <= MIN_ZOOM"
-          @click="stepZoom(-1)"
+      <div class="viewer-id">
+        <span class="viewer-name" :title="current?.name ?? ''">
+          {{ current?.name ?? '' }}
+        </span>
+        <span class="viewer-count">{{ counter }}</span>
+      </div>
+      <div class="viewer-controls">
+        <div class="viewer-zoom" role="group" aria-label="Zoom">
+          <button
+            class="viewer-zoom-out"
+            type="button"
+            aria-label="Zoom out"
+            title="Zoom out (-)"
+            :disabled="zoom <= MIN_ZOOM"
+            @click="stepZoom(-1)"
+          >
+            −
+          </button>
+          <button
+            class="viewer-zoom-label"
+            type="button"
+            aria-label="Reset zoom to fit"
+            title="Reset zoom (0)"
+            @click="resetZoom"
+          >
+            {{ zoomLabel }}
+          </button>
+          <button
+            class="viewer-zoom-in"
+            type="button"
+            aria-label="Zoom in"
+            title="Zoom in (+)"
+            :disabled="zoom >= MAX_ZOOM"
+            @click="stepZoom(1)"
+          >
+            +
+          </button>
+        </div>
+        <a
+          v-if="current"
+          class="viewer-link"
+          :href="imageUrl(current)"
+          target="_blank"
+          rel="noopener"
         >
-          −
-        </button>
+          Open original
+        </a>
         <button
-          class="viewer-zoom-label"
+          ref="closeButton"
+          class="viewer-close"
           type="button"
-          aria-label="Reset zoom to fit"
-          title="Reset zoom (0)"
-          @click="resetZoom"
+          aria-label="Close viewer"
+          @click="close"
         >
-          {{ zoomLabel }}
-        </button>
-        <button
-          class="viewer-zoom-in"
-          type="button"
-          aria-label="Zoom in"
-          title="Zoom in (+)"
-          :disabled="zoom >= MAX_ZOOM"
-          @click="stepZoom(1)"
-        >
-          +
+          <span class="viewer-close-text">Close</span>
+          <span aria-hidden="true">×</span>
         </button>
       </div>
-      <a
-        v-if="current"
-        class="viewer-link"
-        :href="imageUrl(current)"
-        target="_blank"
-        rel="noopener"
-      >
-        Open original
-      </a>
-      <button
-        ref="closeButton"
-        class="viewer-close"
-        type="button"
-        aria-label="Close viewer"
-        @click="close"
-      >
-        ✕
-      </button>
     </header>
     <button
       v-if="images.length > 1"
@@ -248,7 +253,9 @@ onUnmounted(() => {
       aria-label="Previous image"
       @click="step(-1)"
     >
-      ‹
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M15 4L7 12l8 8" />
+      </svg>
     </button>
     <img
       v-if="current"
@@ -272,7 +279,9 @@ onUnmounted(() => {
       aria-label="Next image"
       @click="step(1)"
     >
-      ›
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M9 4l8 8-8 8" />
+      </svg>
     </button>
   </div>
 </template>

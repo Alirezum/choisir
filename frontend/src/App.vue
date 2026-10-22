@@ -1,20 +1,21 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 
 import { api } from './api'
 import BrowserPanel from './components/BrowserPanel.vue'
-import ChoiceCard from './components/ChoiceCard.vue'
+import ChoiceBoard from './components/ChoiceBoard.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import HistoryPanel from './components/HistoryPanel.vue'
 import OptionsPanel from './components/OptionsPanel.vue'
+import PreviewPanel from './components/PreviewPanel.vue'
 import RemainingPanel from './components/RemainingPanel.vue'
 import StatusBar from './components/StatusBar.vue'
 import type { PreviewModel, StateResponse } from './types'
 
 const tabs = [
-  { id: 'browse', label: 'Browse' },
   { id: 'remaining', label: 'Remaining' },
   { id: 'history', label: 'History' },
+  { id: 'browse', label: 'Browse' },
   { id: 'options', label: 'Options' },
 ] as const
 
@@ -32,11 +33,12 @@ const choice = ref<{
   path: string
   preview: PreviewModel | null
 } | null>(null)
-const status = ref('Enter a directory and press Pick.')
+const status = ref('Choose a folder, then press Pick.')
 const state = ref<StateResponse | null>(null)
 const activeTab = ref<TabId>('remaining')
 const clearing = ref(false)
 const removingItem = ref<string | null>(null)
+const pickSerial = ref(0)
 const pathInput = ref<HTMLInputElement | null>(null)
 
 const filters = computed(() => ({
@@ -80,10 +82,13 @@ function scheduleRefresh(): void {
 }
 
 watch([path, logFile, includeHidden, mode], scheduleRefresh)
+watch(path, () => {
+  choice.value = null
+})
 
 async function pick(): Promise<void> {
   if (path.value.trim() === '') {
-    status.value = 'Enter a directory.'
+    status.value = 'Enter a folder path.'
     pathInput.value?.focus()
     return
   }
@@ -92,7 +97,7 @@ async function pick(): Promise<void> {
   if (rawSeed !== '') {
     seedValue = Number(rawSeed)
     if (!Number.isInteger(seedValue)) {
-      status.value = 'Invalid seed (must be an integer).'
+      status.value = 'Seed must be a whole number.'
       return
     }
   }
@@ -105,11 +110,11 @@ async function pick(): Promise<void> {
       ...filters.value,
     })
     if (result.status === 'invalid_path') {
-      status.value = 'Invalid Path.'
+      status.value = "That folder doesn't exist."
     } else if (result.status === 'empty') {
-      status.value = 'Path Empty.'
+      status.value = 'That folder has nothing to pick.'
     } else if (result.status === 'exhausted') {
-      status.value = 'All choices have been selected. Delete log to reset.'
+      status.value = 'All items have been picked. Clear or archive history to start over.'
     } else {
       const item = result.item ?? ''
       const base = path.value.replace(/[/\\]+$/, '')
@@ -118,9 +123,10 @@ async function pick(): Promise<void> {
         path: `${base}/${item}`,
         preview: result.preview,
       }
+      pickSerial.value += 1
       status.value = result.logged
-        ? `Logged in ${result.log_file}.`
-        : 'Dry run: selection not logged.'
+        ? `Picked ${item}.`
+        : `Picked ${item}. Dry run, so it wasn't logged.`
     }
   } catch (error) {
     status.value = describeError(error)
@@ -147,8 +153,8 @@ async function archiveHistory(): Promise<void> {
     const result = await api.archive(path.value, logFile.value)
     status.value =
       result.backup === null
-        ? `No log at ${result.log_file}.`
-        : `Archived to ${result.backup}.`
+        ? `No history file at ${result.log_file}.`
+        : `Archived history to ${result.backup}.`
   } catch (error) {
     status.value = describeError(error)
   } finally {
@@ -161,8 +167,8 @@ async function clearHistory(): Promise<void> {
   try {
     const result = await api.clear(path.value, logFile.value)
     status.value = result.removed
-      ? `Removed ${result.log_file}.`
-      : `No log at ${result.log_file}.`
+      ? `Cleared ${result.log_file}.`
+      : `No history file at ${result.log_file}.`
   } catch (error) {
     status.value = describeError(error)
   } finally {
@@ -190,11 +196,37 @@ async function removeHistoryItem(item: string): Promise<void> {
   }
 }
 
-function onKeydown(event: KeyboardEvent): void {
-  if (event.ctrlKey && event.key.toLowerCase() === 'n') {
-    event.preventDefault()
-    void pick()
+function onTabKey(event: KeyboardEvent, id: TabId): void {
+  const current = tabs.findIndex((tab) => tab.id === id)
+  let next = current
+  if (event.key === 'ArrowRight') {
+    next = (current + 1) % tabs.length
+  } else if (event.key === 'ArrowLeft') {
+    next = (current - 1 + tabs.length) % tabs.length
+  } else if (event.key === 'Home') {
+    next = 0
+  } else if (event.key === 'End') {
+    next = tabs.length - 1
+  } else {
+    return
   }
+  event.preventDefault()
+  const target = tabs[next]
+  if (target === undefined) return
+  activeTab.value = target.id
+  void nextTick(() => document.getElementById(`tab-${target.id}`)?.focus())
+}
+
+function onKeydown(event: KeyboardEvent): void {
+  if (!event.ctrlKey || event.key.toLowerCase() !== 'n') return
+  event.preventDefault()
+  if (
+    clearing.value ||
+    document.querySelector('.viewer-overlay, .overlay') !== null
+  ) {
+    return
+  }
+  void pick()
 }
 
 onMounted(async () => {
@@ -207,8 +239,6 @@ onMounted(async () => {
     status.value = describeError(error)
   }
   await refresh()
-  pathInput.value?.focus()
-  pathInput.value?.select()
 })
 
 onUnmounted(() => {
@@ -218,73 +248,130 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <header class="topbar">
-    <h1>choosier</h1>
-    <span class="tag">local web UI</span>
-  </header>
-  <div class="pathbar">
-    <input
-      ref="pathInput"
-      v-model="path"
-      class="path-input"
-      placeholder="Directory path"
-      @keyup.enter="pick"
-    />
-    <button class="primary" @click="pick">Pick<kbd>ctrl+n</kbd></button>
-    <button :disabled="choice === null" @click="openCurrent">Open</button>
-  </div>
-  <main>
-    <section class="left">
-      <ChoiceCard
+  <div class="app-shell">
+    <header class="topbar">
+      <span class="wordmark">choosier</span>
+      <label class="location">
+        <span class="sr-only">Folder</span>
+        <input
+          ref="pathInput"
+          v-model="path"
+          class="path-input"
+          placeholder="Directory path"
+          autocomplete="off"
+          spellcheck="false"
+          @keyup.enter="pick"
+        />
+      </label>
+    </header>
+
+    <main class="stage">
+      <ChoiceBoard
         :item="choice?.item ?? null"
-        :path="choice?.path ?? ''"
-        :preview="choice?.preview ?? null"
+        :remaining="state?.remaining_total ?? 0"
+        :picked="state?.history_total ?? 0"
+        :serial="pickSerial"
+        @pick="pick"
         @open="openCurrent"
       />
-      <StatusBar :message="status" />
-    </section>
-    <section class="right">
-      <nav class="tabs">
-        <button
-          v-for="tab in tabs"
-          :key="tab.id"
-          :class="{ active: activeTab === tab.id }"
-          @click="activeTab = tab.id"
-        >
-          {{ tab.label
-          }}<span v-if="tabCount(tab.id) !== null" class="count">{{
-            tabCount(tab.id)
-          }}</span>
-        </button>
-      </nav>
-      <BrowserPanel v-show="activeTab === 'browse'" v-model="path" />
-      <RemainingPanel
-        v-show="activeTab === 'remaining'"
-        :items="state?.remaining ?? []"
-        :total="state?.remaining_total ?? 0"
-      />
-      <HistoryPanel
-        v-show="activeTab === 'history'"
-        :entries="state?.history ?? []"
-        :total="state?.history_total ?? 0"
-        :busy-item="removingItem"
-        @archive="archiveHistory"
-        @clear="clearing = true"
-        @remove="removeHistoryItem"
-      />
-      <OptionsPanel
-        v-show="activeTab === 'options'"
-        v-model:log="logFile"
-        v-model:seed="seed"
-        v-model:dry="dryRun"
-        v-model:hidden="includeHidden"
-        v-model:mode="mode"
-      />
-    </section>
-  </main>
+
+      <div class="workspace">
+        <PreviewPanel
+          :path="choice?.path ?? ''"
+          :preview="choice?.preview ?? null"
+        />
+
+        <section class="side" aria-label="Folder panels">
+          <nav class="tabs" role="tablist" aria-label="Folder panels">
+            <button
+              v-for="tab in tabs"
+              :id="`tab-${tab.id}`"
+              :key="tab.id"
+              type="button"
+              role="tab"
+              :class="{ active: activeTab === tab.id }"
+              :aria-selected="activeTab === tab.id"
+              :aria-controls="`panel-${tab.id}`"
+              :tabindex="activeTab === tab.id ? 0 : -1"
+              @click="activeTab = tab.id"
+              @keydown="onTabKey($event, tab.id)"
+            >
+              {{ tab.label
+              }}<span v-if="tabCount(tab.id) !== null" class="count">{{
+                tabCount(tab.id)
+              }}</span>
+            </button>
+          </nav>
+
+          <div
+            id="panel-remaining"
+            v-show="activeTab === 'remaining'"
+            class="tab-panel"
+            role="tabpanel"
+            aria-labelledby="tab-remaining"
+            tabindex="0"
+          >
+            <RemainingPanel
+              :items="state?.remaining ?? []"
+              :total="state?.remaining_total ?? 0"
+            />
+          </div>
+
+          <div
+            id="panel-history"
+            v-show="activeTab === 'history'"
+            class="tab-panel"
+            role="tabpanel"
+            aria-labelledby="tab-history"
+            tabindex="0"
+          >
+            <HistoryPanel
+              :entries="state?.history ?? []"
+              :total="state?.history_total ?? 0"
+              :busy-item="removingItem"
+              @archive="archiveHistory"
+              @clear="clearing = true"
+              @remove="removeHistoryItem"
+            />
+          </div>
+
+          <div
+            id="panel-browse"
+            v-show="activeTab === 'browse'"
+            class="tab-panel"
+            role="tabpanel"
+            aria-labelledby="tab-browse"
+            tabindex="0"
+          >
+            <BrowserPanel v-model="path" />
+          </div>
+
+          <div
+            id="panel-options"
+            v-show="activeTab === 'options'"
+            class="tab-panel"
+            role="tabpanel"
+            aria-labelledby="tab-options"
+            tabindex="0"
+          >
+            <OptionsPanel
+              v-model:log="logFile"
+              v-model:seed="seed"
+              v-model:dry="dryRun"
+              v-model:hidden="includeHidden"
+              v-model:mode="mode"
+            />
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <StatusBar :message="status" />
+  </div>
+
   <ConfirmDialog
     v-if="clearing"
-    :message="`Clear all history?\n${state?.log_file ?? path}`"
+    :message="`Clear history?\n${state?.log_file ?? path}`"
     @confirm="clearHistory"
     @cancel="clearing = false"
   />

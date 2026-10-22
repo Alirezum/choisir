@@ -3,5 +3,7 @@ defineProps<{ message: string }>()
 </script>
 
 <template>
-  <div class="status">{{ message }}</div>
+  <footer class="status" role="status" aria-live="polite">
+    {{ message }}
+  </footer>
 </template>
