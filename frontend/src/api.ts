@@ -7,6 +7,7 @@ import type {
   PickRequest,
   PickResponse,
   PreviewModel,
+  RemoveHistoryItemResponse,
   StateQuery,
   StateResponse,
 } from './types'
@@ -80,4 +81,10 @@ export const api = {
     request<ClearResponse>(`/api/history${query({ path, log_file: logFile })}`, {
       method: 'DELETE',
     }),
+
+  removeHistoryItem: (path: string, logFile: string, item: string) =>
+    request<RemoveHistoryItemResponse>(
+      `/api/history/item${query({ path, item, log_file: logFile })}`,
+      { method: 'DELETE' },
+    ),
 }

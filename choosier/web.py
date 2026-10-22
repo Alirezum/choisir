@@ -30,7 +30,14 @@ from choosier.preview import (
     preview_entry,
     sniff_image_media_type,
 )
-from choosier.storage import archive_log, load_log, log_selection, reset_log
+from choosier.storage import (
+    LogEntry,
+    archive_log,
+    log_selection,
+    read_log_entries,
+    remove_log_item,
+    reset_log,
+)
 
 DEFAULT_PORT = 8765
 PANEL_MAX_LINES = 200
@@ -76,13 +83,21 @@ class BrowseResponse(BaseModel):
     entries: list[BrowserEntry]
 
 
+class HistoryEntryModel(BaseModel):
+    """One history log line with its parsed item for per-item actions."""
+
+    timestamp: str | None
+    item: str
+    display: str
+
+
 class StateResponse(BaseModel):
     valid_path: bool
     path: str
     log_file: str
     remaining: list[str]
     remaining_total: int
-    history: list[str]
+    history: list[HistoryEntryModel]
     history_total: int
 
 
@@ -120,6 +135,12 @@ class ArchiveResponse(BaseModel):
 class ClearResponse(BaseModel):
     log_file: str
     removed: bool
+
+
+class RemoveHistoryItemResponse(BaseModel):
+    log_file: str
+    item: str
+    removed: int
 
 
 def _log_path(path: str, log_file: str | None) -> Path:
@@ -291,7 +312,8 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
             )
         except FileNotFoundError:
             candidates = set()
-        logged, history = load_log(log_path)
+        entries: list[LogEntry] = read_log_entries(log_path)
+        logged = {entry.item for entry in entries}
         remaining = sorted(candidates - logged)
         return StateResponse(
             valid_path=True,
@@ -299,8 +321,15 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
             log_file=str(log_path),
             remaining=remaining[:PANEL_MAX_LINES],
             remaining_total=len(remaining),
-            history=history[-PANEL_MAX_LINES:],
-            history_total=len(history),
+            history=[
+                HistoryEntryModel(
+                    timestamp=entry.timestamp,
+                    item=entry.item,
+                    display=entry.display,
+                )
+                for entry in entries[-PANEL_MAX_LINES:]
+            ],
+            history_total=len(entries),
         )
 
     @app.post("/api/pick")
@@ -408,6 +437,22 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
         except OSError as e:
             raise HTTPException(status_code=500, detail=f"Error resetting log: {e}")
         return ClearResponse(log_file=str(log_path), removed=removed)
+
+    @app.delete("/api/history/item")
+    def remove_history_item(
+        path: str, item: str, log_file: str | None = None
+    ) -> RemoveHistoryItemResponse:
+        """Delete every log entry for `item`, leaving other entries alone."""
+        log_path = _log_path(path, log_file)
+        try:
+            removed = remove_log_item(item, log_path)
+        except OSError as e:
+            raise HTTPException(
+                status_code=500, detail=f"Error removing history item: {e}"
+            )
+        return RemoveHistoryItemResponse(
+            log_file=str(log_path), item=item, removed=removed
+        )
 
     if STATIC_DIR.is_dir():
         app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="spa")

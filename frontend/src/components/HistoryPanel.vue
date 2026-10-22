@@ -1,13 +1,19 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-const props = defineProps<{ lines: string[]; total: number }>()
-const emit = defineEmits<{ archive: []; clear: [] }>()
+import type { HistoryEntry } from '../types'
+
+const props = defineProps<{
+  entries: HistoryEntry[]
+  total: number
+  busyItem: string | null
+}>()
+const emit = defineEmits<{ archive: []; clear: []; remove: [item: string] }>()
 
 const header = computed(() => {
   if (props.total === 0) return 'No history yet.'
-  if (props.lines.length < props.total) {
-    return `${props.total} logged (showing last ${props.lines.length})`
+  if (props.entries.length < props.total) {
+    return `${props.total} logged (showing last ${props.entries.length})`
   }
   return `${props.total} logged`
 })
@@ -17,8 +23,22 @@ const header = computed(() => {
   <div class="panel">
     <div class="panel-header">{{ header }}</div>
     <ul class="list">
-      <li v-for="(line, index) in lines" :key="`${index}-${line}`" class="mono muted">
-        {{ line }}
+      <li
+        v-for="(entry, index) in entries"
+        :key="`${index}-${entry.display}`"
+        class="history-row mono muted"
+      >
+        <span class="history-text" :title="entry.display">{{ entry.display }}</span>
+        <button
+          class="history-delete"
+          type="button"
+          :aria-label="`Remove ${entry.item} from history`"
+          title="Remove from history (item becomes pickable again)"
+          :disabled="busyItem !== null"
+          @click="emit('remove', entry.item)"
+        >
+          ✕
+        </button>
       </li>
     </ul>
     <div class="panel-actions">

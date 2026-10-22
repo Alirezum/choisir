@@ -16,6 +16,8 @@ try:
 except ImportError:
     HAS_WEB = False
 
+from choosier.storage import log_selection
+
 PNG = b"\x89PNG\r\n\x1a\npngdata"
 JPEG = b"\xff\xd8\xffjpegdata"
 
@@ -105,6 +107,15 @@ class WebApiTest(unittest.TestCase):
         body = self.client.get("/api/state", params=self._params()).json()
         self.assertEqual(body["remaining_total"], 2)
         self.assertEqual(body["history_total"], 1)
+
+    def test_state_history_is_structured(self) -> None:
+        log_selection("a", self.log)
+        body = self.client.get("/api/state", params=self._params()).json()
+        self.assertEqual(body["history_total"], 1)
+        entry = body["history"][0]
+        self.assertEqual(entry["item"], "a")
+        self.assertIsNotNone(entry["timestamp"])
+        self.assertIn("a", entry["display"])
 
     def test_pick_logs_and_previews(self) -> None:
         response = self.client.post(
@@ -324,6 +335,51 @@ class WebApiTest(unittest.TestCase):
     def test_archive_without_log_reports_none(self) -> None:
         body = self.client.post("/api/history/archive", params=self._params()).json()
         self.assertIsNone(body["backup"])
+
+    def test_remove_history_item_removes_all_matching_entries(self) -> None:
+        for item in ("a", "b", "a"):
+            log_selection(item, self.log)
+        response = self.client.delete(
+            "/api/history/item", params=self._params(item="a")
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["item"], "a")
+        self.assertEqual(body["removed"], 2)
+        state = self.client.get("/api/state", params=self._params()).json()
+        self.assertEqual(state["history_total"], 1)
+        self.assertEqual([entry["item"] for entry in state["history"]], ["b"])
+        self.assertIn("a", state["remaining"])
+        self.assertNotIn("b", state["remaining"])
+
+    def test_remove_history_item_unknown_is_noop(self) -> None:
+        log_selection("a", self.log)
+        before = self.log.read_bytes()
+        body = self.client.delete(
+            "/api/history/item", params=self._params(item="missing")
+        ).json()
+        self.assertEqual(body["removed"], 0)
+        self.assertEqual(self.log.read_bytes(), before)
+
+    def test_remove_history_item_without_log(self) -> None:
+        body = self.client.delete(
+            "/api/history/item", params=self._params(item="a")
+        ).json()
+        self.assertEqual(body["removed"], 0)
+        self.assertFalse(self.log.exists())
+
+    def test_remove_history_item_special_name(self) -> None:
+        log_selection("a - b", self.log)
+        body = self.client.delete(
+            "/api/history/item", params=self._params(item="a - b")
+        ).json()
+        self.assertEqual(body["removed"], 1)
+        self.assertEqual(
+            self.client.get("/api/state", params=self._params()).json()[
+                "history_total"
+            ],
+            0,
+        )
 
     def test_open_launches_entry(self) -> None:
         with patch("choosier.web.launch_path") as launcher:

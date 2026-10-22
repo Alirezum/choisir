@@ -36,6 +36,7 @@ const status = ref('Enter a directory and press Pick.')
 const state = ref<StateResponse | null>(null)
 const activeTab = ref<TabId>('remaining')
 const clearing = ref(false)
+const removingItem = ref<string | null>(null)
 const pathInput = ref<HTMLInputElement | null>(null)
 
 const filters = computed(() => ({
@@ -169,6 +170,26 @@ async function clearHistory(): Promise<void> {
   }
 }
 
+async function removeHistoryItem(item: string): Promise<void> {
+  if (removingItem.value !== null) return
+  removingItem.value = item
+  try {
+    const result = await api.removeHistoryItem(path.value, logFile.value, item)
+    if (result.removed === 0) {
+      status.value = `No history entry for "${item}".`
+    } else if (result.removed === 1) {
+      status.value = `Removed "${item}" from history.`
+    } else {
+      status.value = `Removed ${result.removed} entries for "${item}".`
+    }
+  } catch (error) {
+    status.value = describeError(error)
+  } finally {
+    removingItem.value = null
+    await refresh()
+  }
+}
+
 function onKeydown(event: KeyboardEvent): void {
   if (event.ctrlKey && event.key.toLowerCase() === 'n') {
     event.preventDefault()
@@ -244,10 +265,12 @@ onUnmounted(() => {
       />
       <HistoryPanel
         v-show="activeTab === 'history'"
-        :lines="state?.history ?? []"
+        :entries="state?.history ?? []"
         :total="state?.history_total ?? 0"
+        :busy-item="removingItem"
         @archive="archiveHistory"
         @clear="clearing = true"
+        @remove="removeHistoryItem"
       />
       <OptionsPanel
         v-show="activeTab === 'options'"

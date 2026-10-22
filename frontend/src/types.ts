@@ -28,8 +28,14 @@ export interface StateResponse {
   log_file: string
   remaining: string[]
   remaining_total: number
-  history: string[]
+  history: HistoryEntry[]
   history_total: number
+}
+
+export interface HistoryEntry {
+  timestamp: string | null
+  item: string
+  display: string
 }
 
 export type PreviewKind =
@@ -91,4 +97,10 @@ export interface ArchiveResponse {
 export interface ClearResponse {
   log_file: string
   removed: boolean
+}
+
+export interface RemoveHistoryItemResponse {
+  log_file: string
+  item: string
+  removed: number
 }
