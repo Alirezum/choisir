@@ -11,6 +11,9 @@
 - Web UI: the fullscreen image viewer supports zooming from fit to 8×
   with toolbar buttons, keyboard shortcuts, or the mouse wheel; drag to
   pan while zoomed, double-click to toggle fit/200%, and `0` to reset.
+- Web UI: each History row has a delete button that removes every log
+  entry for that item, returning it to Remaining without touching other
+  history.
 - Core: previews expose structured `PreviewImage` metadata and support
   `image`/`archive` kinds with bounded scanning (1,000 images, 20 MB
   each).

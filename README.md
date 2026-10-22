@@ -69,10 +69,12 @@ with `‹`/`›` buttons, arrow-key navigation, and `Esc` to close. Zoom
 from fit to 8× with the toolbar controls or mouse wheel, drag to pan,
 double-click to toggle fit/200%, and press `0` to reset.
 Full-size images are capped at 20 MB. Archive members are served on
-demand by index and never extracted to disk. For frontend development,
-run `choosier --web` and `npm run dev` in `frontend/` (Vite proxies
-`/api`); `npm run build` writes the bundle to `choosier/web_static/`,
-which the server serves on the same origin.
+demand by index and never extracted to disk. In the History tab, each
+row has a delete button that removes every log entry for that item, so
+it becomes eligible to be picked again without touching other history.
+For frontend development, run `choosier --web` and `npm run dev` in
+`frontend/` (Vite proxies `/api`); `npm run build` writes the bundle to
+`choosier/web_static/`, which the server serves on the same origin.
 
 ## History log
 
