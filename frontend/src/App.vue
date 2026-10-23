@@ -51,6 +51,11 @@ function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+function entryPath(item: string): string {
+  const base = path.value.replace(/[/\\]+$/, '')
+  return `${base}/${item}`
+}
+
 function tabCount(id: TabId): number | null {
   if (state.value === null) return null
   if (id === 'remaining') return state.value.remaining_total
@@ -117,10 +122,9 @@ async function pick(): Promise<void> {
       status.value = 'All items have been picked. Clear or archive history to start over.'
     } else {
       const item = result.item ?? ''
-      const base = path.value.replace(/[/\\]+$/, '')
       choice.value = {
         item,
-        path: `${base}/${item}`,
+        path: entryPath(item),
         preview: result.preview,
       }
       pickSerial.value += 1
@@ -135,15 +139,37 @@ async function pick(): Promise<void> {
   }
 }
 
+async function openEntry(entry: string): Promise<void> {
+  try {
+    const result = await api.open(entry)
+    status.value = `Opened ${result.opened}.`
+  } catch (error) {
+    status.value = describeError(error)
+  }
+}
+
 async function openCurrent(): Promise<void> {
   if (choice.value === null) {
     status.value = 'Pick something first.'
     return
   }
+  await openEntry(choice.value.path)
+}
+
+function openHistoryItem(item: string): void {
+  void openEntry(entryPath(item))
+}
+
+async function previewHistoryItem(item: string): Promise<void> {
+  const target = { item, path: entryPath(item), preview: null }
+  choice.value = target
   try {
-    const result = await api.open(choice.value.path)
-    status.value = `Opened ${result.opened}.`
+    const preview = await api.preview(target.path)
+    if (choice.value !== target) return
+    choice.value = { ...target, preview }
+    status.value = `Previewing ${item} from history.`
   } catch (error) {
+    if (choice.value !== target) return
     status.value = describeError(error)
   }
 }
@@ -329,9 +355,12 @@ onUnmounted(() => {
               :entries="state?.history ?? []"
               :total="state?.history_total ?? 0"
               :busy-item="removingItem"
+              :selected="choice?.item ?? null"
               @archive="archiveHistory"
               @clear="clearing = true"
               @remove="removeHistoryItem"
+              @select="previewHistoryItem"
+              @open="openHistoryItem"
             />
           </div>
 
