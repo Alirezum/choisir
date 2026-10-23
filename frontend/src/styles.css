@@ -813,9 +813,32 @@ kbd {
 
 .history-row {
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr) 24px;
+  grid-template-columns: minmax(0, 1fr) 24px 24px;
   align-items: center;
   gap: 8px;
+  border-radius: 2px;
+}
+
+.history-row:hover,
+.history-row.is-selected {
+  background: var(--paper-sunken);
+}
+
+.history-select {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.history-row.is-selected .history-text {
+  color: var(--amber);
 }
 
 .history-time {
@@ -834,6 +857,7 @@ kbd {
   white-space: nowrap;
 }
 
+.history-open,
 .history-delete {
   width: 24px;
   height: 24px;
@@ -842,19 +866,36 @@ kbd {
   border-radius: 2px;
   background: transparent;
   color: var(--ink-soft);
-  font-size: 15px;
   line-height: 1;
   opacity: 0.55;
 }
 
+.history-open {
+  font-size: 14px;
+}
+
+.history-delete {
+  font-size: 15px;
+}
+
+.history-open:hover:not(:disabled),
 .history-delete:hover:not(:disabled) {
   border-color: transparent;
   background: transparent;
-  color: var(--red);
   opacity: 1;
 }
 
+.history-open:hover:not(:disabled) {
+  color: var(--amber);
+}
+
+.history-delete:hover:not(:disabled) {
+  color: var(--red);
+}
+
+.history-row:hover .history-open,
 .history-row:hover .history-delete,
+.history-open:focus-visible,
 .history-delete:focus-visible {
   opacity: 1;
 }
@@ -1448,8 +1489,8 @@ kbd {
     font-size: 12.5px;
   }
 
-  .history-row {
-    grid-template-columns: 90px minmax(0, 1fr) 24px;
+  .history-select {
+    grid-template-columns: 90px minmax(0, 1fr);
     gap: 6px;
   }
 
