@@ -85,12 +85,13 @@ are best-effort. If the browser cannot play a file, the preview explains
 this and the board's *Open* button launches it in the system player. No
 transcoding is performed, and videos inside archives are not previewed.
 
-In the History tab, each row has a delete button that removes every log
-entry for that item, so it becomes eligible to be picked again without
-touching other history. For frontend development, run `choosier --web`
-and `npm run dev` in `frontend/` (Vite proxies `/api`); `npm run build`
-writes the bundle to `choosier/web_static/`, which the server serves on
-the same origin.
+In the History tab, clicking a row loads that item onto the board and into
+the preview; the `↗` button next to it opens the item with the OS default
+program. Each row's delete button removes every log entry for that item,
+so it becomes eligible to be picked again without touching other
+history. For frontend development, run `choosier --web` and `npm run dev`
+in `frontend/` (Vite proxies `/api`); `npm run build` writes the bundle to
+`choosier/web_static/`, which the server serves on the same origin.
 
 ## History log
 

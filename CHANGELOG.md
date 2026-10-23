@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Web UI: history rows are clickable and load the item onto the board
+  and into the preview. A new `↗` action beside each row's delete button
+  opens the item with the OS default program.
 - Web UI: redesigned the interface around a split-flap board, with a
   bundled Archivo/Archivo Narrow type system, dark graphite palette,
   responsive two-column workspace, contact-sheet previews with archive
