@@ -41,8 +41,10 @@ from choosier.storage import (
 
 DEFAULT_PORT = 8765
 PANEL_MAX_LINES = 200
-THUMBNAIL_MAX_SIZE = (320, 240)
-THUMBNAIL_QUALITY = 80
+THUMBNAIL_MAX_SIZE = (480, 480)
+THUMBNAIL_QUALITY = 84
+PREVIEW_MAX_SIZE = (1600, 1600)
+PREVIEW_QUALITY = 90
 STATIC_DIR = Path(__file__).resolve().parent / "web_static"
 
 
@@ -231,16 +233,20 @@ def _read_archived_image(path: Path, index: int) -> tuple[bytes, str]:
     return data, media_type
 
 
-def _make_thumbnail(data: bytes) -> bytes:
-    """Downscale image bytes to a small WebP for the thumbnail grid."""
+def _make_thumbnail(
+    data: bytes,
+    max_size: tuple[int, int] = THUMBNAIL_MAX_SIZE,
+    quality: int = THUMBNAIL_QUALITY,
+) -> bytes:
+    """Downscale image bytes to a WebP rendition for the web UI."""
     try:
         with Image.open(BytesIO(data)) as source:
             image = ImageOps.exif_transpose(source)
-            image.thumbnail(THUMBNAIL_MAX_SIZE)
+            image.thumbnail(max_size, Image.Resampling.LANCZOS)
             if image.mode not in ("RGB", "RGBA"):
                 image = image.convert("RGBA")
             output = BytesIO()
-            image.save(output, format="WEBP", quality=THUMBNAIL_QUALITY)
+            image.save(output, format="WEBP", quality=quality)
             return output.getvalue()
     except (UnidentifiedImageError, Image.DecompressionBombError, OSError) as e:
         raise HTTPException(status_code=415, detail=f"Cannot decode image: {e}")
@@ -380,11 +386,16 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
         return _preview_model(Path(path).expanduser())
 
     @app.get("/api/image")
-    def image(path: str, index: int | None = None, thumb: bool = False) -> Response:
+    def image(
+        path: str,
+        index: int | None = None,
+        variant: Literal["thumb", "preview"] | None = None,
+    ) -> Response:
         """Serve a standalone image or one image member of a zip archive.
 
-        `thumb=true` returns a downscaled WebP for the thumbnail grid;
-        otherwise the original bytes are served for the full-size viewer.
+        `variant=thumb` downscales for the contact-sheet grid;
+        `variant=preview` produces a larger, high-quality WebP for a
+        single-image preview. Omit it for the original image bytes.
         """
         entry = Path(path).expanduser()
         if not entry.is_file():
@@ -393,8 +404,15 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
             data, media_type = _read_standalone_image(entry)
         else:
             data, media_type = _read_archived_image(entry, index)
-        if thumb:
+        if variant == "thumb":
             data = _make_thumbnail(data)
+            media_type = "image/webp"
+        elif variant == "preview":
+            data = _make_thumbnail(
+                data,
+                max_size=PREVIEW_MAX_SIZE,
+                quality=PREVIEW_QUALITY,
+            )
             media_type = "image/webp"
         return Response(
             content=data,

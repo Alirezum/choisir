@@ -65,8 +65,11 @@ export const api = {
 
   preview: (path: string) => request<PreviewModel>(`/api/preview${query({ path })}`),
 
-  imageUrl: (path: string, index: number | null = null, thumb = false) =>
-    `/api/image${query({ path, index, thumb })}`,
+  imageUrl: (
+    path: string,
+    index: number | null = null,
+    variant: 'thumb' | 'preview' | null = null,
+  ) => `/api/image${query({ path, index, variant })}`,
 
   pick: (body: PickRequest) => postJson<PickResponse>('/api/pick', body),
 
