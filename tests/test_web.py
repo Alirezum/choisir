@@ -20,6 +20,7 @@ from choosier.storage import log_selection
 
 PNG = b"\x89PNG\r\n\x1a\npngdata"
 JPEG = b"\xff\xd8\xffjpegdata"
+MP4 = b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom"
 
 
 @unittest.skipUnless(HAS_WEB, "web extra (fastapi) not installed")
@@ -310,6 +311,58 @@ class WebApiTest(unittest.TestCase):
         doc.write_text("hello\n", encoding="utf-8")
         response = self.client.get("/api/image", params={"path": str(doc)})
         self.assertEqual(response.status_code, 415)
+
+    def test_preview_reports_video(self) -> None:
+        video = Path(self.tmp.name) / "clip.mp4"
+        video.write_bytes(MP4)
+        response = self.client.get("/api/preview", params={"path": str(video)})
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["kind"], "video")
+        self.assertEqual(
+            body["video"],
+            {"name": "clip.mp4", "media_type": "video/mp4", "size": len(MP4)},
+        )
+        self.assertIn("video/mp4", body["text"])
+
+    def test_video_endpoint_streams_file(self) -> None:
+        video = Path(self.tmp.name) / "clip.mp4"
+        video.write_bytes(MP4)
+        response = self.client.get("/api/video", params={"path": str(video)})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["content-type"], "video/mp4")
+        self.assertEqual(response.headers["accept-ranges"], "bytes")
+        self.assertEqual(response.content, MP4)
+
+    def test_video_endpoint_supports_range(self) -> None:
+        video = Path(self.tmp.name) / "clip.mp4"
+        video.write_bytes(MP4)
+        response = self.client.get(
+            "/api/video",
+            params={"path": str(video)},
+            headers={"Range": "bytes=0-3"},
+        )
+        self.assertEqual(response.status_code, 206)
+        self.assertEqual(response.content, MP4[:4])
+        self.assertEqual(response.headers["content-range"], f"bytes 0-3/{len(MP4)}")
+
+    def test_video_endpoint_rejects_non_video(self) -> None:
+        doc = self.target / "doc.txt"
+        doc.write_text("hello\n", encoding="utf-8")
+        response = self.client.get("/api/video", params={"path": str(doc)})
+        self.assertEqual(response.status_code, 415)
+
+    def test_video_endpoint_rejects_mislabeled_video(self) -> None:
+        video = Path(self.tmp.name) / "fake.mp4"
+        video.write_bytes(b"not a video")
+        response = self.client.get("/api/video", params={"path": str(video)})
+        self.assertEqual(response.status_code, 415)
+
+    def test_video_endpoint_rejects_missing_video(self) -> None:
+        response = self.client.get(
+            "/api/video", params={"path": str(self.target / "gone.mp4")}
+        )
+        self.assertEqual(response.status_code, 404)
 
     def test_image_endpoint_rejects_non_archive(self) -> None:
         fake = Path(self.tmp.name) / "fake.zip"

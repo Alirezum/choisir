@@ -11,6 +11,7 @@ const props = defineProps<{
 }>()
 
 const viewerIndex = ref<number | null>(null)
+const videoError = ref(false)
 
 const images = computed(() => props.preview?.images ?? [])
 const showNumbers = computed(() =>
@@ -31,8 +32,19 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+const mediaLabels: Record<string, string> = {
+  'video/mp4': 'MP4',
+  'video/webm': 'WEBM',
+  'video/quicktime': 'MOV',
+  'video/x-matroska': 'MKV',
+  'video/ogg': 'OGV',
+}
+
 function mediaLabel(mediaType: string): string {
-  return (mediaType.split('/')[1] ?? mediaType).toUpperCase()
+  return (
+    mediaLabels[mediaType] ??
+    (mediaType.split('/')[1] ?? mediaType).toUpperCase()
+  )
 }
 
 const metaLine = computed(() => {
@@ -44,6 +56,9 @@ const metaLine = computed(() => {
   }
   if (preview.kind === 'archive' && preview.images.length > 0) {
     return 'Archive'
+  }
+  if (preview.kind === 'video' && preview.video !== null) {
+    return `${mediaLabel(preview.video.media_type)}, ${formatSize(preview.video.size)}`
   }
   return ''
 })
@@ -58,7 +73,12 @@ watch(
   () => props.preview,
   () => {
     viewerIndex.value = null
+    videoError.value = false
   },
+)
+
+const videoUrl = computed(() =>
+  props.path === '' ? '' : api.videoUrl(props.path),
 )
 
 function previewImageUrl(index: number | null): string {
@@ -92,6 +112,24 @@ function closeViewer(): void {
       <template v-if="preview !== null">
         <p v-if="metaLine !== ''" class="preview-meta">{{ metaLine }}</p>
         <pre v-if="bodyText !== ''" class="preview">{{ bodyText }}</pre>
+        <div v-if="preview.video !== null" class="video-frame">
+          <video
+            v-if="!videoError"
+            class="preview-video"
+            controls
+            playsinline
+            preload="metadata"
+            :src="videoUrl"
+            :aria-label="`Video preview of ${preview.video.name}`"
+            @error="videoError = true"
+          >
+            This browser cannot play this video.
+          </video>
+          <p v-else class="video-fallback">
+            Browser playback failed. Use <strong>Open</strong> above to play
+            this file with your system player.
+          </p>
+        </div>
         <div
           v-if="images.length > 0"
           class="image-grid"

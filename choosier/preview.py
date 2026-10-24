@@ -21,6 +21,7 @@ PreviewKind = Literal[
     "unreadable",
     "archive",
     "image",
+    "video",
 ]
 
 IMAGE_MEDIA_TYPES = {
@@ -30,6 +31,14 @@ IMAGE_MEDIA_TYPES = {
     ".gif": "image/gif",
     ".webp": "image/webp",
     ".bmp": "image/bmp",
+}
+VIDEO_MEDIA_TYPES = {
+    ".mp4": "video/mp4",
+    ".m4v": "video/mp4",
+    ".webm": "video/webm",
+    ".ogv": "video/ogg",
+    ".mov": "video/quicktime",
+    ".mkv": "video/x-matroska",
 }
 ARCHIVE_SUFFIXES = frozenset({".zip", ".cbz"})
 
@@ -50,13 +59,23 @@ class PreviewImage:
 
 
 @dataclass(frozen=True)
+class PreviewVideo:
+    """One standalone video available for preview."""
+
+    name: str
+    media_type: str
+    size: int
+
+
+@dataclass(frozen=True)
 class Preview:
     """Short display data for a picked entry.
 
     `text` is the human-readable rendering; `entry_count` and `size`
     carry the structured values behind it. `truncated` marks previews
     that were capped by the line/byte/entry limits. `images` carries the
-    bounded list of previewable images and `image_total` the full count.
+    bounded list of previewable images and `image_total` the full count;
+    `video` carries a standalone video when one is supported.
     """
 
     kind: PreviewKind
@@ -66,11 +85,29 @@ class Preview:
     size: int | None = None
     images: tuple[PreviewImage, ...] = ()
     image_total: int = 0
+    video: PreviewVideo | None = None
 
 
 def image_media_type(name: str) -> str | None:
     """Map a filename to a supported image media type."""
     return IMAGE_MEDIA_TYPES.get(Path(name).suffix.lower())
+
+
+def video_media_type(name: str) -> str | None:
+    """Map a filename to a supported video media type."""
+    return VIDEO_MEDIA_TYPES.get(Path(name).suffix.lower())
+
+
+def video_matches_content(name: str, head: bytes) -> bool:
+    """Check that the leading bytes match the video container extension."""
+    suffix = Path(name).suffix.lower()
+    if suffix in {".mp4", ".m4v", ".mov"}:
+        return len(head) >= 12 and head[4:8] == b"ftyp"
+    if suffix in {".webm", ".mkv"}:
+        return head.startswith(b"\x1aE\xdf\xa3")
+    if suffix == ".ogv":
+        return head.startswith(b"OggS")
+    return False
 
 
 def sniff_image_media_type(head: bytes) -> str | None:
@@ -165,6 +202,23 @@ def _preview_archive(entry: Path, max_images: int) -> Preview:
     )
 
 
+def _preview_video(entry: Path, head: bytes) -> Preview | None:
+    """Preview a standalone video file, or None when the bytes do not match."""
+    media_type = video_media_type(entry.name)
+    if media_type is None or not video_matches_content(entry.name, head):
+        return None
+    try:
+        size = entry.stat().st_size
+    except OSError:
+        size = len(head)
+    return Preview(
+        kind="video",
+        text=f"<video: {media_type}, {_format_size(size)}>",
+        size=size,
+        video=PreviewVideo(name=entry.name, media_type=media_type, size=size),
+    )
+
+
 def _preview_image(entry: Path, head: bytes) -> Preview | None:
     """Preview a standalone image file, or None when the bytes do not match."""
     media_type = sniff_image_media_type(head)
@@ -241,6 +295,10 @@ def preview_entry(
             image_preview = _preview_image(entry, head[:32])
             if image_preview is not None:
                 return image_preview
+        if suffix in VIDEO_MEDIA_TYPES:
+            video_preview = _preview_video(entry, head[:32])
+            if video_preview is not None:
+                return video_preview
         if b"\x00" in head:
             size = f"{max_bytes}+" if truncated else str(len(head))
             return Preview(

@@ -14,6 +14,7 @@ from typing import Literal
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Response
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
@@ -26,9 +27,12 @@ from choosier.chooser import (
 from choosier.launcher import launch_path
 from choosier.preview import (
     PREVIEW_MAX_IMAGE_BYTES,
+    PreviewVideo,
     image_media_type,
     preview_entry,
     sniff_image_media_type,
+    video_matches_content,
+    video_media_type,
 )
 from choosier.storage import (
     LogEntry,
@@ -57,6 +61,14 @@ class PreviewImageModel(BaseModel):
     size: int
 
 
+class PreviewVideoModel(BaseModel):
+    """One standalone video available for preview."""
+
+    name: str
+    media_type: str
+    size: int
+
+
 class PreviewModel(BaseModel):
     """Structured preview of a picked entry."""
 
@@ -67,6 +79,7 @@ class PreviewModel(BaseModel):
     size: int | None = None
     images: list[PreviewImageModel] = Field(default_factory=list)
     image_total: int = 0
+    video: PreviewVideoModel | None = None
 
 
 class DefaultsResponse(BaseModel):
@@ -151,6 +164,9 @@ def _log_path(path: str, log_file: str | None) -> Path:
 
 def _preview_model(entry: Path) -> PreviewModel:
     preview = preview_entry(entry)
+    video: PreviewVideoModel | None = None
+    if preview.video is not None:
+        video = _video_model(preview.video)
     return PreviewModel(
         kind=preview.kind,
         text=preview.text,
@@ -167,6 +183,15 @@ def _preview_model(entry: Path) -> PreviewModel:
             for image in preview.images
         ],
         image_total=preview.image_total,
+        video=video,
+    )
+
+
+def _video_model(video: PreviewVideo) -> PreviewVideoModel:
+    return PreviewVideoModel(
+        name=video.name,
+        media_type=video.media_type,
+        size=video.size,
     )
 
 
@@ -421,6 +446,32 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
                 "Cache-Control": "no-store",
                 "X-Content-Type-Options": "nosniff",
             },
+        )
+
+    @app.get("/api/video")
+    def video(path: str) -> FileResponse:
+        """Stream a standalone video with byte-range support."""
+        entry = Path(path).expanduser()
+        if not entry.is_file():
+            raise HTTPException(status_code=404, detail="Video is gone")
+        media_type = video_media_type(entry.name)
+        if media_type is None:
+            raise HTTPException(status_code=415, detail="Not a supported video")
+        try:
+            with open(entry, "rb") as handle:
+                head = handle.read(32)
+        except OSError as e:
+            raise HTTPException(status_code=500, detail=f"Cannot read video: {e}")
+        if not video_matches_content(entry.name, head):
+            raise HTTPException(status_code=415, detail="Not a supported video")
+        return FileResponse(
+            path=entry,
+            media_type=media_type,
+            headers={
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
+            },
+            content_disposition_type="inline",
         )
 
     @app.post("/api/open")
