@@ -99,4 +99,12 @@ Every review MUST verify compliance; deviations require explicit
 justification. The temporary Sync Impact Report MUST be removed before
 committing the amended constitution.
 
-**Version**: 1.0.0 | **Ratified**: 2026-10-29 | **Last Amended**: 2026-10-29
+## 5. Git & Commit Policy
+
+- **Atomic Commits:** Each individual task from `tasks.md` must be committed separately upon completion and test verification.
+- **Convention:** All commit messages must follow the Conventional Commits specification:
+  - Format: `<type>(<scope>): <short description>`
+  - Allowed types: `feat`, `fix`, `refactor`, `test`, `chore`, `docs`, `style`.
+- **Validation:** Never commit code that fails existing test suites or linters.
+
+**Version**: 1.1.0 | **Ratified**: 2026-10-29 | **Last Amended**: 2026-10-29
