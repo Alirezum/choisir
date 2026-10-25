@@ -1,0 +1,633 @@
+{
+  "version": 1,
+  "apiPrefix": "/api",
+  "description": "Complete success and error contract for the choosier local HTTP API.",
+  "envelope": {
+    "topLevelFields": ["error", "detail"],
+    "errorFields": ["code", "message", "details"],
+    "invariants": [
+      "detail is always a non-empty string",
+      "detail equals error.message",
+      "error.code is a key in errorCodes",
+      "the HTTP status equals errorCodes[error.code].status",
+      "error.details is null except for validation_error",
+      "every JSON error uses application/json"
+    ]
+  },
+  "errorCodes": {
+    "invalid_request": {
+      "status": 400,
+      "description": "Syntactically valid request with an invalid combination or unsupported operation."
+    },
+    "forbidden": {
+      "status": 403,
+      "description": "The target exists but cannot be accessed."
+    },
+    "not_found": {
+      "status": 404,
+      "description": "The route, directory, entry, image, video, or archive member does not exist."
+    },
+    "method_not_allowed": {
+      "status": 405,
+      "description": "The route does not support the request method."
+    },
+    "payload_too_large": {
+      "status": 413,
+      "description": "The requested binary exceeds a preview size limit."
+    },
+    "unsupported_media_type": {
+      "status": 415,
+      "description": "The file is not a supported image or video, or it cannot be decoded."
+    },
+    "range_not_satisfiable": {
+      "status": 416,
+      "description": "The requested byte range starts outside the video file."
+    },
+    "validation_error": {
+      "status": 422,
+      "description": "Query parameter or request body validation failed."
+    },
+    "internal_error": {
+      "status": 500,
+      "description": "An I/O, log, launch, or unexpected server failure occurred."
+    }
+  },
+  "globalErrors": [
+    {
+      "code": "not_found",
+      "status": 404,
+      "when": "No /api route matches the request path."
+    },
+    {
+      "code": "method_not_allowed",
+      "status": 405,
+      "when": "The matched route does not allow the request method."
+    },
+    {
+      "code": "validation_error",
+      "status": 422,
+      "when": "Framework request validation rejects the query string or body."
+    },
+    {
+      "code": "internal_error",
+      "status": 500,
+      "when": "An unexpected exception escapes a route."
+    }
+  ],
+  "schemas": {
+    "BrowserEntry": {
+      "type": "object",
+      "fields": {
+        "name": {"type": "string", "nullable": false},
+        "is_dir": {"type": "boolean", "nullable": false}
+      }
+    },
+    "HistoryEntry": {
+      "type": "object",
+      "fields": {
+        "timestamp": {"type": "string", "nullable": true},
+        "item": {"type": "string", "nullable": false},
+        "display": {"type": "string", "nullable": false}
+      }
+    },
+    "PreviewImage": {
+      "type": "object",
+      "fields": {
+        "index": {"type": "integer", "nullable": true},
+        "name": {"type": "string", "nullable": false},
+        "media_type": {"type": "string", "nullable": false},
+        "size": {"type": "integer", "nullable": false}
+      }
+    },
+    "PreviewVideo": {
+      "type": "object",
+      "fields": {
+        "name": {"type": "string", "nullable": false},
+        "media_type": {"type": "string", "nullable": false},
+        "size": {"type": "integer", "nullable": false}
+      }
+    },
+    "PreviewModel": {
+      "type": "object",
+      "fields": {
+        "kind": {
+          "type": "string",
+          "nullable": false,
+          "enum": [
+            "text",
+            "directory",
+            "binary",
+            "empty",
+            "gone",
+            "unreadable",
+            "archive",
+            "image",
+            "video"
+          ]
+        },
+        "text": {"type": "string", "nullable": false},
+        "truncated": {"type": "boolean", "nullable": false},
+        "entry_count": {"type": "integer", "nullable": true},
+        "size": {"type": "integer", "nullable": true},
+        "images": {
+          "type": "array",
+          "items": {"ref": "PreviewImage"}
+        },
+        "image_total": {"type": "integer", "nullable": false},
+        "video": {"ref": "PreviewVideo", "nullable": true}
+      }
+    }
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/api/defaults",
+      "purpose": "Return the initial path and log file supplied when the server started.",
+      "success": {
+        "statuses": [200],
+        "contentType": "application/json",
+        "body": "json",
+        "schema": {
+          "type": "object",
+          "fields": {
+            "path": {"type": "string", "nullable": false},
+            "log_file": {"type": "string", "nullable": false}
+          }
+        }
+      },
+      "errors": [
+        {
+          "code": "method_not_allowed",
+          "status": 405,
+          "when": "A method other than GET is used."
+        },
+        {
+          "code": "internal_error",
+          "status": 500,
+          "when": "An unexpected exception escapes the route."
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/browse",
+      "purpose": "List one directory's children with directories first.",
+      "success": {
+        "statuses": [200],
+        "contentType": "application/json",
+        "body": "json",
+        "schema": {
+          "type": "object",
+          "fields": {
+            "path": {"type": "string", "nullable": false},
+            "parent": {"type": "string", "nullable": true},
+            "entries": {
+              "type": "array",
+              "items": {"ref": "BrowserEntry"}
+            }
+          }
+        }
+      },
+      "errors": [
+        {
+          "code": "validation_error",
+          "status": 422,
+          "when": "The required path query parameter is missing or malformed."
+        },
+        {
+          "code": "not_found",
+          "status": 404,
+          "when": "The path does not exist or is not a directory."
+        },
+        {
+          "code": "forbidden",
+          "status": 403,
+          "when": "The directory exists but cannot be listed."
+        },
+        {
+          "code": "method_not_allowed",
+          "status": 405,
+          "when": "A method other than GET is used."
+        },
+        {
+          "code": "internal_error",
+          "status": 500,
+          "when": "An unexpected exception escapes the route."
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/state",
+      "purpose": "Return remaining candidates and recent history for a target and filter set.",
+      "success": {
+        "statuses": [200],
+        "contentType": "application/json",
+        "body": "json",
+        "schema": {
+          "type": "object",
+          "fields": {
+            "valid_path": {"type": "boolean", "nullable": false},
+            "path": {"type": "string", "nullable": false},
+            "log_file": {"type": "string", "nullable": false},
+            "remaining": {
+              "type": "array",
+              "items": {"type": "string", "nullable": false}
+            },
+            "remaining_total": {"type": "integer", "nullable": false},
+            "history": {
+              "type": "array",
+              "items": {"ref": "HistoryEntry"}
+            },
+            "history_total": {"type": "integer", "nullable": false}
+          }
+        }
+      },
+      "errors": [
+        {
+          "code": "validation_error",
+          "status": 422,
+          "when": "The required path parameter is missing or a boolean filter is malformed."
+        },
+        {
+          "code": "invalid_request",
+          "status": 400,
+          "when": "files_only and dirs_only are both true."
+        },
+        {
+          "code": "method_not_allowed",
+          "status": 405,
+          "when": "A method other than GET is used."
+        },
+        {
+          "code": "internal_error",
+          "status": 500,
+          "when": "An unexpected exception escapes the route."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/pick",
+      "purpose": "Pick one unselected entry and optionally record it in the history log.",
+      "success": {
+        "statuses": [200],
+        "contentType": "application/json",
+        "body": "json",
+        "schema": {
+          "type": "object",
+          "fields": {
+            "status": {
+              "type": "string",
+              "nullable": false,
+              "enum": ["picked", "empty", "exhausted", "invalid_path"]
+            },
+            "log_file": {"type": "string", "nullable": false},
+            "item": {"type": "string", "nullable": true},
+            "logged": {"type": "boolean", "nullable": false},
+            "preview": {"ref": "PreviewModel", "nullable": true}
+          }
+        }
+      },
+      "errors": [
+        {
+          "code": "validation_error",
+          "status": 422,
+          "when": "The JSON body is missing, malformed, or has wrong field types."
+        },
+        {
+          "code": "invalid_request",
+          "status": 400,
+          "when": "files_only and dirs_only are both true."
+        },
+        {
+          "code": "internal_error",
+          "status": 500,
+          "when": "Writing the history log fails or an unexpected exception escapes the route."
+        },
+        {
+          "code": "method_not_allowed",
+          "status": 405,
+          "when": "A method other than POST is used."
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/preview",
+      "purpose": "Return a structured, bounded preview for an entry path.",
+      "success": {
+        "statuses": [200],
+        "contentType": "application/json",
+        "body": "json",
+        "schema": {"ref": "PreviewModel"}
+      },
+      "errors": [
+        {
+          "code": "validation_error",
+          "status": 422,
+          "when": "The required path query parameter is missing or malformed."
+        },
+        {
+          "code": "method_not_allowed",
+          "status": 405,
+          "when": "A method other than GET is used."
+        },
+        {
+          "code": "internal_error",
+          "status": 500,
+          "when": "An unexpected exception escapes the route."
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/image",
+      "purpose": "Serve original image bytes or a WebP rendition, including archive members by index.",
+      "success": {
+        "statuses": [200],
+        "contentType": "image/*",
+        "body": "binary",
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Content-Type-Options": "nosniff"
+        },
+        "notes": "Original bytes are PNG, JPEG, GIF, WebP, or BMP. variant=thumb and variant=preview return image/webp."
+      },
+      "errors": [
+        {
+          "code": "validation_error",
+          "status": 422,
+          "when": "path is missing, index is not an integer, or variant is not thumb/preview."
+        },
+        {
+          "code": "not_found",
+          "status": 404,
+          "when": "The image file is missing or disappears before it can be read."
+        },
+        {
+          "code": "not_found",
+          "status": 404,
+          "when": "The archive index is outside the archive's entry list."
+        },
+        {
+          "code": "invalid_request",
+          "status": 400,
+          "when": "The file is not a zip archive, the archive is corrupt, or the member is encrypted."
+        },
+        {
+          "code": "payload_too_large",
+          "status": 413,
+          "when": "The image exceeds the 20 MB preview limit."
+        },
+        {
+          "code": "unsupported_media_type",
+          "status": 415,
+          "when": "The extension or bytes are not a supported image, or the thumbnail cannot be decoded."
+        },
+        {
+          "code": "internal_error",
+          "status": 500,
+          "when": "Reading the image or archive fails, or an unexpected exception escapes the route."
+        },
+        {
+          "code": "method_not_allowed",
+          "status": 405,
+          "when": "A method other than GET is used."
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/video",
+      "purpose": "Stream a standalone video with byte-range support.",
+      "success": {
+        "statuses": [200, 206],
+        "contentType": ["video/*", "multipart/byteranges"],
+        "body": "binary",
+        "headers": {
+          "Accept-Ranges": "bytes",
+          "Cache-Control": "no-store",
+          "X-Content-Type-Options": "nosniff"
+        },
+        "notes": "200 returns the whole file. 206 returns a single, suffix, or multipart byte range."
+      },
+      "errors": [
+        {
+          "code": "validation_error",
+          "status": 422,
+          "when": "The required path query parameter is missing or malformed."
+        },
+        {
+          "code": "not_found",
+          "status": 404,
+          "when": "The video file is missing."
+        },
+        {
+          "code": "unsupported_media_type",
+          "status": 415,
+          "when": "The extension or leading bytes are not a supported video container."
+        },
+        {
+          "code": "invalid_request",
+          "status": 400,
+          "when": "The Range header is malformed."
+        },
+        {
+          "code": "range_not_satisfiable",
+          "status": 416,
+          "when": "The Range header requests a start beyond the end of the file."
+        },
+        {
+          "code": "internal_error",
+          "status": 500,
+          "when": "Reading the video fails or an unexpected exception escapes the route."
+        },
+        {
+          "code": "method_not_allowed",
+          "status": 405,
+          "when": "A method other than GET is used."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/open",
+      "purpose": "Open an entry with the operating system's default program.",
+      "success": {
+        "statuses": [200],
+        "contentType": "application/json",
+        "body": "json",
+        "schema": {
+          "type": "object",
+          "fields": {
+            "opened": {"type": "string", "nullable": false}
+          }
+        }
+      },
+      "errors": [
+        {
+          "code": "validation_error",
+          "status": 422,
+          "when": "The JSON body is missing, malformed, or path is not a string."
+        },
+        {
+          "code": "not_found",
+          "status": 404,
+          "when": "The entry does not exist."
+        },
+        {
+          "code": "internal_error",
+          "status": 500,
+          "when": "Launching the entry fails or an unexpected exception escapes the route."
+        },
+        {
+          "code": "method_not_allowed",
+          "status": 405,
+          "when": "A method other than POST is used."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/history/archive",
+      "purpose": "Rotate the history log to a timestamped backup.",
+      "success": {
+        "statuses": [200],
+        "contentType": "application/json",
+        "body": "json",
+        "schema": {
+          "type": "object",
+          "fields": {
+            "log_file": {"type": "string", "nullable": false},
+            "backup": {"type": "string", "nullable": true}
+          }
+        }
+      },
+      "errors": [
+        {
+          "code": "validation_error",
+          "status": 422,
+          "when": "The required path query parameter is missing or malformed."
+        },
+        {
+          "code": "internal_error",
+          "status": 500,
+          "when": "Archiving the log fails or an unexpected exception escapes the route."
+        },
+        {
+          "code": "method_not_allowed",
+          "status": 405,
+          "when": "A method other than POST is used."
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/history",
+      "purpose": "Delete the history log.",
+      "success": {
+        "statuses": [200],
+        "contentType": "application/json",
+        "body": "json",
+        "schema": {
+          "type": "object",
+          "fields": {
+            "log_file": {"type": "string", "nullable": false},
+            "removed": {"type": "boolean", "nullable": false}
+          }
+        }
+      },
+      "errors": [
+        {
+          "code": "validation_error",
+          "status": 422,
+          "when": "The required path query parameter is missing or malformed."
+        },
+        {
+          "code": "internal_error",
+          "status": 500,
+          "when": "Resetting the log fails or an unexpected exception escapes the route."
+        },
+        {
+          "code": "method_not_allowed",
+          "status": 405,
+          "when": "A method other than DELETE is used."
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/history/item",
+      "purpose": "Remove every history entry for one item.",
+      "success": {
+        "statuses": [200],
+        "contentType": "application/json",
+        "body": "json",
+        "schema": {
+          "type": "object",
+          "fields": {
+            "log_file": {"type": "string", "nullable": false},
+            "item": {"type": "string", "nullable": false},
+            "removed": {"type": "integer", "nullable": false}
+          }
+        }
+      },
+      "errors": [
+        {
+          "code": "validation_error",
+          "status": 422,
+          "when": "The required path or item query parameter is missing or malformed."
+        },
+        {
+          "code": "internal_error",
+          "status": 500,
+          "when": "Removing the history item fails or an unexpected exception escapes the route."
+        },
+        {
+          "code": "method_not_allowed",
+          "status": 405,
+          "when": "A method other than DELETE is used."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/history/remove",
+      "purpose": "Remove every history entry for a batch of items in one rewrite.",
+      "success": {
+        "statuses": [200],
+        "contentType": "application/json",
+        "body": "json",
+        "schema": {
+          "type": "object",
+          "fields": {
+            "log_file": {"type": "string", "nullable": false},
+            "items": {
+              "type": "array",
+              "items": {"type": "string", "nullable": false}
+            },
+            "removed": {"type": "integer", "nullable": false}
+          }
+        }
+      },
+      "errors": [
+        {
+          "code": "validation_error",
+          "status": 422,
+          "when": "The JSON body is missing, malformed, path is missing, or items is empty."
+        },
+        {
+          "code": "internal_error",
+          "status": 500,
+          "when": "Removing the history items fails or an unexpected exception escapes the route."
+        },
+        {
+          "code": "method_not_allowed",
+          "status": 405,
+          "when": "A method other than POST is used."
+        }
+      ]
+    }
+  ]
+}
