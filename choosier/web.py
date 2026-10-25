@@ -14,7 +14,7 @@ from typing import Literal
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Response
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
@@ -27,6 +27,7 @@ from choosier.chooser import (
 from choosier.launcher import launch_path
 from choosier.preview import (
     PREVIEW_MAX_IMAGE_BYTES,
+    PreviewKind,
     PreviewVideo,
     image_media_type,
     preview_entry,
@@ -52,6 +53,78 @@ PREVIEW_MAX_SIZE = (1600, 1600)
 PREVIEW_QUALITY = 90
 STATIC_DIR = Path(__file__).resolve().parent / "web_static"
 
+ErrorCode = Literal[
+    "invalid_request",
+    "forbidden",
+    "not_found",
+    "method_not_allowed",
+    "payload_too_large",
+    "unsupported_media_type",
+    "range_not_satisfiable",
+    "validation_error",
+    "internal_error",
+]
+
+ERROR_STATUS: dict[ErrorCode, int] = {
+    "invalid_request": 400,
+    "forbidden": 403,
+    "not_found": 404,
+    "method_not_allowed": 405,
+    "payload_too_large": 413,
+    "unsupported_media_type": 415,
+    "range_not_satisfiable": 416,
+    "validation_error": 422,
+    "internal_error": 500,
+}
+
+ErrorDetails = dict[str, object]
+
+
+class ApiError(Exception):
+    """A route failure that serializes through the documented error envelope."""
+
+    def __init__(
+        self,
+        code: ErrorCode,
+        message: str,
+        details: ErrorDetails | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.details = details
+        self.headers = headers
+
+
+def _error_body(
+    code: ErrorCode,
+    message: str,
+    details: ErrorDetails | None = None,
+) -> dict[str, object]:
+    """Build the one JSON error shape; `detail` stays a string for the frontend."""
+    error: dict[str, object] = {
+        "code": code,
+        "message": message,
+        "details": details,
+    }
+    return {"error": error, "detail": message}
+
+
+def _error_response(
+    code: ErrorCode,
+    message: str,
+    details: ErrorDetails | None = None,
+    headers: dict[str, str] | None = None,
+    status_code: int | None = None,
+) -> JSONResponse:
+    """Serialize an API error with the status aligned to its code."""
+    return JSONResponse(
+        status_code=ERROR_STATUS[code] if status_code is None else status_code,
+        content=_error_body(code, message, details),
+        headers=headers,
+    )
+
 
 class PreviewImageModel(BaseModel):
     """One previewable image inside an archive or a standalone file."""
@@ -73,7 +146,7 @@ class PreviewVideoModel(BaseModel):
 class PreviewModel(BaseModel):
     """Structured preview of a picked entry."""
 
-    kind: str
+    kind: PreviewKind
     text: str
     truncated: bool = False
     entry_count: int | None = None
