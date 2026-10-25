@@ -27,7 +27,8 @@
 
 **Purpose**: Confirm the existing project and quality baseline before making changes.
 
-- [ ] T001 Confirm the baseline in `pyproject.toml`, `frontend/package.json`, and `tests/` is green: run `uv sync --group dev --extra ui --extra web`, `uv run pytest -q`, and `cd frontend && npm run build`; record the existing pass count and build result before edits.
+- [X] T001 Confirm the baseline in `pyproject.toml`, `frontend/package.json`, and `tests/` is green: run `uv sync --group dev --extra ui --extra web`, `uv run pytest -q`, and `cd frontend && npm run build`; record the existing pass count and build result before edits.
+  - Baseline recorded 2026-10-29: `147 passed, 5 subtests passed`; frontend production build succeeded with no source changes.
 
 **Checkpoint**: The repository is known-green and the web/frontend extras are installed.
 
