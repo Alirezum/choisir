@@ -55,7 +55,7 @@
 
 ### Tests for User Story 1
 
-- [ ] T004 [US1] Add `tests/test_api_compat.py` covering every existing success flow, using `specs/001-standardize-api-responses/contracts/api-contract.json` as the exact field/type/nullability/enum baseline: JSON routes return 200 `application/json` with the exact contract top-level fields; `/api/state` invalid path stays 200 with `valid_path: false`; `/api/pick` returns 200 for `invalid_path`, `empty`, and `exhausted`; archive/clear/remove no-ops stay 200; `/api/preview` gone/empty stays 200; image returns the original MIME/bytes and `image/webp` for thumb/preview; video returns 200 and 206 with `Accept-Ranges: bytes`.
+- [X] T004 [US1] Add `tests/test_api_compat.py` covering every existing success flow, using `specs/001-standardize-api-responses/contracts/api-contract.json` as the exact field/type/nullability/enum baseline: JSON routes return 200 `application/json` with the exact contract top-level fields; `/api/state` invalid path stays 200 with `valid_path: false`; `/api/pick` returns 200 for `invalid_path`, `empty`, and `exhausted`; archive/clear/remove no-ops stay 200; `/api/preview` gone/empty stays 200; image returns the original MIME/bytes and `image/webp` for thumb/preview; video returns 200 and 206 with `Accept-Ranges: bytes`.
 
 ### Implementation and Verification for User Story 1
 
