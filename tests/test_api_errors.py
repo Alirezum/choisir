@@ -343,6 +343,44 @@ class ApiErrorEnvelopeTest(unittest.TestCase):
         )
         self._assert_log_unchanged(before)
 
+    @unittest.expectedFailure  # Range validation lands in T012.
+    def test_malformed_range_returns_json_error(self) -> None:
+        video = self.root / "clip.mp4"
+        video.write_bytes(MP4)
+        for header in ("garbage", "bytes=5-2"):
+            with self.subTest(header=header):
+                response = self.client.get(
+                    "/api/video",
+                    params={"path": str(video)},
+                    headers={"Range": header},
+                )
+                body = assert_error_envelope(self, response, 400, "invalid_request")
+                self.assertTrue(body["error"]["message"])
+                self.assertNotIn(
+                    "text/plain",
+                    response.headers.get("content-type", ""),
+                )
+
+    @unittest.expectedFailure  # Range validation lands in T012.
+    def test_unsatisfiable_range_returns_json_error(self) -> None:
+        video = self.root / "clip.mp4"
+        video.write_bytes(MP4)
+        response = self.client.get(
+            "/api/video",
+            params={"path": str(video)},
+            headers={"Range": "bytes=999999-"},
+        )
+        body = assert_error_envelope(self, response, 416, "range_not_satisfiable")
+        self.assertTrue(body["error"]["message"])
+        self.assertEqual(
+            response.headers["content-range"],
+            f"bytes */{len(MP4)}",
+        )
+        self.assertNotIn(
+            "text/plain",
+            response.headers.get("content-type", ""),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
