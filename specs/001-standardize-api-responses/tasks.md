@@ -59,7 +59,7 @@
 
 ### Implementation and Verification for User Story 1
 
-- [ ] T005 [US1] Run `uv run pytest tests/test_api_compat.py tests/test_web.py -v` and `npm run build` in `frontend/`; confirm all existing flows pass and no file under `frontend/src/` needs to change.
+- [X] T005 [US1] Run `uv run pytest tests/test_api_compat.py tests/test_web.py -v` and `npm run build` in `frontend/`; confirm all existing flows pass and no file under `frontend/src/` needs to change.
 
 **Checkpoint**: User Story 1 is independently satisfied: the success surface is frozen and the current frontend contract is proven intact.
 
