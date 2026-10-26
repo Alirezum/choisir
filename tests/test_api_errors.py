@@ -2,6 +2,7 @@
 
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -14,7 +15,11 @@ try:
 except ImportError:
     HAS_WEB = False
 
+from choosier.storage import log_selection
 from tests.api_contract_support import assert_error_envelope
+
+PNG = b"\x89PNG\r\n\x1a\npngdata"
+MP4 = b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom"
 
 
 @unittest.skipUnless(HAS_WEB, "web extra (fastapi) not installed")
@@ -41,6 +46,19 @@ class ApiErrorEnvelopeTest(unittest.TestCase):
 
     def _assert_log_unchanged(self, before: bytes | None) -> None:
         self.assertEqual(self._log_bytes(), before)
+
+    def _archive(
+        self,
+        members: dict[str, bytes],
+        name: str = "pics.zip",
+    ) -> Path:
+        folder = self.root / "archives"
+        folder.mkdir(exist_ok=True)
+        archive = folder / name
+        with zipfile.ZipFile(archive, "w") as handle:
+            for member, data in members.items():
+                handle.writestr(member, data)
+        return archive
 
     @unittest.expectedFailure  # Envelope handler lands in T009.
     def test_unknown_route_is_not_found(self) -> None:
@@ -89,6 +107,241 @@ class ApiErrorEnvelopeTest(unittest.TestCase):
             response = client.get("/api/state", params=self._params())
         body = assert_error_envelope(self, response, 500, "internal_error")
         self.assertEqual(body["error"]["message"], "Internal server error")
+
+    @unittest.expectedFailure  # Route errors migrate in T011.
+    def test_browse_errors(self) -> None:
+        before = self._log_bytes()
+        missing = self.client.get(
+            "/api/browse", params={"path": str(self.target / "missing")}
+        )
+        body = assert_error_envelope(self, missing, 404, "not_found")
+        self.assertEqual(body["error"]["message"], "Not a directory")
+        self._assert_log_unchanged(before)
+
+        with patch(
+            "choosier.web.Path.iterdir",
+            side_effect=PermissionError("denied"),
+        ):
+            forbidden = self.client.get(
+                "/api/browse", params={"path": str(self.target)}
+            )
+        body = assert_error_envelope(self, forbidden, 403, "forbidden")
+        self.assertTrue(body["error"]["message"].startswith("Cannot list:"))
+        self._assert_log_unchanged(before)
+
+    @unittest.expectedFailure  # Route errors migrate in T011.
+    def test_conflicting_filter_errors(self) -> None:
+        before = self._log_bytes()
+        state = self.client.get(
+            "/api/state",
+            params=self._params(files_only="true", dirs_only="true"),
+        )
+        body = assert_error_envelope(self, state, 400, "invalid_request")
+        self.assertEqual(
+            body["error"]["message"],
+            "files_only and dirs_only are mutually exclusive",
+        )
+        self._assert_log_unchanged(before)
+
+        pick = self.client.post(
+            "/api/pick",
+            json={
+                "path": str(self.target),
+                "files_only": True,
+                "dirs_only": True,
+            },
+        )
+        body = assert_error_envelope(self, pick, 400, "invalid_request")
+        self.assertEqual(
+            body["error"]["message"],
+            "files_only and dirs_only are mutually exclusive",
+        )
+        self._assert_log_unchanged(before)
+
+    @unittest.expectedFailure  # Route errors migrate in T011.
+    def test_pick_log_error(self) -> None:
+        log_selection("a", self.log)
+        before = self._log_bytes()
+        with patch(
+            "choosier.web.log_selection",
+            side_effect=OSError("disk full"),
+        ):
+            response = self.client.post(
+                "/api/pick",
+                json={"path": str(self.target), "seed": 1},
+            )
+        body = assert_error_envelope(self, response, 500, "internal_error")
+        self.assertTrue(body["error"]["message"].startswith("Error writing log:"))
+        self._assert_log_unchanged(before)
+
+    @unittest.expectedFailure  # Route errors migrate in T011.
+    def test_image_errors(self) -> None:
+        before = self._log_bytes()
+
+        missing = self.client.get(
+            "/api/image", params={"path": str(self.root / "missing.png")}
+        )
+        body = assert_error_envelope(self, missing, 404, "not_found")
+        self.assertEqual(body["error"]["message"], "Image is gone")
+
+        archive = self._archive({"one.png": PNG})
+        bad_index = self.client.get(
+            "/api/image", params={"path": str(archive), "index": 99}
+        )
+        body = assert_error_envelope(self, bad_index, 404, "not_found")
+        self.assertEqual(body["error"]["message"], "Image not found in archive")
+
+        fake = self.root / "fake.zip"
+        fake.write_bytes(b"not a zip")
+        non_zip = self.client.get("/api/image", params={"path": str(fake), "index": 0})
+        body = assert_error_envelope(self, non_zip, 400, "invalid_request")
+        self.assertEqual(body["error"]["message"], "Not a zip archive")
+
+        corrupt = self._archive({"one.png": PNG}, name="corrupt.zip")
+        data = bytearray(corrupt.read_bytes())
+        offset = data.find(PNG)
+        self.assertGreaterEqual(offset, 0)
+        data[offset] ^= 0xFF
+        corrupt.write_bytes(data)
+        corrupt_response = self.client.get(
+            "/api/image", params={"path": str(corrupt), "index": 0}
+        )
+        body = assert_error_envelope(self, corrupt_response, 400, "invalid_request")
+        self.assertTrue(body["error"]["message"].startswith("Not a valid archive:"))
+
+        encrypted = self._archive({"one.png": PNG}, name="encrypted.zip")
+        original_infolist = zipfile.ZipFile.infolist
+
+        def encrypted_infolist(handle: zipfile.ZipFile) -> list[zipfile.ZipInfo]:
+            infos = original_infolist(handle)
+            for info in infos:
+                info.flag_bits |= 0x1
+            return infos
+
+        with patch.object(zipfile.ZipFile, "infolist", encrypted_infolist):
+            encrypted_response = self.client.get(
+                "/api/image", params={"path": str(encrypted), "index": 0}
+            )
+        body = assert_error_envelope(self, encrypted_response, 400, "invalid_request")
+        self.assertEqual(
+            body["error"]["message"],
+            "Encrypted archive members are not supported",
+        )
+
+        image = self.root / "big.png"
+        image.write_bytes(PNG)
+        with patch("choosier.web.PREVIEW_MAX_IMAGE_BYTES", 8):
+            oversized = self.client.get("/api/image", params={"path": str(image)})
+        body = assert_error_envelope(self, oversized, 413, "payload_too_large")
+        self.assertEqual(body["error"]["message"], "Image is too large to preview")
+
+        doc = self.target / "doc.txt"
+        doc.write_text("hello\n", encoding="utf-8")
+        unsupported = self.client.get("/api/image", params={"path": str(doc)})
+        body = assert_error_envelope(self, unsupported, 415, "unsupported_media_type")
+        self.assertEqual(body["error"]["message"], "Not a supported image")
+
+        fake_png = self.root / "fake.png"
+        fake_png.write_bytes(PNG)
+        undecodable = self.client.get(
+            "/api/image",
+            params={"path": str(fake_png), "variant": "thumb"},
+        )
+        body = assert_error_envelope(self, undecodable, 415, "unsupported_media_type")
+        self.assertTrue(body["error"]["message"].startswith("Cannot decode image:"))
+        self._assert_log_unchanged(before)
+
+    @unittest.expectedFailure  # Route errors migrate in T011.
+    def test_video_errors(self) -> None:
+        before = self._log_bytes()
+        missing = self.client.get(
+            "/api/video", params={"path": str(self.root / "missing.mp4")}
+        )
+        body = assert_error_envelope(self, missing, 404, "not_found")
+        self.assertEqual(body["error"]["message"], "Video is gone")
+
+        doc = self.target / "doc.txt"
+        doc.write_text("hello\n", encoding="utf-8")
+        unsupported = self.client.get("/api/video", params={"path": str(doc)})
+        body = assert_error_envelope(self, unsupported, 415, "unsupported_media_type")
+        self.assertEqual(body["error"]["message"], "Not a supported video")
+
+        fake = self.root / "fake.mp4"
+        fake.write_bytes(b"not a video")
+        mislabeled = self.client.get("/api/video", params={"path": str(fake)})
+        body = assert_error_envelope(self, mislabeled, 415, "unsupported_media_type")
+        self.assertEqual(body["error"]["message"], "Not a supported video")
+        self._assert_log_unchanged(before)
+
+    @unittest.expectedFailure  # Route errors migrate in T011.
+    def test_open_errors(self) -> None:
+        before = self._log_bytes()
+        missing = self.client.post(
+            "/api/open", json={"path": str(self.target / "missing")}
+        )
+        body = assert_error_envelope(self, missing, 404, "not_found")
+        self.assertEqual(body["error"]["message"], "Entry is gone")
+
+        with patch(
+            "choosier.web.launch_path",
+            side_effect=OSError("no opener"),
+        ):
+            failure = self.client.post(
+                "/api/open", json={"path": str(self.target / "a")}
+            )
+        body = assert_error_envelope(self, failure, 500, "internal_error")
+        self.assertTrue(body["error"]["message"].startswith("Cannot open:"))
+        self._assert_log_unchanged(before)
+
+    @unittest.expectedFailure  # Route errors migrate in T011.
+    def test_history_write_errors(self) -> None:
+        log_selection("a", self.log)
+        before = self._log_bytes()
+
+        with patch(
+            "choosier.web.archive_log",
+            side_effect=OSError("archive fail"),
+        ):
+            archived = self.client.post("/api/history/archive", params=self._params())
+        body = assert_error_envelope(self, archived, 500, "internal_error")
+        self.assertTrue(body["error"]["message"].startswith("Error archiving log:"))
+        self._assert_log_unchanged(before)
+
+        with patch(
+            "choosier.web.reset_log",
+            side_effect=OSError("reset fail"),
+        ):
+            cleared = self.client.delete("/api/history", params=self._params())
+        body = assert_error_envelope(self, cleared, 500, "internal_error")
+        self.assertTrue(body["error"]["message"].startswith("Error resetting log:"))
+        self._assert_log_unchanged(before)
+
+        with patch(
+            "choosier.web.remove_log_item",
+            side_effect=OSError("remove fail"),
+        ):
+            removed_item = self.client.delete(
+                "/api/history/item", params=self._params(item="a")
+            )
+        body = assert_error_envelope(self, removed_item, 500, "internal_error")
+        self.assertTrue(
+            body["error"]["message"].startswith("Error removing history item:")
+        )
+        self._assert_log_unchanged(before)
+
+        with patch(
+            "choosier.web.remove_log_items",
+            side_effect=OSError("batch fail"),
+        ):
+            removed_batch = self.client.post(
+                "/api/history/remove",
+                json={"path": str(self.target), "items": ["a"]},
+            )
+        body = assert_error_envelope(self, removed_batch, 500, "internal_error")
+        self.assertTrue(
+            body["error"]["message"].startswith("Error removing history items:")
+        )
+        self._assert_log_unchanged(before)
 
 
 if __name__ == "__main__":
