@@ -331,7 +331,6 @@ class ApiErrorEnvelopeTest(unittest.TestCase):
         )
         self._assert_log_unchanged(before)
 
-    @unittest.expectedFailure  # Range validation lands in T012.
     def test_malformed_range_returns_json_error(self) -> None:
         video = self.root / "clip.mp4"
         video.write_bytes(MP4)
@@ -349,7 +348,6 @@ class ApiErrorEnvelopeTest(unittest.TestCase):
                     response.headers.get("content-type", ""),
                 )
 
-    @unittest.expectedFailure  # Range validation lands in T012.
     def test_unsatisfiable_range_returns_json_error(self) -> None:
         video = self.root / "clip.mp4"
         video.write_bytes(MP4)

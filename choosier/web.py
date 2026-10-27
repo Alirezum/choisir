@@ -20,6 +20,10 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.responses import (
+    MalformedRangeHeader,
+    RangeNotSatisfiable,
+)
 
 from choosier.chooser import (
     get_unselected_item,
@@ -619,7 +623,7 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
         )
 
     @app.get("/api/video")
-    def video(path: str) -> FileResponse:
+    def video(path: str, request: Request) -> FileResponse:
         """Stream a standalone video with byte-range support."""
         entry = Path(path).expanduser()
         if not entry.is_file():
@@ -630,19 +634,36 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
         try:
             with open(entry, "rb") as handle:
                 head = handle.read(32)
+            stat_result = entry.stat()
         except OSError as e:
             raise ApiError("internal_error", f"Cannot read video: {e}")
         if not video_matches_content(entry.name, head):
             raise ApiError("unsupported_media_type", "Not a supported video")
-        return FileResponse(
+        response = FileResponse(
             path=entry,
             media_type=media_type,
+            stat_result=stat_result,
             headers={
                 "Cache-Control": "no-store",
                 "X-Content-Type-Options": "nosniff",
             },
             content_disposition_type="inline",
         )
+        range_header = request.headers.get("range")
+        if range_header is not None:
+            if_range = request.headers.get("if-range")
+            if if_range is None or response._should_use_range(if_range):
+                try:
+                    FileResponse._parse_range_header(range_header, stat_result.st_size)
+                except MalformedRangeHeader as exc:
+                    raise ApiError("invalid_request", exc.content)
+                except RangeNotSatisfiable as exc:
+                    raise ApiError(
+                        "range_not_satisfiable",
+                        "Requested range not satisfiable",
+                        headers={"Content-Range": f"bytes */{exc.max_size}"},
+                    )
+        return response
 
     @app.post("/api/open")
     def open_entry(request: OpenRequest) -> OpenResponse:
