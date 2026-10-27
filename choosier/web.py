@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Literal
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -298,63 +298,58 @@ def _video_model(video: PreviewVideo) -> PreviewVideoModel:
 def _read_standalone_image(path: Path) -> tuple[bytes, str]:
     """Read a supported image file, bounded by the preview size limit."""
     if image_media_type(path.name) is None:
-        raise HTTPException(status_code=415, detail="Not a supported image")
+        raise ApiError("unsupported_media_type", "Not a supported image")
     try:
         size = path.stat().st_size
     except OSError as e:
-        raise HTTPException(status_code=404, detail=f"Image is gone: {e}")
+        raise ApiError("not_found", f"Image is gone: {e}")
     if size > PREVIEW_MAX_IMAGE_BYTES:
-        raise HTTPException(status_code=413, detail="Image is too large to preview")
+        raise ApiError("payload_too_large", "Image is too large to preview")
     try:
         with open(path, "rb") as f:
             data = f.read(PREVIEW_MAX_IMAGE_BYTES + 1)
     except OSError as e:
-        raise HTTPException(status_code=500, detail=f"Cannot read image: {e}")
+        raise ApiError("internal_error", f"Cannot read image: {e}")
     if len(data) > PREVIEW_MAX_IMAGE_BYTES:
-        raise HTTPException(status_code=413, detail="Image is too large to preview")
+        raise ApiError("payload_too_large", "Image is too large to preview")
     media_type = sniff_image_media_type(data[:32])
     if media_type is None:
-        raise HTTPException(status_code=415, detail="Not a supported image")
+        raise ApiError("unsupported_media_type", "Not a supported image")
     return data, media_type
 
 
 def _read_archived_image(path: Path, index: int) -> tuple[bytes, str]:
     """Read one image member by position, never by client-supplied name."""
     if not zipfile.is_zipfile(path):
-        raise HTTPException(status_code=400, detail="Not a zip archive")
+        raise ApiError("invalid_request", "Not a zip archive")
     data = b""
     try:
         with zipfile.ZipFile(path) as archive:
             infos = archive.infolist()
             if index < 0 or index >= len(infos):
-                raise HTTPException(
-                    status_code=404, detail="Image not found in archive"
-                )
+                raise ApiError("not_found", "Image not found in archive")
             info = infos[index]
             if info.is_dir() or image_media_type(info.filename) is None:
-                raise HTTPException(status_code=415, detail="Not a supported image")
+                raise ApiError("unsupported_media_type", "Not a supported image")
             if info.flag_bits & 0x1:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Encrypted archive members are not supported",
+                raise ApiError(
+                    "invalid_request", "Encrypted archive members are not supported"
                 )
             if info.file_size > PREVIEW_MAX_IMAGE_BYTES:
-                raise HTTPException(
-                    status_code=413, detail="Image is too large to preview"
-                )
+                raise ApiError("payload_too_large", "Image is too large to preview")
             with archive.open(info) as member:
                 data = member.read(PREVIEW_MAX_IMAGE_BYTES + 1)
     except zipfile.BadZipFile as e:
-        raise HTTPException(status_code=400, detail=f"Not a valid archive: {e}")
+        raise ApiError("invalid_request", f"Not a valid archive: {e}")
     except (RuntimeError, NotImplementedError) as e:
-        raise HTTPException(status_code=400, detail=f"Cannot read archive member: {e}")
+        raise ApiError("invalid_request", f"Cannot read archive member: {e}")
     except OSError as e:
-        raise HTTPException(status_code=500, detail=f"Cannot read archive: {e}")
+        raise ApiError("internal_error", f"Cannot read archive: {e}")
     if len(data) > PREVIEW_MAX_IMAGE_BYTES:
-        raise HTTPException(status_code=413, detail="Image is too large to preview")
+        raise ApiError("payload_too_large", "Image is too large to preview")
     media_type = sniff_image_media_type(data[:32])
     if media_type is None:
-        raise HTTPException(status_code=415, detail="Not a supported image")
+        raise ApiError("unsupported_media_type", "Not a supported image")
     return data, media_type
 
 
@@ -374,7 +369,7 @@ def _make_thumbnail(
             image.save(output, format="WEBP", quality=quality)
             return output.getvalue()
     except (UnidentifiedImageError, Image.DecompressionBombError, OSError) as e:
-        raise HTTPException(status_code=415, detail=f"Cannot decode image: {e}")
+        raise ApiError("unsupported_media_type", f"Cannot decode image: {e}")
 
 
 def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
@@ -467,13 +462,13 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
         """List one directory for the folder browser (dirs first)."""
         directory = Path(path).expanduser()
         if not directory.is_dir():
-            raise HTTPException(status_code=404, detail="Not a directory")
+            raise ApiError("not_found", "Not a directory")
         try:
             children = sorted(
                 directory.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())
             )
         except OSError as e:
-            raise HTTPException(status_code=403, detail=f"Cannot list: {e}")
+            raise ApiError("forbidden", f"Cannot list: {e}")
         parent = directory.parent if directory.parent != directory else None
         return BrowseResponse(
             path=str(directory),
@@ -506,9 +501,8 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
                 history_total=0,
             )
         if files_only and dirs_only:
-            raise HTTPException(
-                status_code=400,
-                detail="files_only and dirs_only are mutually exclusive",
+            raise ApiError(
+                "invalid_request", "files_only and dirs_only are mutually exclusive"
             )
         try:
             candidates = list_candidates(
@@ -558,9 +552,8 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
                 rng=rng,
             )
         except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail="files_only and dirs_only are mutually exclusive",
+            raise ApiError(
+                "invalid_request", "files_only and dirs_only are mutually exclusive"
             )
         if item is None:
             status: Literal["empty", "exhausted"] = (
@@ -572,7 +565,7 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
             try:
                 log_selection(item, log_path)
             except OSError as e:
-                raise HTTPException(status_code=500, detail=f"Error writing log: {e}")
+                raise ApiError("internal_error", f"Error writing log: {e}")
             logged = True
         return PickResponse(
             status="picked",
@@ -601,7 +594,7 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
         """
         entry = Path(path).expanduser()
         if not entry.is_file():
-            raise HTTPException(status_code=404, detail="Image is gone")
+            raise ApiError("not_found", "Image is gone")
         if index is None:
             data, media_type = _read_standalone_image(entry)
         else:
@@ -630,17 +623,17 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
         """Stream a standalone video with byte-range support."""
         entry = Path(path).expanduser()
         if not entry.is_file():
-            raise HTTPException(status_code=404, detail="Video is gone")
+            raise ApiError("not_found", "Video is gone")
         media_type = video_media_type(entry.name)
         if media_type is None:
-            raise HTTPException(status_code=415, detail="Not a supported video")
+            raise ApiError("unsupported_media_type", "Not a supported video")
         try:
             with open(entry, "rb") as handle:
                 head = handle.read(32)
         except OSError as e:
-            raise HTTPException(status_code=500, detail=f"Cannot read video: {e}")
+            raise ApiError("internal_error", f"Cannot read video: {e}")
         if not video_matches_content(entry.name, head):
-            raise HTTPException(status_code=415, detail="Not a supported video")
+            raise ApiError("unsupported_media_type", "Not a supported video")
         return FileResponse(
             path=entry,
             media_type=media_type,
@@ -656,11 +649,11 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
         """Open an entry with the OS default program."""
         entry = Path(request.path).expanduser()
         if not entry.exists():
-            raise HTTPException(status_code=404, detail="Entry is gone")
+            raise ApiError("not_found", "Entry is gone")
         try:
             launch_path(entry)
         except OSError as e:
-            raise HTTPException(status_code=500, detail=f"Cannot open: {e}")
+            raise ApiError("internal_error", f"Cannot open: {e}")
         return OpenResponse(opened=entry.name)
 
     @app.post("/api/history/archive")
@@ -669,7 +662,7 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
         try:
             backup = archive_log(log_path)
         except OSError as e:
-            raise HTTPException(status_code=500, detail=f"Error archiving log: {e}")
+            raise ApiError("internal_error", f"Error archiving log: {e}")
         return ArchiveResponse(
             log_file=str(log_path),
             backup=backup.name if backup is not None else None,
@@ -681,7 +674,7 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
         try:
             removed = reset_log(log_path)
         except OSError as e:
-            raise HTTPException(status_code=500, detail=f"Error resetting log: {e}")
+            raise ApiError("internal_error", f"Error resetting log: {e}")
         return ClearResponse(log_file=str(log_path), removed=removed)
 
     @app.delete("/api/history/item")
@@ -693,9 +686,7 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
         try:
             removed = remove_log_item(item, log_path)
         except OSError as e:
-            raise HTTPException(
-                status_code=500, detail=f"Error removing history item: {e}"
-            )
+            raise ApiError("internal_error", f"Error removing history item: {e}")
         return RemoveHistoryItemResponse(
             log_file=str(log_path), item=item, removed=removed
         )
@@ -709,9 +700,7 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
         try:
             removed = remove_log_items(request.items, log_path)
         except OSError as e:
-            raise HTTPException(
-                status_code=500, detail=f"Error removing history items: {e}"
-            )
+            raise ApiError("internal_error", f"Error removing history items: {e}")
         return RemoveHistoryItemsResponse(
             log_file=str(log_path), items=request.items, removed=removed
         )
