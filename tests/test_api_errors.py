@@ -60,13 +60,11 @@ class ApiErrorEnvelopeTest(unittest.TestCase):
                 handle.writestr(member, data)
         return archive
 
-    @unittest.expectedFailure  # Envelope handler lands in T009.
     def test_unknown_route_is_not_found(self) -> None:
         response = self.client.get("/api/nope")
         body = assert_error_envelope(self, response, 404, "not_found")
         self.assertEqual(body["error"]["message"], "Not Found")
 
-    @unittest.expectedFailure  # Envelope handler lands in T009.
     def test_method_not_allowed_preserves_allow_header(self) -> None:
         response = self.client.post("/api/defaults")
         body = assert_error_envelope(self, response, 405, "method_not_allowed")
@@ -97,7 +95,6 @@ class ApiErrorEnvelopeTest(unittest.TestCase):
         self.assertEqual(issues[0]["location"][0], "body")
         self.assertEqual(issues[0]["type"], "json_invalid")
 
-    @unittest.expectedFailure  # Envelope handler lands in T009.
     def test_unexpected_exception_is_internal_error(self) -> None:
         client = TestClient(create_app(), raise_server_exceptions=False)
         with patch(
@@ -108,7 +105,6 @@ class ApiErrorEnvelopeTest(unittest.TestCase):
         body = assert_error_envelope(self, response, 500, "internal_error")
         self.assertEqual(body["error"]["message"], "Internal server error")
 
-    @unittest.expectedFailure  # Route errors migrate in T011.
     def test_browse_errors(self) -> None:
         before = self._log_bytes()
         missing = self.client.get(
@@ -129,7 +125,6 @@ class ApiErrorEnvelopeTest(unittest.TestCase):
         self.assertTrue(body["error"]["message"].startswith("Cannot list:"))
         self._assert_log_unchanged(before)
 
-    @unittest.expectedFailure  # Route errors migrate in T011.
     def test_conflicting_filter_errors(self) -> None:
         before = self._log_bytes()
         state = self.client.get(
@@ -158,7 +153,6 @@ class ApiErrorEnvelopeTest(unittest.TestCase):
         )
         self._assert_log_unchanged(before)
 
-    @unittest.expectedFailure  # Route errors migrate in T011.
     def test_pick_log_error(self) -> None:
         log_selection("a", self.log)
         before = self._log_bytes()
@@ -174,7 +168,6 @@ class ApiErrorEnvelopeTest(unittest.TestCase):
         self.assertTrue(body["error"]["message"].startswith("Error writing log:"))
         self._assert_log_unchanged(before)
 
-    @unittest.expectedFailure  # Route errors migrate in T011.
     def test_image_errors(self) -> None:
         before = self._log_bytes()
 
@@ -251,7 +244,6 @@ class ApiErrorEnvelopeTest(unittest.TestCase):
         self.assertTrue(body["error"]["message"].startswith("Cannot decode image:"))
         self._assert_log_unchanged(before)
 
-    @unittest.expectedFailure  # Route errors migrate in T011.
     def test_video_errors(self) -> None:
         before = self._log_bytes()
         missing = self.client.get(
@@ -273,7 +265,6 @@ class ApiErrorEnvelopeTest(unittest.TestCase):
         self.assertEqual(body["error"]["message"], "Not a supported video")
         self._assert_log_unchanged(before)
 
-    @unittest.expectedFailure  # Route errors migrate in T011.
     def test_open_errors(self) -> None:
         before = self._log_bytes()
         missing = self.client.post(
@@ -293,7 +284,6 @@ class ApiErrorEnvelopeTest(unittest.TestCase):
         self.assertTrue(body["error"]["message"].startswith("Cannot open:"))
         self._assert_log_unchanged(before)
 
-    @unittest.expectedFailure  # Route errors migrate in T011.
     def test_history_write_errors(self) -> None:
         log_selection("a", self.log)
         before = self._log_bytes()

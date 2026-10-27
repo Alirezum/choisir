@@ -13,11 +13,12 @@ from pathlib import Path
 from typing import Literal
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from choosier.chooser import (
     get_unselected_item,
@@ -75,6 +76,18 @@ ERROR_STATUS: dict[ErrorCode, int] = {
     "range_not_satisfiable": 416,
     "validation_error": 422,
     "internal_error": 500,
+}
+
+_HTTP_ERROR_CODES: dict[int, ErrorCode] = {
+    400: "invalid_request",
+    403: "forbidden",
+    404: "not_found",
+    405: "method_not_allowed",
+    413: "payload_too_large",
+    415: "unsupported_media_type",
+    416: "range_not_satisfiable",
+    422: "validation_error",
+    500: "internal_error",
 }
 
 ErrorDetails = dict[str, object]
@@ -366,6 +379,47 @@ def _make_thumbnail(
 def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
     """Build the web app; initial values seed the defaults endpoint."""
     app = FastAPI(title="choosier")
+
+    @app.exception_handler(ApiError)
+    async def api_error_handler(
+        _request: Request,
+        exc: ApiError,
+    ) -> JSONResponse:
+        return _error_response(
+            exc.code,
+            exc.message,
+            details=exc.details,
+            headers=exc.headers,
+        )
+
+    @app.exception_handler(StarletteHTTPException)
+    async def http_exception_handler(
+        _request: Request,
+        exc: StarletteHTTPException,
+    ) -> JSONResponse:
+        code = _HTTP_ERROR_CODES.get(exc.status_code)
+        if code is None:
+            return _error_response("internal_error", "Internal server error")
+        if isinstance(exc.detail, str):
+            message = exc.detail
+        elif code == "validation_error":
+            message = "Request validation failed"
+        else:
+            message = "Request failed"
+        headers = dict(exc.headers) if exc.headers is not None else None
+        return _error_response(
+            code,
+            message,
+            headers=headers,
+            status_code=exc.status_code,
+        )
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(
+        _request: Request,
+        _exc: Exception,
+    ) -> JSONResponse:
+        return _error_response("internal_error", "Internal server error")
 
     @app.get("/api/defaults")
     def defaults() -> DefaultsResponse:
