@@ -71,7 +71,6 @@ class ApiErrorEnvelopeTest(unittest.TestCase):
         self.assertEqual(body["error"]["message"], "Method Not Allowed")
         self.assertIn("GET", response.headers["allow"])
 
-    @unittest.expectedFailure  # Validation handler lands in T010.
     def test_missing_query_is_validation_error(self) -> None:
         response = self.client.get("/api/state")
         body = assert_error_envelope(self, response, 422, "validation_error")
@@ -83,7 +82,6 @@ class ApiErrorEnvelopeTest(unittest.TestCase):
         self.assertEqual(issues[0]["message"], "Field required")
         self.assertEqual(issues[0]["type"], "missing")
 
-    @unittest.expectedFailure  # Validation handler lands in T010.
     def test_malformed_json_is_validation_error(self) -> None:
         response = self.client.post(
             "/api/pick",

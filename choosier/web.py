@@ -14,6 +14,7 @@ from typing import Literal
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps, UnidentifiedImageError
@@ -412,6 +413,42 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
             message,
             headers=headers,
             status_code=exc.status_code,
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(
+        _request: Request,
+        exc: RequestValidationError,
+    ) -> JSONResponse:
+        issues: list[dict[str, object]] = []
+        first_location = "request"
+        first_message = "Invalid request"
+        for index, error in enumerate(exc.errors()):
+            location = [str(part) for part in error.get("loc", ())]
+            message = str(error.get("msg", "Invalid value"))
+            issue_type = str(error.get("type", "value_error"))
+            issues.append(
+                {
+                    "location": location,
+                    "message": message,
+                    "type": issue_type,
+                }
+            )
+            if index == 0:
+                first_location = ".".join(location) or "request"
+                first_message = message
+        if not issues:
+            issues.append(
+                {
+                    "location": ["request"],
+                    "message": "Invalid request",
+                    "type": "value_error",
+                }
+            )
+        return _error_response(
+            "validation_error",
+            f"Request validation failed: {first_location}: {first_message}",
+            details={"issues": issues},
         )
 
     @app.exception_handler(Exception)
