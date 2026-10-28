@@ -39,6 +39,7 @@ const activeTab = ref<TabId>('remaining')
 const clearing = ref(false)
 const removingItem = ref<string | null>(null)
 const pickSerial = ref(0)
+let previewSerial = 0
 const pathInput = ref<HTMLInputElement | null>(null)
 
 const filters = computed(() => ({
@@ -88,6 +89,7 @@ function scheduleRefresh(): void {
 
 watch([path, logFile, includeHidden, mode], scheduleRefresh)
 watch(path, () => {
+  previewSerial += 1
   choice.value = null
 })
 
@@ -122,6 +124,7 @@ async function pick(): Promise<void> {
       status.value = 'All items have been picked. Clear or archive history to start over.'
     } else {
       const item = result.item ?? ''
+      previewSerial += 1
       choice.value = {
         item,
         path: entryPath(item),
@@ -161,15 +164,16 @@ function openHistoryItem(item: string): void {
 }
 
 async function previewHistoryItem(item: string): Promise<void> {
+  const request = ++previewSerial
   const target = { item, path: entryPath(item), preview: null }
   choice.value = target
   try {
     const preview = await api.preview(target.path)
-    if (choice.value !== target) return
+    if (request !== previewSerial) return
     choice.value = { ...target, preview }
     status.value = `Previewing ${item} from history.`
   } catch (error) {
-    if (choice.value !== target) return
+    if (request !== previewSerial) return
     status.value = describeError(error)
   }
 }
