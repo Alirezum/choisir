@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Web API: every failed `/api/*` request now returns one JSON envelope
+  with `error.code`, `error.message`, and `error.details`. The legacy
+  `detail` string is preserved and always equals `error.message`, so the
+  existing frontend keeps working.
+- Web API: request validation failures return 422 with
+  `details.issues` containing string locations, messages, and error
+  types; raw request input is not echoed.
+- Web API: image/video failures and malformed or unsatisfiable video
+  byte ranges now use the same JSON envelope instead of plain text,
+  while valid 200/206 binary streaming is unchanged.
+- Web API: automated route-inventory, OpenAPI success-schema,
+  binary-response, and seeded-drift tests now guard the documented
+  contract.
 - Web UI: history rows are highlighted to select them for batch deletion.
   Clicking a row previews and toggles its highlight; hold Shift while
   clicking to select a range, use Select all/Clear selection for the

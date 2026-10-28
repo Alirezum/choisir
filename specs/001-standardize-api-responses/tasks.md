@@ -104,7 +104,7 @@
 ### Documentation for User Story 3
 
 - [X] T017 [P] [US3] Document the error envelope, `detail` compatibility invariant, 9-code table, binary/range behavior, and the contract-test update workflow in `README.md`; link `specs/001-standardize-api-responses/contracts/api-contract.md`.
-- [ ] T018 [P] [US3] Add an Unreleased `CHANGELOG.md` entry for standardized JSON errors, validation `details.issues`, preserved `detail` messages, binary/range error handling, and automated route-contract/drift checks.
+- [X] T018 [P] [US3] Add an Unreleased `CHANGELOG.md` entry for standardized JSON errors, validation `details.issues`, preserved `detail` messages, binary/range error handling, and automated route-contract/drift checks.
 
 **Checkpoint**: The inventory covers 100% of `/api` routes, and seeded field/type/route/error drift fails the suite.
 
