@@ -1,9 +1,11 @@
-"""Executable route, schema, and binary tests for the choosier API contract."""
+"""Executable route, schema, and drift tests for the choosier API contract."""
 
+import copy
 import tempfile
 import unittest
 from io import BytesIO
 from pathlib import Path
+from typing import Any
 
 try:
     from fastapi.testclient import TestClient
@@ -23,6 +25,9 @@ from tests.api_contract_support import (
     load_contract,
 )
 
+PNG = b"\x89PNG\r\n\x1a\npngdata"
+MP4 = b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom"
+
 
 def _real_png(size: tuple[int, int] = (32, 24)) -> bytes:
     from PIL import Image
@@ -30,9 +35,6 @@ def _real_png(size: tuple[int, int] = (32, 24)) -> bytes:
     buffer = BytesIO()
     Image.new("RGB", size, (10, 80, 160)).save(buffer, "PNG")
     return buffer.getvalue()
-
-
-MP4 = b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom"
 
 
 @unittest.skipUnless(HAS_WEB, "web extra (fastapi) not installed")
@@ -139,6 +141,90 @@ class ApiContractTest(unittest.TestCase):
         self.assertTrue(
             multipart.headers["content-type"].startswith("multipart/byteranges")
         )
+
+
+@unittest.skipUnless(HAS_WEB, "web extra (fastapi) not installed")
+class ContractDriftTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.contract = load_contract()
+        self.app = create_app()
+        self.openapi = self.app.openapi()
+
+    def _copy(self) -> dict[str, Any]:
+        return copy.deepcopy(self.contract)
+
+    def test_missing_success_field_is_rejected(self) -> None:
+        contract = self._copy()
+        route = contract_route(contract, "GET", "/api/defaults")
+        del route["success"]["schema"]["fields"]["path"]
+        with self.assertRaises(AssertionError):
+            assert_success_schema(contract, route, self.openapi)
+
+    def test_renamed_success_field_is_rejected(self) -> None:
+        contract = self._copy()
+        route = contract_route(contract, "GET", "/api/browse")
+        fields = route["success"]["schema"]["fields"]
+        fields["parent_path"] = fields.pop("parent")
+        with self.assertRaises(AssertionError):
+            assert_success_schema(contract, route, self.openapi)
+
+    def test_retyped_success_field_is_rejected(self) -> None:
+        contract = self._copy()
+        route = contract_route(contract, "GET", "/api/defaults")
+        route["success"]["schema"]["fields"]["path"]["type"] = "integer"
+        with self.assertRaises(AssertionError):
+            assert_success_schema(contract, route, self.openapi)
+
+    def test_nullability_drift_is_rejected(self) -> None:
+        contract = self._copy()
+        route = contract_route(contract, "GET", "/api/browse")
+        route["success"]["schema"]["fields"]["parent"]["nullable"] = False
+        with self.assertRaises(AssertionError):
+            assert_success_schema(contract, route, self.openapi)
+
+    def test_enum_drift_is_rejected(self) -> None:
+        contract = self._copy()
+        route = contract_route(contract, "POST", "/api/pick")
+        route["success"]["schema"]["fields"]["status"]["enum"] = [
+            "picked",
+            "empty",
+            "exhausted",
+            "invalid_path",
+            "other",
+        ]
+        with self.assertRaises(AssertionError):
+            assert_success_schema(contract, route, self.openapi)
+
+    def test_added_contract_route_is_rejected(self) -> None:
+        contract = self._copy()
+        extra = copy.deepcopy(contract_route(contract, "GET", "/api/defaults"))
+        extra["path"] = "/api/undocumented"
+        contract["routes"].append(extra)
+        with self.assertRaises(AssertionError):
+            assert_route_parity(contract, api_routes(self.app))
+
+    def test_removed_contract_route_is_rejected(self) -> None:
+        contract = self._copy()
+        contract["routes"] = [
+            route
+            for route in contract["routes"]
+            if not (route["method"] == "GET" and route["path"] == "/api/defaults")
+        ]
+        with self.assertRaises(AssertionError):
+            assert_route_parity(contract, api_routes(self.app))
+
+    def test_error_status_drift_is_rejected(self) -> None:
+        contract = self._copy()
+        contract["errorCodes"]["not_found"]["status"] = 410
+        with self.assertRaises(AssertionError):
+            assert_error_taxonomy(contract, ERROR_STATUS)
+
+    def test_route_error_status_drift_is_rejected(self) -> None:
+        contract = self._copy()
+        route = contract_route(contract, "GET", "/api/browse")
+        route["errors"][1]["status"] = 410
+        with self.assertRaises(AssertionError):
+            assert_error_taxonomy(contract, ERROR_STATUS)
 
 
 if __name__ == "__main__":
