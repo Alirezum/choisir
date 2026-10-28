@@ -96,6 +96,53 @@ range, use *Select all* / *Clear selection* for the visible rows, then
 in `frontend/` (Vite proxies `/api`); `npm run build` writes the bundle to
 `choosier/web_static/`, which the server serves on the same origin.
 
+## API contract
+
+Every failed `/api/*` request returns the same JSON envelope:
+
+```json
+{
+  "error": {
+    "code": "not_found",
+    "message": "Not a directory",
+    "details": null
+  },
+  "detail": "Not a directory"
+}
+```
+
+`detail` is kept as a string and always equals `error.message`, so existing
+frontend error handling keeps working. Validation failures add
+`error.details.issues` (each with string `location`, `message`, and `type`);
+raw request input is never echoed.
+
+| Code | Status | Meaning |
+| --- | --- | --- |
+| `invalid_request` | 400 | Invalid parameter combination, archive operation, or byte range |
+| `forbidden` | 403 | Target exists but cannot be accessed |
+| `not_found` | 404 | Unknown route or missing path/entry/image/video/archive member |
+| `method_not_allowed` | 405 | Route does not support the method |
+| `payload_too_large` | 413 | Image exceeds the 20 MB preview limit |
+| `unsupported_media_type` | 415 | Unsupported or undecodable image/video |
+| `range_not_satisfiable` | 416 | Range starts beyond the end of the video |
+| `validation_error` | 422 | Query/body validation failed |
+| `internal_error` | 500 | I/O, log, launch, or unexpected server failure |
+
+Domain outcomes are not errors: an invalid target path in `/api/state`,
+`invalid_path`/`empty`/`exhausted` picks, and no-op archive/clear/remove calls
+still return `200` with their normal payloads. The image endpoint keeps binary
+bytes and MIME types; the video endpoint keeps `200`/`206` streaming and
+answers malformed or unsatisfiable `Range` headers with the JSON envelope
+(400/416) instead of plain text.
+
+The machine-readable inventory (12 `/api` routes and all error codes) lives in
+[`specs/001-standardize-api-responses/contracts/api-contract.json`](specs/001-standardize-api-responses/contracts/api-contract.json),
+with a human-readable audit in
+[`api-contract.md`](specs/001-standardize-api-responses/contracts/api-contract.md).
+When changing an API response, update both files and run
+`uv run pytest tests/test_api_contract.py`; the tests reject route, field,
+type, nullability, enum, binary/content-type, and error-status drift.
+
 ## History log
 
 Selections are stored as JSON Lines (`{"ts": ..., "item": ...}`) in
