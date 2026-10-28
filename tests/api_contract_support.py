@@ -266,7 +266,7 @@ def assert_route_parity(
 
 def assert_error_taxonomy(
     contract: Mapping[str, Any],
-    error_status: Mapping[str, int],
+    error_status: Mapping[ErrorCode, int],
 ) -> None:
     """Require one documented status per code and a documented use for each."""
     documented = {
