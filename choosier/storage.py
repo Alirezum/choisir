@@ -4,6 +4,7 @@ import json
 import os
 import stat
 import tempfile
+from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -154,13 +155,19 @@ def _rewrite_log(log_path: Path, lines: list[str]) -> None:
         raise
 
 
-def remove_log_item(item: str, log_file: str | Path = DEFAULT_LOG_FILENAME) -> int:
-    """Remove every log entry for `item`, keeping all other lines verbatim.
+def remove_log_items(
+    items: Collection[str], log_file: str | Path = DEFAULT_LOG_FILENAME
+) -> int:
+    """Remove every log entry for each item in `items` in one rewrite.
 
-    Returns the number of entries removed (0 if the log is missing or the
-    item is not logged). Rewrites the log atomically so a crash cannot
-    leave a truncated file behind.
+    Returns the number of entries removed (0 if the log is missing or
+    none of the items are logged). All other lines are kept verbatim.
+    Rewrites the log atomically so a crash cannot leave a truncated file
+    behind.
     """
+    names = set(items)
+    if not names:
+        return 0
     log_path = Path(log_file).expanduser()
     try:
         raw_lines = log_path.read_text(encoding="utf-8").splitlines(keepends=True)
@@ -169,7 +176,7 @@ def remove_log_item(item: str, log_file: str | Path = DEFAULT_LOG_FILENAME) -> i
     kept: list[str] = []
     removed = 0
     for line in raw_lines:
-        if parse_log_line(line)[1] == item:
+        if parse_log_line(line)[1] in names:
             removed += 1
         else:
             kept.append(line)
@@ -177,6 +184,11 @@ def remove_log_item(item: str, log_file: str | Path = DEFAULT_LOG_FILENAME) -> i
         return 0
     _rewrite_log(log_path, kept)
     return removed
+
+
+def remove_log_item(item: str, log_file: str | Path = DEFAULT_LOG_FILENAME) -> int:
+    """Remove every log entry for `item`, keeping all other lines verbatim."""
+    return remove_log_items({item}, log_file)
 
 
 def archive_log(log_file: str | Path = DEFAULT_LOG_FILENAME) -> Path | None:

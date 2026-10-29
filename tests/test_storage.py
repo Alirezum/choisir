@@ -16,6 +16,7 @@ from choosier.storage import (
     log_selection,
     read_log_entries,
     remove_log_item,
+    remove_log_items,
     reset_log,
 )
 
@@ -173,6 +174,71 @@ class RemoveLogItemTest(unittest.TestCase):
     def test_removing_last_entry_leaves_empty_log(self) -> None:
         log_selection("only", self.log)
         self.assertEqual(remove_log_item("only", self.log), 1)
+        self.assertEqual(self.log.read_text(encoding="utf-8"), "")
+        self.assertEqual(get_logged_items(self.log), set())
+
+
+class RemoveLogItemsTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.log = Path(self.tmp.name) / "history.jsonl"
+
+    def test_removes_multiple_items_in_one_rewrite(self) -> None:
+        for item in ("a", "b", "c", "a"):
+            log_selection(item, self.log)
+        self.assertEqual(remove_log_items({"a", "c"}, self.log), 3)
+        self.assertEqual(get_logged_items(self.log), {"b"})
+        self.assertEqual([entry.item for entry in read_log_entries(self.log)], ["b"])
+
+    def test_removes_legacy_entry_by_parsed_item(self) -> None:
+        self.log.write_text(
+            "2020-01-01T00:00:00Z - legacy name\n"
+            '{"ts": "2026-01-01T00:00:00+00:00", "item": "keep"}\n'
+            '{"ts": "2026-01-02T00:00:00+00:00", "item": "drop"}\n',
+            encoding="utf-8",
+        )
+        self.assertEqual(remove_log_items({"legacy name", "drop"}, self.log), 2)
+        self.assertEqual(get_logged_items(self.log), {"keep"})
+
+    def test_preserves_unrelated_lines_verbatim(self) -> None:
+        content = (
+            "2020-01-01T00:00:00Z - old\n"
+            '{"ts": "2026-01-02T00:00:00+00:00", "item": "a"}\n'
+            "\n"
+            "not json\n"
+            '{"ts": "2026-01-03T00:00:00+00:00", "item": "b"}\n'
+        )
+        self.log.write_text(content, encoding="utf-8")
+        self.assertEqual(remove_log_items({"a"}, self.log), 1)
+        self.assertEqual(
+            self.log.read_text(encoding="utf-8"),
+            "2020-01-01T00:00:00Z - old\n"
+            "\n"
+            "not json\n"
+            '{"ts": "2026-01-03T00:00:00+00:00", "item": "b"}\n',
+        )
+
+    def test_empty_items_is_a_noop(self) -> None:
+        log_selection("a", self.log)
+        before = self.log.read_bytes()
+        self.assertEqual(remove_log_items(set(), self.log), 0)
+        self.assertEqual(self.log.read_bytes(), before)
+
+    def test_missing_items_are_a_noop(self) -> None:
+        log_selection("a", self.log)
+        before = self.log.read_bytes()
+        self.assertEqual(remove_log_items({"missing", "also-missing"}, self.log), 0)
+        self.assertEqual(self.log.read_bytes(), before)
+
+    def test_missing_log_returns_zero(self) -> None:
+        self.assertEqual(remove_log_items({"a", "b"}, self.log), 0)
+        self.assertFalse(self.log.exists())
+
+    def test_removing_last_entries_leaves_empty_log(self) -> None:
+        log_selection("one", self.log)
+        log_selection("two", self.log)
+        self.assertEqual(remove_log_items({"one", "two"}, self.log), 2)
         self.assertEqual(self.log.read_text(encoding="utf-8"), "")
         self.assertEqual(get_logged_items(self.log), set())
 
