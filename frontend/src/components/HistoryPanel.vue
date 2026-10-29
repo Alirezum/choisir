@@ -108,23 +108,15 @@ function selectRange(item: string): void {
   emit('rangeCheck', namesInRange(anchor.value, item))
 }
 
-function onCheckClick(item: string, event: MouseEvent): void {
-  event.preventDefault()
-  if (props.busy) return
-  if (event.shiftKey) {
-    selectRange(item)
-    return
-  }
-  anchor.value = item
-  emit('toggleCheck', item)
-}
-
 function onRowClick(item: string, event: MouseEvent): void {
+  if (props.busy) return
   if (event.shiftKey) {
     event.preventDefault()
     selectRange(item)
     return
   }
+  anchor.value = item
+  emit('toggleCheck', item)
   emit('select', item)
 }
 
@@ -149,7 +141,7 @@ function onToggleAll(): void {
       </button>
     </div>
     <p v-if="rows.length > 0" class="history-hint">
-      Shift-click a row to select a range.
+      Click a row to preview and select it. Shift-click to select a range.
     </p>
     <ul v-if="rows.length > 0" class="list history-list">
       <li v-for="row in rows" :key="row.key">
@@ -157,21 +149,13 @@ function onToggleAll(): void {
           class="history-row"
           :class="{ 'is-selected': row.selected, 'is-checked': row.checked }"
         >
-          <input
-            class="history-check"
-            type="checkbox"
-            :checked="row.checked"
-            :disabled="busy"
-            :aria-label="`Select ${row.item} for batch deletion`"
-            :title="`Select ${row.item}`"
-            @click="onCheckClick(row.item, $event)"
-          />
           <button
             class="history-select"
             type="button"
-            :aria-label="`Preview ${row.item}`"
+            :aria-label="`Preview and select ${row.item}`"
+            :aria-pressed="row.checked ? 'true' : 'false'"
             :aria-current="row.selected ? 'true' : undefined"
-            :title="`Preview ${row.item}`"
+            :title="`Preview and select ${row.item}`"
             @click="onRowClick(row.item, $event)"
           >
             <time
