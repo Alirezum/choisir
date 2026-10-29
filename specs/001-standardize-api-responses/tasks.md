@@ -117,7 +117,7 @@
 - [X] T019 [P] Run the full quality gate from `pyproject.toml`, `tests/`, `choosier/`, and `frontend/package.json`: `uv run pytest -q`, `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy choosier main.py tests`, and `cd frontend && npm run build`.
 - [X] T020 [P] Execute the manual `specs/001-standardize-api-responses/quickstart.md` curl checks for success, framework errors, route errors, binary ranges, and domain outcomes; record any mismatch in `choosier/web.py` or the contract.
 - [X] T021 [P] Review `frontend/src/`, the route decorators in `choosier/web.py`, and the request models; confirm no frontend source, path, method, request field, auth, or loopback binding changed.
-- [ ] T022 [P] Review `specs/001-standardize-api-responses/contracts/api-contract.json`, `contracts/api-contract.md`, `README.md`, and `CHANGELOG.md` for consistency with the implemented envelope and route errors; update only if implementation revealed a contract correction.
+- [X] T022 [P] Review `specs/001-standardize-api-responses/contracts/api-contract.json`, `contracts/api-contract.md`, `README.md`, and `CHANGELOG.md` for consistency with the implemented envelope and route errors; update only if implementation revealed a contract correction.
 - [ ] T023 Review the commit history and working tree against this task list: confirm every completed task has one Conventional Commit, each commit passed its relevant test/lint gate, and `git status` is clean apart from intentionally untracked tooling files.
 
 ---

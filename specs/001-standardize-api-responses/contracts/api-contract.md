@@ -35,7 +35,8 @@ fields:
 | `error.details` | object or `null` | Structured context; validation only today |
 | `detail` | string | Legacy field; always equals `error.message` |
 
-Invariants enforced by `tests/test_api_contract.py`:
+Invariants enforced by `tests/test_api_errors.py` and
+`tests/test_api_contract.py`:
 
 - `detail` is a string and equals `error.message`.
 - `error` has exactly `code`, `message`, and `details`.
