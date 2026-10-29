@@ -2,10 +2,11 @@
 
 ## Unreleased
 
-- Web UI: history rows have checkboxes for batch deletion. Hold Shift
-  while checking or clicking a row to select a range, use Select
-  all/Clear selection for the shown rows, then Delete selected with a
-  confirmation. The log is rewritten once per batch.
+- Web UI: history rows are highlighted to select them for batch deletion.
+  Clicking a row previews and toggles its highlight; hold Shift while
+  clicking to select a range, use Select all/Clear selection for the
+  shown rows, then Delete selected with a confirmation. The log is
+  rewritten once per batch.
 - Web UI: history rows are clickable and load the item onto the board
   and into the preview. A new `↗` action beside each row's delete button
   opens the item with the OS default program.

@@ -89,10 +89,10 @@ In the History tab, clicking a row loads that item onto the board and into
 the preview; the `↗` button next to it opens the item with the OS default
 program. Each row's delete button removes every log entry for that item,
 so it becomes eligible to be picked again without touching other
-history. Checkboxes select rows for batch deletion: hold `Shift` while
-checking or clicking a row to select the whole range, use *Select all* /
-*Clear selection* for the visible rows, then *Delete selected* and
-confirm. For frontend development, run `choosier --web` and `npm run dev`
+history. Clicking a row highlights it for batch deletion, and clicking it
+again deselects it; hold `Shift` while clicking to select the whole
+range, use *Select all* / *Clear selection* for the visible rows, then
+*Delete selected* and confirm. For frontend development, run `choosier --web` and `npm run dev`
 in `frontend/` (Vite proxies `/api`); `npm run build` writes the bundle to
 `choosier/web_static/`, which the server serves on the same origin.
 
