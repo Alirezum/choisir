@@ -447,6 +447,49 @@ class WebApiTest(unittest.TestCase):
             0,
         )
 
+    def test_remove_history_items_batch(self) -> None:
+        (self.target / "c").touch()
+        for item in ("a", "b", "c", "a"):
+            log_selection(item, self.log)
+        response = self.client.post(
+            "/api/history/remove",
+            json={"path": str(self.target), "items": ["a", "c"]},
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["items"], ["a", "c"])
+        self.assertEqual(body["removed"], 3)
+        state = self.client.get("/api/state", params=self._params()).json()
+        self.assertEqual([entry["item"] for entry in state["history"]], ["b"])
+        self.assertIn("a", state["remaining"])
+        self.assertIn("c", state["remaining"])
+        self.assertNotIn("b", state["remaining"])
+
+    def test_remove_history_items_unknown_is_noop(self) -> None:
+        log_selection("a", self.log)
+        before = self.log.read_bytes()
+        body = self.client.post(
+            "/api/history/remove",
+            json={"path": str(self.target), "items": ["missing"]},
+        ).json()
+        self.assertEqual(body["removed"], 0)
+        self.assertEqual(self.log.read_bytes(), before)
+
+    def test_remove_history_items_without_log(self) -> None:
+        body = self.client.post(
+            "/api/history/remove",
+            json={"path": str(self.target), "items": ["a"]},
+        ).json()
+        self.assertEqual(body["removed"], 0)
+        self.assertFalse(self.log.exists())
+
+    def test_remove_history_items_requires_selection(self) -> None:
+        response = self.client.post(
+            "/api/history/remove",
+            json={"path": str(self.target), "items": []},
+        )
+        self.assertEqual(response.status_code, 422)
+
     def test_open_launches_entry(self) -> None:
         with patch("choosier.web.launch_path") as launcher:
             response = self.client.post(

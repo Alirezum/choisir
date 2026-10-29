@@ -40,6 +40,7 @@ from choosier.storage import (
     log_selection,
     read_log_entries,
     remove_log_item,
+    remove_log_items,
     reset_log,
 )
 
@@ -155,6 +156,18 @@ class ClearResponse(BaseModel):
 class RemoveHistoryItemResponse(BaseModel):
     log_file: str
     item: str
+    removed: int
+
+
+class RemoveHistoryItemsRequest(BaseModel):
+    path: str
+    log_file: str | None = None
+    items: list[str] = Field(min_length=1)
+
+
+class RemoveHistoryItemsResponse(BaseModel):
+    log_file: str
+    items: list[str]
     removed: int
 
 
@@ -521,6 +534,22 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
             )
         return RemoveHistoryItemResponse(
             log_file=str(log_path), item=item, removed=removed
+        )
+
+    @app.post("/api/history/remove")
+    def remove_history_items(
+        request: RemoveHistoryItemsRequest,
+    ) -> RemoveHistoryItemsResponse:
+        """Delete every log entry for all selected items in one rewrite."""
+        log_path = _log_path(request.path, request.log_file)
+        try:
+            removed = remove_log_items(request.items, log_path)
+        except OSError as e:
+            raise HTTPException(
+                status_code=500, detail=f"Error removing history items: {e}"
+            )
+        return RemoveHistoryItemsResponse(
+            log_file=str(log_path), items=request.items, removed=removed
         )
 
     if STATIC_DIR.is_dir():
