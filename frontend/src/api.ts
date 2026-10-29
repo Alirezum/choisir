@@ -8,6 +8,7 @@ import type {
   PickResponse,
   PreviewModel,
   RemoveHistoryItemResponse,
+  RemoveHistoryItemsResponse,
   StateQuery,
   StateResponse,
 } from './types'
@@ -92,4 +93,11 @@ export const api = {
       `/api/history/item${query({ path, item, log_file: logFile })}`,
       { method: 'DELETE' },
     ),
+
+  removeHistoryItems: (path: string, logFile: string, items: string[]) =>
+    postJson<RemoveHistoryItemsResponse>('/api/history/remove', {
+      path,
+      log_file: logFile === '' ? null : logFile,
+      items,
+    }),
 }

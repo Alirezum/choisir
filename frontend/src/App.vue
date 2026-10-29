@@ -38,9 +38,24 @@ const state = ref<StateResponse | null>(null)
 const activeTab = ref<TabId>('remaining')
 const clearing = ref(false)
 const removingItem = ref<string | null>(null)
+const removingHistory = ref(false)
+const historyChecked = ref<string[]>([])
+const pendingHistoryDelete = ref<string[] | null>(null)
 const pickSerial = ref(0)
 let previewSerial = 0
 const pathInput = ref<HTMLInputElement | null>(null)
+
+const historyDeleteCount = computed(() => pendingHistoryDelete.value?.length ?? 0)
+const historyDeleteMessage = computed(() => {
+  const count = historyDeleteCount.value
+  if (count === 0) return ''
+  const noun = count === 1 ? 'entry' : 'entries'
+  return `Delete ${count} ${noun} from history?\nThis removes every log entry for the selected items, making them pickable again.`
+})
+const historyDeleteLabel = computed(() => {
+  const count = historyDeleteCount.value
+  return count === 1 ? 'Delete 1 item' : `Delete ${count} items`
+})
 
 const filters = computed(() => ({
   include_hidden: includeHidden.value,
@@ -91,6 +106,12 @@ watch([path, logFile, includeHidden, mode], scheduleRefresh)
 watch(path, () => {
   previewSerial += 1
   choice.value = null
+  historyChecked.value = []
+  pendingHistoryDelete.value = null
+})
+watch(logFile, () => {
+  historyChecked.value = []
+  pendingHistoryDelete.value = null
 })
 
 async function pick(): Promise<void> {
@@ -189,6 +210,7 @@ async function archiveHistory(): Promise<void> {
     status.value = describeError(error)
   } finally {
     await refresh()
+    historyChecked.value = []
   }
 }
 
@@ -203,6 +225,7 @@ async function clearHistory(): Promise<void> {
     status.value = describeError(error)
   } finally {
     await refresh()
+    historyChecked.value = []
   }
 }
 
@@ -222,6 +245,57 @@ async function removeHistoryItem(item: string): Promise<void> {
     status.value = describeError(error)
   } finally {
     removingItem.value = null
+    historyChecked.value = historyChecked.value.filter((name) => name !== item)
+    await refresh()
+  }
+}
+
+function toggleHistoryCheck(item: string): void {
+  historyChecked.value = historyChecked.value.includes(item)
+    ? historyChecked.value.filter((name) => name !== item)
+    : [...historyChecked.value, item]
+}
+
+function addHistoryRange(items: string[]): void {
+  historyChecked.value = [...new Set([...historyChecked.value, ...items])]
+}
+
+function toggleAllHistory(): void {
+  const items = [
+    ...new Set((state.value?.history ?? []).map((entry) => entry.item)),
+  ]
+  const allSelected =
+    items.length > 0 &&
+    items.every((item) => historyChecked.value.includes(item))
+  historyChecked.value = allSelected ? [] : items
+}
+
+function requestDeleteSelected(): void {
+  if (historyChecked.value.length === 0) return
+  pendingHistoryDelete.value = [...historyChecked.value]
+}
+
+async function deleteSelectedHistory(): Promise<void> {
+  const items = pendingHistoryDelete.value
+  if (items === null) return
+  pendingHistoryDelete.value = null
+  removingHistory.value = true
+  try {
+    const result = await api.removeHistoryItems(path.value, logFile.value, items)
+    if (result.removed === 0) {
+      status.value = 'No matching history entries to remove.'
+    } else if (result.removed === 1) {
+      status.value = 'Removed 1 entry from history.'
+    } else {
+      status.value = `Removed ${result.removed} entries from history.`
+    }
+  } catch (error) {
+    status.value = describeError(error)
+  } finally {
+    removingHistory.value = false
+    historyChecked.value = historyChecked.value.filter(
+      (item) => !items.includes(item),
+    )
     await refresh()
   }
 }
@@ -358,13 +432,18 @@ onUnmounted(() => {
             <HistoryPanel
               :entries="state?.history ?? []"
               :total="state?.history_total ?? 0"
-              :busy-item="removingItem"
+              :busy="removingItem !== null || removingHistory"
               :selected="choice?.item ?? null"
+              :checked-items="historyChecked"
               @archive="archiveHistory"
               @clear="clearing = true"
               @remove="removeHistoryItem"
               @select="previewHistoryItem"
               @open="openHistoryItem"
+              @toggle-check="toggleHistoryCheck"
+              @range-check="addHistoryRange"
+              @toggle-all="toggleAllHistory"
+              @remove-selected="requestDeleteSelected"
             />
           </div>
 
@@ -407,5 +486,14 @@ onUnmounted(() => {
     :message="`Clear history?\n${state?.log_file ?? path}`"
     @confirm="clearHistory"
     @cancel="clearing = false"
+  />
+
+  <ConfirmDialog
+    v-if="pendingHistoryDelete !== null"
+    :message="historyDeleteMessage"
+    :confirm-label="historyDeleteLabel"
+    cancel-label="Cancel"
+    @confirm="deleteSelectedHistory"
+    @cancel="pendingHistoryDelete = null"
   />
 </template>

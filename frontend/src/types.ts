@@ -112,3 +112,9 @@ export interface RemoveHistoryItemResponse {
   item: string
   removed: number
 }
+
+export interface RemoveHistoryItemsResponse {
+  log_file: string
+  items: string[]
+  removed: number
+}

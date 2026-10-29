@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import type { HistoryEntry } from '../types'
 
 const props = defineProps<{
   entries: HistoryEntry[]
   total: number
-  busyItem: string | null
+  busy: boolean
   selected: string | null
+  checkedItems: string[]
 }>()
 const emit = defineEmits<{
   archive: []
@@ -15,7 +16,13 @@ const emit = defineEmits<{
   remove: [item: string]
   select: [item: string]
   open: [item: string]
+  toggleCheck: [item: string]
+  rangeCheck: [items: string[]]
+  toggleAll: []
+  removeSelected: []
 }>()
+
+const anchor = ref<string | null>(null)
 
 const header = computed(() => {
   if (props.entries.length < props.total) {
@@ -23,6 +30,33 @@ const header = computed(() => {
   }
   return `${props.total} picked`
 })
+
+const checkedCount = computed(() => props.checkedItems.length)
+
+const allSelected = computed(() => {
+  if (props.entries.length === 0) return false
+  const checked = new Set(props.checkedItems)
+  return props.entries.every((entry) => checked.has(entry.item))
+})
+
+watch(
+  () => props.entries,
+  (entries) => {
+    if (
+      anchor.value !== null &&
+      !entries.some((entry) => entry.item === anchor.value)
+    ) {
+      anchor.value = null
+    }
+  },
+)
+
+watch(
+  () => props.checkedItems.length,
+  (count) => {
+    if (count === 0) anchor.value = null
+  },
+)
 
 function formatTimestamp(timestamp: string | null): string {
   if (timestamp === null) return ''
@@ -45,29 +79,100 @@ function formatTimestamp(timestamp: string | null): string {
   })
 }
 
-const rows = computed(() =>
-  props.entries.map((entry, index) => ({
+const rows = computed(() => {
+  const checked = new Set(props.checkedItems)
+  return props.entries.map((entry, index) => ({
     ...entry,
     key: `${index}-${entry.timestamp ?? 'legacy'}-${entry.item}`,
     time: formatTimestamp(entry.timestamp),
     selected: entry.item === props.selected,
-  })),
-)
+    checked: checked.has(entry.item),
+  }))
+})
+
+function namesInRange(from: string, to: string): string[] {
+  const names = props.entries.map((entry) => entry.item)
+  const start = names.indexOf(from)
+  const end = names.indexOf(to)
+  if (start === -1 || end === -1) return [to]
+  return names.slice(Math.min(start, end), Math.max(start, end) + 1)
+}
+
+function selectRange(item: string): void {
+  if (props.busy) return
+  if (anchor.value === null) {
+    anchor.value = item
+    emit('rangeCheck', [item])
+    return
+  }
+  emit('rangeCheck', namesInRange(anchor.value, item))
+}
+
+function onCheckClick(item: string, event: MouseEvent): void {
+  event.preventDefault()
+  if (props.busy) return
+  if (event.shiftKey) {
+    selectRange(item)
+    return
+  }
+  anchor.value = item
+  emit('toggleCheck', item)
+}
+
+function onRowClick(item: string, event: MouseEvent): void {
+  if (event.shiftKey) {
+    event.preventDefault()
+    selectRange(item)
+    return
+  }
+  emit('select', item)
+}
+
+function onToggleAll(): void {
+  anchor.value = null
+  emit('toggleAll')
+}
 </script>
 
 <template>
   <div class="panel">
-    <div class="panel-header">{{ header }}</div>
+    <div class="panel-header history-header">
+      <span>{{ header }}</span>
+      <button
+        v-if="rows.length > 0"
+        class="panel-link"
+        type="button"
+        :disabled="busy"
+        @click="onToggleAll"
+      >
+        {{ allSelected ? 'Clear selection' : 'Select all' }}
+      </button>
+    </div>
+    <p v-if="rows.length > 0" class="history-hint">
+      Shift-click a row to select a range.
+    </p>
     <ul v-if="rows.length > 0" class="list history-list">
       <li v-for="row in rows" :key="row.key">
-        <div class="history-row" :class="{ 'is-selected': row.selected }">
+        <div
+          class="history-row"
+          :class="{ 'is-selected': row.selected, 'is-checked': row.checked }"
+        >
+          <input
+            class="history-check"
+            type="checkbox"
+            :checked="row.checked"
+            :disabled="busy"
+            :aria-label="`Select ${row.item} for batch deletion`"
+            :title="`Select ${row.item}`"
+            @click="onCheckClick(row.item, $event)"
+          />
           <button
             class="history-select"
             type="button"
             :aria-label="`Preview ${row.item}`"
             :aria-current="row.selected ? 'true' : undefined"
             :title="`Preview ${row.item}`"
-            @click="emit('select', row.item)"
+            @click="onRowClick(row.item, $event)"
           >
             <time
               v-if="row.time !== ''"
@@ -84,6 +189,7 @@ const rows = computed(() =>
             type="button"
             :aria-label="`Open ${row.item} with the default program`"
             title="Open with the default program"
+            :disabled="busy"
             @click.stop="emit('open', row.item)"
           >
             ↗
@@ -93,7 +199,7 @@ const rows = computed(() =>
             type="button"
             :aria-label="`Remove ${row.item} from history`"
             title="Remove from history (it becomes pickable again)"
-            :disabled="busyItem !== null"
+            :disabled="busy"
             @click.stop="emit('remove', row.item)"
           >
             ×
@@ -105,8 +211,24 @@ const rows = computed(() =>
       Picked items land here. Remove one to make it available again.
     </p>
     <div class="panel-actions">
-      <button type="button" @click="emit('archive')">Archive history</button>
-      <button class="danger" type="button" @click="emit('clear')">
+      <button
+        v-if="checkedCount > 0"
+        class="danger"
+        type="button"
+        :disabled="busy"
+        @click="emit('removeSelected')"
+      >
+        Delete selected ({{ checkedCount }})
+      </button>
+      <button type="button" :disabled="busy" @click="emit('archive')">
+        Archive history
+      </button>
+      <button
+        class="danger"
+        type="button"
+        :disabled="busy"
+        @click="emit('clear')"
+      >
         Clear history
       </button>
     </div>

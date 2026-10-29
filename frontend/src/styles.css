@@ -813,7 +813,7 @@ kbd {
 
 .history-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 24px 24px;
+  grid-template-columns: 16px minmax(0, 1fr) 24px 24px;
   align-items: center;
   gap: 8px;
   border-radius: 2px;
@@ -822,6 +822,50 @@ kbd {
 .history-row:hover,
 .history-row.is-selected {
   background: var(--paper-sunken);
+}
+
+.history-row.is-checked {
+  background: rgba(217, 162, 58, 0.09);
+}
+
+.history-check {
+  justify-self: center;
+  cursor: pointer;
+}
+
+.history-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 4px;
+}
+
+.panel-link {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.4;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.panel-link:hover:not(:disabled) {
+  border-color: transparent;
+  color: var(--amber);
+}
+
+.history-hint {
+  flex: none;
+  padding: 0 4px 8px;
+  margin: 0;
+  color: var(--ink-soft);
+  font-family: var(--font-data);
+  font-size: 10px;
+  line-height: 1.4;
 }
 
 .history-select {
@@ -837,7 +881,8 @@ kbd {
   text-align: left;
 }
 
-.history-row.is-selected .history-text {
+.history-row.is-selected .history-text,
+.history-row.is-checked .history-text {
   color: var(--amber);
 }
 

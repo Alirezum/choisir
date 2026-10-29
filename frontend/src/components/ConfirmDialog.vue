@@ -1,7 +1,17 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
-const props = defineProps<{ message: string }>()
+const props = withDefaults(
+  defineProps<{
+    message: string
+    confirmLabel?: string
+    cancelLabel?: string
+  }>(),
+  {
+    confirmLabel: 'Clear history',
+    cancelLabel: 'Keep history',
+  },
+)
 const emit = defineEmits<{ confirm: []; cancel: [] }>()
 
 const dialog = ref<HTMLElement | null>(null)
@@ -54,10 +64,10 @@ onMounted(() => {
       <p v-if="detail !== ''" class="dialog-detail">{{ detail }}</p>
       <div class="dialog-actions">
         <button ref="cancelButton" type="button" @click="emit('cancel')">
-          Keep history
+          {{ cancelLabel }}
         </button>
         <button class="danger" type="button" @click="emit('confirm')">
-          Clear history
+          {{ confirmLabel }}
         </button>
       </div>
     </div>
