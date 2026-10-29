@@ -49,8 +49,8 @@ const historyDeleteCount = computed(() => pendingHistoryDelete.value?.length ?? 
 const historyDeleteMessage = computed(() => {
   const count = historyDeleteCount.value
   if (count === 0) return ''
-  const noun = count === 1 ? 'entry' : 'entries'
-  return `Delete ${count} ${noun} from history?\nThis removes every log entry for the selected items, making them pickable again.`
+  const noun = count === 1 ? 'item' : 'items'
+  return `Delete history for ${count} ${noun}?\nThis removes every log entry for the selected items, making them pickable again.`
 })
 const historyDeleteLabel = computed(() => {
   const count = historyDeleteCount.value
