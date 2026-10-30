@@ -26,7 +26,7 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["choosier"]
+packages = ["choosier", "choosier.services"]
 
 [tool.setuptools.package-data]
 choosier = ["web_static/*", "web_static/assets/*"]
