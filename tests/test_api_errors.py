@@ -221,7 +221,7 @@ class ApiErrorEnvelopeTest(unittest.TestCase):
 
         image = self.root / "big.png"
         image.write_bytes(PNG)
-        with patch("choosier.web.PREVIEW_MAX_IMAGE_BYTES", 8):
+        with patch("choosier.preview.PREVIEW_MAX_IMAGE_BYTES", 8):
             oversized = self.client.get("/api/image", params={"path": str(image)})
         body = assert_error_envelope(self, oversized, 413, "payload_too_large")
         self.assertEqual(body["error"]["message"], "Image is too large to preview")

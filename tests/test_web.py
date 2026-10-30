@@ -296,7 +296,7 @@ class WebApiTest(unittest.TestCase):
     def test_image_endpoint_rejects_oversized_image(self) -> None:
         image = Path(self.tmp.name) / "big.png"
         image.write_bytes(PNG)
-        with patch("choosier.web.PREVIEW_MAX_IMAGE_BYTES", 8):
+        with patch("choosier.preview.PREVIEW_MAX_IMAGE_BYTES", 8):
             response = self.client.get("/api/image", params={"path": str(image)})
         self.assertEqual(response.status_code, 413)
 

@@ -6,8 +6,6 @@ TUI use. When the Vue frontend has been built (`frontend/` with Vite),
 `choosier/web_static/` directory. The server binds to localhost only.
 """
 
-import zipfile
-from io import BytesIO
 from pathlib import Path
 from typing import Literal
 
@@ -16,7 +14,6 @@ from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import (
@@ -24,26 +21,16 @@ from starlette.responses import (
     RangeNotSatisfiable,
 )
 
-from choosier import services
+from choosier import services, web_media
 from choosier.chooser import resolve_log_path
 from choosier.preview import (
-    PREVIEW_MAX_IMAGE_BYTES,
     Preview,
     PreviewKind,
     PreviewVideo,
-    image_media_type,
     preview_entry,
-    sniff_image_media_type,
-    video_matches_content,
-    video_media_type,
 )
 
 DEFAULT_PORT = 8765
-PANEL_MAX_LINES = 200
-THUMBNAIL_MAX_SIZE = (480, 480)
-THUMBNAIL_QUALITY = 84
-PREVIEW_MAX_SIZE = (1600, 1600)
-PREVIEW_QUALITY = 90
 STATIC_DIR = Path(__file__).resolve().parent / "web_static"
 
 ErrorCode = Literal[
@@ -295,83 +282,6 @@ def _video_model(video: PreviewVideo) -> PreviewVideoModel:
     )
 
 
-def _read_standalone_image(path: Path) -> tuple[bytes, str]:
-    """Read a supported image file, bounded by the preview size limit."""
-    if image_media_type(path.name) is None:
-        raise ApiError("unsupported_media_type", "Not a supported image")
-    try:
-        size = path.stat().st_size
-    except OSError as e:
-        raise ApiError("not_found", f"Image is gone: {e}")
-    if size > PREVIEW_MAX_IMAGE_BYTES:
-        raise ApiError("payload_too_large", "Image is too large to preview")
-    try:
-        with open(path, "rb") as f:
-            data = f.read(PREVIEW_MAX_IMAGE_BYTES + 1)
-    except OSError as e:
-        raise ApiError("internal_error", f"Cannot read image: {e}")
-    if len(data) > PREVIEW_MAX_IMAGE_BYTES:
-        raise ApiError("payload_too_large", "Image is too large to preview")
-    media_type = sniff_image_media_type(data[:32])
-    if media_type is None:
-        raise ApiError("unsupported_media_type", "Not a supported image")
-    return data, media_type
-
-
-def _read_archived_image(path: Path, index: int) -> tuple[bytes, str]:
-    """Read one image member by position, never by client-supplied name."""
-    if not zipfile.is_zipfile(path):
-        raise ApiError("invalid_request", "Not a zip archive")
-    data = b""
-    try:
-        with zipfile.ZipFile(path) as archive:
-            infos = archive.infolist()
-            if index < 0 or index >= len(infos):
-                raise ApiError("not_found", "Image not found in archive")
-            info = infos[index]
-            if info.is_dir() or image_media_type(info.filename) is None:
-                raise ApiError("unsupported_media_type", "Not a supported image")
-            if info.flag_bits & 0x1:
-                raise ApiError(
-                    "invalid_request", "Encrypted archive members are not supported"
-                )
-            if info.file_size > PREVIEW_MAX_IMAGE_BYTES:
-                raise ApiError("payload_too_large", "Image is too large to preview")
-            with archive.open(info) as member:
-                data = member.read(PREVIEW_MAX_IMAGE_BYTES + 1)
-    except zipfile.BadZipFile as e:
-        raise ApiError("invalid_request", f"Not a valid archive: {e}")
-    except (RuntimeError, NotImplementedError) as e:
-        raise ApiError("invalid_request", f"Cannot read archive member: {e}")
-    except OSError as e:
-        raise ApiError("internal_error", f"Cannot read archive: {e}")
-    if len(data) > PREVIEW_MAX_IMAGE_BYTES:
-        raise ApiError("payload_too_large", "Image is too large to preview")
-    media_type = sniff_image_media_type(data[:32])
-    if media_type is None:
-        raise ApiError("unsupported_media_type", "Not a supported image")
-    return data, media_type
-
-
-def _make_thumbnail(
-    data: bytes,
-    max_size: tuple[int, int] = THUMBNAIL_MAX_SIZE,
-    quality: int = THUMBNAIL_QUALITY,
-) -> bytes:
-    """Downscale image bytes to a WebP rendition for the web UI."""
-    try:
-        with Image.open(BytesIO(data)) as source:
-            image = ImageOps.exif_transpose(source)
-            image.thumbnail(max_size, Image.Resampling.LANCZOS)
-            if image.mode not in ("RGB", "RGBA"):
-                image = image.convert("RGBA")
-            output = BytesIO()
-            image.save(output, format="WEBP", quality=quality)
-            return output.getvalue()
-    except (UnidentifiedImageError, Image.DecompressionBombError, OSError) as e:
-        raise ApiError("unsupported_media_type", f"Cannot decode image: {e}")
-
-
 def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
     """Build the web app; initial values seed the defaults endpoint."""
     app = FastAPI(title="choosier")
@@ -553,20 +463,17 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
         single-image preview. Omit it for the original image bytes.
         """
         entry = Path(path).expanduser()
-        if not entry.is_file():
-            raise ApiError("not_found", "Image is gone")
-        if index is None:
-            data, media_type = _read_standalone_image(entry)
-        else:
-            data, media_type = _read_archived_image(entry, index)
+        payload = web_media.read_image(entry, index)
+        data = payload.data
+        media_type = payload.media_type
         if variant == "thumb":
-            data = _make_thumbnail(data)
+            data = web_media.make_thumbnail(data)
             media_type = "image/webp"
         elif variant == "preview":
-            data = _make_thumbnail(
+            data = web_media.make_thumbnail(
                 data,
-                max_size=PREVIEW_MAX_SIZE,
-                quality=PREVIEW_QUALITY,
+                max_size=web_media.PREVIEW_MAX_SIZE,
+                quality=web_media.PREVIEW_QUALITY,
             )
             media_type = "image/webp"
         return Response(
@@ -582,23 +489,11 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
     def video(path: str, request: Request) -> FileResponse:
         """Stream a standalone video with byte-range support."""
         entry = Path(path).expanduser()
-        if not entry.is_file():
-            raise ApiError("not_found", "Video is gone")
-        media_type = video_media_type(entry.name)
-        if media_type is None:
-            raise ApiError("unsupported_media_type", "Not a supported video")
-        try:
-            with open(entry, "rb") as handle:
-                head = handle.read(32)
-            stat_result = entry.stat()
-        except OSError as e:
-            raise ApiError("internal_error", f"Cannot read video: {e}")
-        if not video_matches_content(entry.name, head):
-            raise ApiError("unsupported_media_type", "Not a supported video")
+        video_file = web_media.read_video(entry)
         response = FileResponse(
-            path=entry,
-            media_type=media_type,
-            stat_result=stat_result,
+            path=video_file.path,
+            media_type=video_file.media_type,
+            stat_result=video_file.stat_result,
             headers={
                 "Cache-Control": "no-store",
                 "X-Content-Type-Options": "nosniff",
@@ -610,7 +505,9 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
             if_range = request.headers.get("if-range")
             if if_range is None or response._should_use_range(if_range):
                 try:
-                    FileResponse._parse_range_header(range_header, stat_result.st_size)
+                    FileResponse._parse_range_header(
+                        range_header, video_file.stat_result.st_size
+                    )
                 except MalformedRangeHeader as exc:
                     raise ApiError("invalid_request", exc.content)
                 except RangeNotSatisfiable as exc:
