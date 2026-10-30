@@ -6,17 +6,12 @@ selected. Code 2 is reserved for argparse usage errors.
 """
 
 import argparse
-import random
 import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from choosier.chooser import (
-    get_unselected_item,
-    list_available_items,
-    resolve_default_log,
-)
-from choosier.storage import log_selection, reset_log
+from choosier.chooser import resolve_log_path
+from choosier.services import HistoryService, ServiceError, build_state, pick
 
 EMPTY_EXIT = 3
 EXHAUSTED_EXIT = 4
@@ -145,17 +140,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not target.is_dir():
         print("Invalid Path.", file=sys.stderr)
         return 1
-    log_path = (
-        Path(args.log_file).expanduser()
-        if args.log_file is not None
-        else resolve_default_log(target)
-    )
+    log_path = resolve_log_path(target, args.log_file or "")
+    history = HistoryService(log_path)
 
     if args.reset:
         try:
-            removed = reset_log(log_path)
-        except OSError as e:
-            print(f"Error resetting log: {e}", file=sys.stderr)
+            removed = history.clear()
+        except ServiceError as e:
+            print(e.message, file=sys.stderr)
             return 1
         if removed:
             print(f"Removed {log_path}.")
@@ -168,27 +160,35 @@ def main(argv: Sequence[str] | None = None) -> int:
         "files_only": args.files_only,
         "dirs_only": args.dirs_only,
     }
-    rng = random.Random(args.seed) if args.seed is not None else None
 
     if args.list:
-        remaining = list_available_items(target, log_path, **picker_args)
+        remaining = build_state(
+            target, log_path, max_lines=None, **picker_args
+        ).remaining
         for name in remaining:
             print(name)
         if remaining:
             return 0
         return _exhausted_exit(target)
 
-    random_item = get_unselected_item(target, log_path, rng=rng, **picker_args)
-    if random_item is None:
+    outcome = pick(
+        target,
+        log_path,
+        seed=args.seed,
+        dry_run=args.dry_run,
+        commit=False,
+        **picker_args,
+    )
+    if outcome.item is None:
         return _exhausted_exit(target)
-    print(f"The choice: {random_item}")
+    print(f"The choice: {outcome.item}")
     if args.dry_run:
         print("Dry run: selection not logged.")
         return 0
     try:
-        log_selection(random_item, log_path)
-    except OSError as e:
-        print(f"Error writing log: {e}", file=sys.stderr)
+        history.append(outcome.item)
+    except ServiceError as e:
+        print(e.message, file=sys.stderr)
         return 1
     print(f"Added in {log_path} with timestamp.\n")
     return 0
