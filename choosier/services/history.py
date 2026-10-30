@@ -48,9 +48,7 @@ class HistoryService:
         try:
             storage.log_selection(item, self._log_file)
         except OSError as e:
-            raise ServiceError(
-                FailureKind.IO_ERROR, f"Error writing log: {e}"
-            ) from e
+            raise ServiceError(FailureKind.IO_ERROR, f"Error writing log: {e}") from e
 
     def remove(self, item: str) -> int:
         """Remove every entry for one item; return the number removed."""
@@ -82,6 +80,4 @@ class HistoryService:
         try:
             return storage.reset_log(self._log_file)
         except OSError as e:
-            raise ServiceError(
-                FailureKind.IO_ERROR, f"Error resetting log: {e}"
-            ) from e
+            raise ServiceError(FailureKind.IO_ERROR, f"Error resetting log: {e}") from e
