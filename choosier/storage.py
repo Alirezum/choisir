@@ -51,13 +51,21 @@ def _parse_log_line(line: str) -> str | None:
 
 def read_log_entries(
     log_file: str | Path = DEFAULT_LOG_FILENAME,
+    *,
+    ignore_errors: bool = True,
 ) -> list[LogEntry]:
-    """Read a history log into structured entries, one per valid line."""
+    """Read a history log into structured entries, one per valid line.
+
+    Tolerant by default: unreadable files yield no entries. Callers that
+    need strict I/O behavior pass ``ignore_errors=False``.
+    """
     log_path = Path(log_file).expanduser()
     try:
         raw_lines = log_path.read_text(encoding="utf-8").splitlines()
     except OSError:
-        return []
+        if ignore_errors:
+            return []
+        raise
     entries: list[LogEntry] = []
     for raw in raw_lines:
         stripped = raw.strip()
@@ -80,18 +88,15 @@ def load_log(
 
 
 def get_logged_items(log_file: str | Path = DEFAULT_LOG_FILENAME) -> set[str]:
-    """Read previously selected item names from a JSONL log file."""
+    """Read previously selected item names from a JSONL log file.
+
+    Missing files are tolerated; other I/O errors propagate as before.
+    """
     log_path = Path(log_file).expanduser()
     if not log_path.exists():
         return set()
-    with open(log_path, encoding="utf-8") as f:
-        items = set()
-        for line in f:
-            item = _parse_log_line(line)
-            if item is None:
-                continue
-            items.add(item)
-        return items
+    entries = read_log_entries(log_path, ignore_errors=False)
+    return {entry.item for entry in entries}
 
 
 def log_selection(item: str, log_file: str | Path = DEFAULT_LOG_FILENAME) -> None:
