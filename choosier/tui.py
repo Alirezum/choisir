@@ -1,6 +1,5 @@
 """Terminal UI for choosier (requires the `ui` extra)."""
 
-import random
 from pathlib import Path
 
 from rich.markup import escape
@@ -21,24 +20,20 @@ from textual.widgets import (
     TabPane,
 )
 
-from choosier.chooser import (
-    get_unselected_item,
-    list_candidates,
-    parse_seed,
-    resolve_log_path,
-)
-from choosier.launcher import launch_path
+from choosier.chooser import parse_seed, resolve_log_path
 from choosier.preview import preview_entry
-from choosier.storage import (
-    archive_log,
-    load_log,
-    log_selection,
-    reset_log,
+from choosier.services import (
+    FailureKind,
+    HistoryService,
+    ServiceError,
+    build_state,
+    open_entry,
+    pick,
 )
+from choosier.services.state import PANEL_MAX_LINES
 
 NO_CHOICE_TEXT = "No choice yet — enter a directory and press Pick."
 MODE_LABELS = ("all", "files", "dirs")
-PANEL_MAX_LINES = 200
 
 
 def render_panel(
@@ -219,22 +214,20 @@ class ChooserApp(App[None]):
         self.query_one("#preview", Static).update(escape(text))
 
     def _refresh_panels(self) -> None:
-        target = self._target
-        if target.is_dir():
-            log_path = self._current_log_path()
-            flags = self._picker_flags()
-            try:
-                candidates = list_candidates(target, log_path, **flags)
-            except FileNotFoundError:
-                candidates = set()
-            logged, history = load_log(log_path)
-            remaining = sorted(candidates - logged)
-        else:
-            remaining = []
-            history = []
-        self.query_one("#remaining", Static).update(render_panel(remaining, "(none)"))
+        snapshot = build_state(
+            self._target,
+            self._current_log_path(),
+            max_lines=None,
+            **self._picker_flags(),
+        )
+        self.query_one("#remaining", Static).update(
+            render_panel(list(snapshot.remaining), "(none)")
+        )
         self.query_one("#history", Static).update(
-            render_panel(history, "(no history yet)")
+            render_panel(
+                [entry.display for entry in snapshot.history],
+                "(no history yet)",
+            )
         )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -272,9 +265,9 @@ class ChooserApp(App[None]):
             return
         log_path = self._current_log_path()
         try:
-            backup = archive_log(log_path)
-        except OSError as e:
-            self._set_status(f"Error archiving log: {e}")
+            backup = HistoryService(log_path).archive()
+        except ServiceError as e:
+            self._set_status(e.message)
             return
         if backup is None:
             self._set_status(f"No log at {log_path}.")
@@ -303,9 +296,9 @@ class ChooserApp(App[None]):
             return
         log_path = self._current_log_path()
         try:
-            removed = reset_log(log_path)
-        except OSError as e:
-            self._set_status(f"Error resetting log: {e}")
+            removed = HistoryService(log_path).clear()
+        except ServiceError as e:
+            self._set_status(e.message)
             return
         if removed:
             self._set_status(f"Removed {log_path}.")
@@ -318,13 +311,13 @@ class ChooserApp(App[None]):
         if self._current_choice is None:
             self._set_status("Pick something first.")
             return
-        if not self._current_choice.exists():
-            self._set_status(f"Gone: {self._current_choice.name}")
-            return
         try:
-            launch_path(self._current_choice)
-        except OSError as e:
-            self._set_status(f"Cannot open: {e}")
+            open_entry(self._current_choice)
+        except ServiceError as e:
+            if e.kind is FailureKind.NOT_FOUND:
+                self._set_status(f"Gone: {self._current_choice.name}")
+            else:
+                self._set_status(e.message)
             return
         self._set_status(f"Opened {self._current_choice.name}.")
 
@@ -345,26 +338,32 @@ class ChooserApp(App[None]):
             return
         log_path = self._current_log_path()
         dry_run = self.query_one("#dry-run", Checkbox).value
-        rng = random.Random(seed) if seed is not None else None
-        random_item = get_unselected_item(
-            target, log_path, rng=rng, **self._picker_flags()
-        )
-        if random_item is None:
-            if any(target.iterdir()):
+        try:
+            outcome = pick(
+                target,
+                log_path,
+                seed=seed,
+                dry_run=dry_run,
+                **self._picker_flags(),
+            )
+        except ServiceError as e:
+            self._set_status(e.message)
+            return
+        if outcome.status == "invalid_path":
+            self._set_status("Invalid Path.")
+            self._refresh_panels()
+            return
+        if outcome.item is None:
+            if outcome.status == "exhausted":
                 self._set_status("All choices have been selected. Delete log to reset.")
             else:
                 self._set_status("Path Empty.")
             self._refresh_panels()
             return
         if dry_run:
-            self._finish_pick(target, random_item, "Dry run: selection not logged.")
+            self._finish_pick(target, outcome.item, "Dry run: selection not logged.")
             return
-        try:
-            log_selection(random_item, log_path)
-        except OSError as e:
-            self._set_status(f"Error writing log: {e}")
-            return
-        self._finish_pick(target, random_item, f"Logged in {log_path}.")
+        self._finish_pick(target, outcome.item, f"Logged in {log_path}.")
 
     def _finish_pick(self, target: Path, item: str, message: str) -> None:
         """Display a successful pick, update preview, and refresh panels."""
