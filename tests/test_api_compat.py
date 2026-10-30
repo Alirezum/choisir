@@ -124,7 +124,7 @@ class ApiSuccessCompatibilityTest(unittest.TestCase):
         )
         self._assert_json_success(preview, "GET", "/api/preview")
 
-        with patch("choosier.web.launch_path"):
+        with patch("choosier.launcher.launch_path"):
             opened = self.client.post(
                 "/api/open", json={"path": str(self.target / "a")}
             )

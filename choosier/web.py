@@ -6,7 +6,6 @@ TUI use. When the Vue frontend has been built (`frontend/` with Vite),
 `choosier/web_static/` directory. The server binds to localhost only.
 """
 
-import random
 import zipfile
 from io import BytesIO
 from pathlib import Path
@@ -25,14 +24,11 @@ from starlette.responses import (
     RangeNotSatisfiable,
 )
 
-from choosier.chooser import (
-    get_unselected_item,
-    list_candidates,
-    resolve_log_path,
-)
-from choosier.launcher import launch_path
+from choosier import services
+from choosier.chooser import resolve_log_path
 from choosier.preview import (
     PREVIEW_MAX_IMAGE_BYTES,
+    Preview,
     PreviewKind,
     PreviewVideo,
     image_media_type,
@@ -41,12 +37,8 @@ from choosier.preview import (
     video_matches_content,
     video_media_type,
 )
-from choosier.services import FailureKind, ServiceError
 from choosier.storage import (
-    LogEntry,
     archive_log,
-    log_selection,
-    read_log_entries,
     remove_log_item,
     remove_log_items,
     reset_log,
@@ -84,14 +76,14 @@ ERROR_STATUS: dict[ErrorCode, int] = {
     "internal_error": 500,
 }
 
-SERVICE_ERROR_CODES: dict[FailureKind, ErrorCode] = {
-    FailureKind.INVALID_INPUT: "invalid_request",
-    FailureKind.FORBIDDEN: "forbidden",
-    FailureKind.NOT_FOUND: "not_found",
-    FailureKind.PAYLOAD_TOO_LARGE: "payload_too_large",
-    FailureKind.UNSUPPORTED_MEDIA_TYPE: "unsupported_media_type",
-    FailureKind.RANGE_NOT_SATISFIABLE: "range_not_satisfiable",
-    FailureKind.IO_ERROR: "internal_error",
+SERVICE_ERROR_CODES: dict[services.FailureKind, ErrorCode] = {
+    services.FailureKind.INVALID_INPUT: "invalid_request",
+    services.FailureKind.FORBIDDEN: "forbidden",
+    services.FailureKind.NOT_FOUND: "not_found",
+    services.FailureKind.PAYLOAD_TOO_LARGE: "payload_too_large",
+    services.FailureKind.UNSUPPORTED_MEDIA_TYPE: "unsupported_media_type",
+    services.FailureKind.RANGE_NOT_SATISFIABLE: "range_not_satisfiable",
+    services.FailureKind.IO_ERROR: "internal_error",
 }
 
 _HTTP_ERROR_CODES: dict[int, ErrorCode] = {
@@ -277,8 +269,7 @@ def _log_path(path: str, log_file: str | None) -> Path:
     return resolve_log_path(Path(path).expanduser(), log_file or "")
 
 
-def _preview_model(entry: Path) -> PreviewModel:
-    preview = preview_entry(entry)
+def _preview_model(preview: Preview) -> PreviewModel:
     video: PreviewVideoModel | None = None
     if preview.video is not None:
         video = _video_model(preview.video)
@@ -403,10 +394,10 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
             headers=exc.headers,
         )
 
-    @app.exception_handler(ServiceError)
+    @app.exception_handler(services.ServiceError)
     async def service_error_handler(
         _request: Request,
-        exc: ServiceError,
+        exc: services.ServiceError,
     ) -> JSONResponse:
         return _error_response(
             SERVICE_ERROR_CODES[exc.kind],
@@ -486,22 +477,13 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
     @app.get("/api/browse")
     def browse(path: str) -> BrowseResponse:
         """List one directory for the folder browser (dirs first)."""
-        directory = Path(path).expanduser()
-        if not directory.is_dir():
-            raise ApiError("not_found", "Not a directory")
-        try:
-            children = sorted(
-                directory.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())
-            )
-        except OSError as e:
-            raise ApiError("forbidden", f"Cannot list: {e}")
-        parent = directory.parent if directory.parent != directory else None
+        listing = services.browse_directory(path)
         return BrowseResponse(
-            path=str(directory),
-            parent=str(parent) if parent is not None else None,
+            path=str(listing.path),
+            parent=str(listing.parent) if listing.parent is not None else None,
             entries=[
-                BrowserEntry(name=child.name, is_dir=child.is_dir())
-                for child in children
+                BrowserEntry(name=entry.name, is_dir=entry.is_dir)
+                for entry in listing.entries
             ],
         )
 
@@ -514,97 +496,55 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
         dirs_only: bool = False,
     ) -> StateResponse:
         """Remaining picks and history for the current target and filters."""
-        target = Path(path).expanduser()
-        log_path = _log_path(path, log_file)
-        if not target.is_dir():
-            return StateResponse(
-                valid_path=False,
-                path=str(target),
-                log_file=str(log_path),
-                remaining=[],
-                remaining_total=0,
-                history=[],
-                history_total=0,
-            )
-        if files_only and dirs_only:
-            raise ApiError(
-                "invalid_request", "files_only and dirs_only are mutually exclusive"
-            )
-        try:
-            candidates = list_candidates(
-                target,
-                log_path,
-                include_hidden=include_hidden,
-                files_only=files_only,
-                dirs_only=dirs_only,
-            )
-        except FileNotFoundError:
-            candidates = set()
-        entries: list[LogEntry] = read_log_entries(log_path)
-        logged = {entry.item for entry in entries}
-        remaining = sorted(candidates - logged)
+        snapshot = services.build_state(
+            path,
+            log_file,
+            include_hidden=include_hidden,
+            files_only=files_only,
+            dirs_only=dirs_only,
+        )
         return StateResponse(
-            valid_path=True,
-            path=str(target),
-            log_file=str(log_path),
-            remaining=remaining[:PANEL_MAX_LINES],
-            remaining_total=len(remaining),
+            valid_path=snapshot.valid_path,
+            path=str(snapshot.path),
+            log_file=str(snapshot.log_file),
+            remaining=list(snapshot.remaining),
+            remaining_total=snapshot.remaining_total,
             history=[
                 HistoryEntryModel(
                     timestamp=entry.timestamp,
                     item=entry.item,
                     display=entry.display,
                 )
-                for entry in entries[-PANEL_MAX_LINES:]
+                for entry in snapshot.history
             ],
-            history_total=len(entries),
+            history_total=snapshot.history_total,
         )
 
     @app.post("/api/pick")
     def pick(request: PickRequest) -> PickResponse:
         """Pick one unselected entry, mirroring the CLI/TUI states."""
-        target = Path(request.path).expanduser()
-        log_path = _log_path(request.path, request.log_file)
-        if not target.is_dir():
-            return PickResponse(status="invalid_path", log_file=str(log_path))
-        rng = random.Random(request.seed) if request.seed is not None else None
-        try:
-            item = get_unselected_item(
-                target,
-                log_path,
-                include_hidden=request.include_hidden,
-                files_only=request.files_only,
-                dirs_only=request.dirs_only,
-                rng=rng,
-            )
-        except ValueError:
-            raise ApiError(
-                "invalid_request", "files_only and dirs_only are mutually exclusive"
-            )
-        if item is None:
-            status: Literal["empty", "exhausted"] = (
-                "exhausted" if any(target.iterdir()) else "empty"
-            )
-            return PickResponse(status=status, log_file=str(log_path))
-        logged = False
-        if not request.dry_run:
-            try:
-                log_selection(item, log_path)
-            except OSError as e:
-                raise ApiError("internal_error", f"Error writing log: {e}")
-            logged = True
+        outcome = services.pick(
+            request.path,
+            request.log_file,
+            seed=request.seed,
+            dry_run=request.dry_run,
+            include_hidden=request.include_hidden,
+            files_only=request.files_only,
+            dirs_only=request.dirs_only,
+            include_preview=True,
+        )
         return PickResponse(
-            status="picked",
-            log_file=str(log_path),
-            item=item,
-            logged=logged,
-            preview=_preview_model(target / item),
+            status=outcome.status,
+            log_file=str(outcome.log_file),
+            item=outcome.item,
+            logged=outcome.logged,
+            preview=_preview_model(outcome.preview) if outcome.preview else None,
         )
 
     @app.get("/api/preview")
     def preview(path: str) -> PreviewModel:
         """Structured preview for an entry path."""
-        return _preview_model(Path(path).expanduser())
+        return _preview_model(preview_entry(Path(path).expanduser()))
 
     @app.get("/api/image")
     def image(
@@ -690,14 +630,8 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
     @app.post("/api/open")
     def open_entry(request: OpenRequest) -> OpenResponse:
         """Open an entry with the OS default program."""
-        entry = Path(request.path).expanduser()
-        if not entry.exists():
-            raise ApiError("not_found", "Entry is gone")
-        try:
-            launch_path(entry)
-        except OSError as e:
-            raise ApiError("internal_error", f"Cannot open: {e}")
-        return OpenResponse(opened=entry.name)
+        outcome = services.open_entry(request.path)
+        return OpenResponse(opened=outcome.name)
 
     @app.post("/api/history/archive")
     def archive(path: str, log_file: str | None = None) -> ArchiveResponse:

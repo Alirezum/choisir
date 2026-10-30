@@ -491,7 +491,7 @@ class WebApiTest(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
 
     def test_open_launches_entry(self) -> None:
-        with patch("choosier.web.launch_path") as launcher:
+        with patch("choosier.launcher.launch_path") as launcher:
             response = self.client.post(
                 "/api/open", json={"path": str(self.target / "a")}
             )

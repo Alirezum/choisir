@@ -96,7 +96,7 @@ class ApiErrorEnvelopeTest(unittest.TestCase):
     def test_unexpected_exception_is_internal_error(self) -> None:
         client = TestClient(create_app(), raise_server_exceptions=False)
         with patch(
-            "choosier.web.read_log_entries",
+            "choosier.storage.read_log_entries",
             side_effect=RuntimeError("boom"),
         ):
             response = client.get("/api/state", params=self._params())
@@ -113,7 +113,7 @@ class ApiErrorEnvelopeTest(unittest.TestCase):
         self._assert_log_unchanged(before)
 
         with patch(
-            "choosier.web.Path.iterdir",
+            "choosier.services.browse.Path.iterdir",
             side_effect=PermissionError("denied"),
         ):
             forbidden = self.client.get(
@@ -155,7 +155,7 @@ class ApiErrorEnvelopeTest(unittest.TestCase):
         log_selection("a", self.log)
         before = self._log_bytes()
         with patch(
-            "choosier.web.log_selection",
+            "choosier.storage.log_selection",
             side_effect=OSError("disk full"),
         ):
             response = self.client.post(
@@ -272,7 +272,7 @@ class ApiErrorEnvelopeTest(unittest.TestCase):
         self.assertEqual(body["error"]["message"], "Entry is gone")
 
         with patch(
-            "choosier.web.launch_path",
+            "choosier.launcher.launch_path",
             side_effect=OSError("no opener"),
         ):
             failure = self.client.post(
