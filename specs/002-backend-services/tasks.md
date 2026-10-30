@@ -40,7 +40,7 @@ completed in the Foundational phase so every story can build on one foundation.
 
 **Purpose**: Create the new package skeleton and make setuptools include it.
 
-- [ ] T001 [P] Create the `choosier/services/` package with a docstring-only `choosier/services/__init__.py`; exports are added in T012.
+- [X] T001 [P] Create the `choosier/services/` package with a docstring-only `choosier/services/__init__.py`; exports are added in T012.
 - [ ] T002 [P] Update `pyproject.toml` under `[tool.setuptools]` to `packages = ["choosier", "choosier.services"]` so the wheel and sdist contain the new subpackage.
 
 **Checkpoint**: The package exists and packaging metadata knows about it.
