@@ -140,17 +140,20 @@ class BrowseEntry:
     name: str
     is_dir: bool
 
+
 @dataclass(frozen=True)
 class BrowseListing:
     path: Path
     parent: Path | None
     entries: tuple[BrowseEntry, ...]
 
+
 @dataclass(frozen=True)
 class HistorySnapshot:
     entries: tuple[LogEntry, ...]
     logged: frozenset[str]
     display: tuple[str, ...]
+
 
 @dataclass(frozen=True)
 class StateSnapshot:
@@ -162,7 +165,9 @@ class StateSnapshot:
     history: tuple[LogEntry, ...]
     history_total: int
 
+
 PickStatus = Literal["picked", "empty", "exhausted", "invalid_path"]
+
 
 @dataclass(frozen=True)
 class PickOutcome:
@@ -171,6 +176,7 @@ class PickOutcome:
     item: str | None = None
     logged: bool = False
     preview: Preview | None = None
+
 
 @dataclass(frozen=True)
 class OpenOutcome:
@@ -353,10 +359,12 @@ THUMBNAIL_QUALITY = 84
 PREVIEW_MAX_SIZE = (1600, 1600)
 PREVIEW_QUALITY = 90
 
+
 @dataclass(frozen=True)
 class ImagePayload:
     data: bytes
     media_type: str
+
 
 @dataclass(frozen=True)
 class VideoFile:
