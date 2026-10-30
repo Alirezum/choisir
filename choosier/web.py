@@ -37,12 +37,6 @@ from choosier.preview import (
     video_matches_content,
     video_media_type,
 )
-from choosier.storage import (
-    archive_log,
-    remove_log_item,
-    remove_log_items,
-    reset_log,
-)
 
 DEFAULT_PORT = 8765
 PANEL_MAX_LINES = 200
@@ -636,10 +630,7 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
     @app.post("/api/history/archive")
     def archive(path: str, log_file: str | None = None) -> ArchiveResponse:
         log_path = _log_path(path, log_file)
-        try:
-            backup = archive_log(log_path)
-        except OSError as e:
-            raise ApiError("internal_error", f"Error archiving log: {e}")
+        backup = services.HistoryService(log_path).archive()
         return ArchiveResponse(
             log_file=str(log_path),
             backup=backup.name if backup is not None else None,
@@ -648,10 +639,7 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
     @app.delete("/api/history")
     def clear(path: str, log_file: str | None = None) -> ClearResponse:
         log_path = _log_path(path, log_file)
-        try:
-            removed = reset_log(log_path)
-        except OSError as e:
-            raise ApiError("internal_error", f"Error resetting log: {e}")
+        removed = services.HistoryService(log_path).clear()
         return ClearResponse(log_file=str(log_path), removed=removed)
 
     @app.delete("/api/history/item")
@@ -660,10 +648,7 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
     ) -> RemoveHistoryItemResponse:
         """Delete every log entry for `item`, leaving other entries alone."""
         log_path = _log_path(path, log_file)
-        try:
-            removed = remove_log_item(item, log_path)
-        except OSError as e:
-            raise ApiError("internal_error", f"Error removing history item: {e}")
+        removed = services.HistoryService(log_path).remove(item)
         return RemoveHistoryItemResponse(
             log_file=str(log_path), item=item, removed=removed
         )
@@ -674,10 +659,7 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
     ) -> RemoveHistoryItemsResponse:
         """Delete every log entry for all selected items in one rewrite."""
         log_path = _log_path(request.path, request.log_file)
-        try:
-            removed = remove_log_items(request.items, log_path)
-        except OSError as e:
-            raise ApiError("internal_error", f"Error removing history items: {e}")
+        removed = services.HistoryService(log_path).remove_many(request.items)
         return RemoveHistoryItemsResponse(
             log_file=str(log_path), items=request.items, removed=removed
         )

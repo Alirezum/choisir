@@ -287,7 +287,7 @@ class ApiErrorEnvelopeTest(unittest.TestCase):
         before = self._log_bytes()
 
         with patch(
-            "choosier.web.archive_log",
+            "choosier.storage.archive_log",
             side_effect=OSError("archive fail"),
         ):
             archived = self.client.post("/api/history/archive", params=self._params())
@@ -296,7 +296,7 @@ class ApiErrorEnvelopeTest(unittest.TestCase):
         self._assert_log_unchanged(before)
 
         with patch(
-            "choosier.web.reset_log",
+            "choosier.storage.reset_log",
             side_effect=OSError("reset fail"),
         ):
             cleared = self.client.delete("/api/history", params=self._params())
@@ -305,7 +305,7 @@ class ApiErrorEnvelopeTest(unittest.TestCase):
         self._assert_log_unchanged(before)
 
         with patch(
-            "choosier.web.remove_log_item",
+            "choosier.storage.remove_log_item",
             side_effect=OSError("remove fail"),
         ):
             removed_item = self.client.delete(
@@ -318,7 +318,7 @@ class ApiErrorEnvelopeTest(unittest.TestCase):
         self._assert_log_unchanged(before)
 
         with patch(
-            "choosier.web.remove_log_items",
+            "choosier.storage.remove_log_items",
             side_effect=OSError("batch fail"),
         ):
             removed_batch = self.client.post(
