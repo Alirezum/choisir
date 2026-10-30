@@ -41,6 +41,7 @@ from choosier.preview import (
     video_matches_content,
     video_media_type,
 )
+from choosier.services import FailureKind, ServiceError
 from choosier.storage import (
     LogEntry,
     archive_log,
@@ -81,6 +82,16 @@ ERROR_STATUS: dict[ErrorCode, int] = {
     "range_not_satisfiable": 416,
     "validation_error": 422,
     "internal_error": 500,
+}
+
+SERVICE_ERROR_CODES: dict[FailureKind, ErrorCode] = {
+    FailureKind.INVALID_INPUT: "invalid_request",
+    FailureKind.FORBIDDEN: "forbidden",
+    FailureKind.NOT_FOUND: "not_found",
+    FailureKind.PAYLOAD_TOO_LARGE: "payload_too_large",
+    FailureKind.UNSUPPORTED_MEDIA_TYPE: "unsupported_media_type",
+    FailureKind.RANGE_NOT_SATISFIABLE: "range_not_satisfiable",
+    FailureKind.IO_ERROR: "internal_error",
 }
 
 _HTTP_ERROR_CODES: dict[int, ErrorCode] = {
@@ -390,6 +401,17 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
             exc.message,
             details=exc.details,
             headers=exc.headers,
+        )
+
+    @app.exception_handler(ServiceError)
+    async def service_error_handler(
+        _request: Request,
+        exc: ServiceError,
+    ) -> JSONResponse:
+        return _error_response(
+            SERVICE_ERROR_CODES[exc.kind],
+            exc.message,
+            details=exc.details,
         )
 
     @app.exception_handler(StarletteHTTPException)
