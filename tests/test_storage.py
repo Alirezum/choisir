@@ -338,6 +338,59 @@ class LoadLogTest(unittest.TestCase):
         )
 
 
+class MixedHistoryReadTest(unittest.TestCase):
+    """One fixture covering every supported line form and duplicates."""
+
+    CONTENT = (
+        '{"ts": "2026-01-01T00:00:00+00:00", "item": "current"}\n'
+        "2020-01-01T00:00:00Z - legacy - name\n"
+        "plain name\n"
+        "\n"
+        "[1, 2]\n"
+        '{"ts": "2026-01-02T00:00:00+00:00", "item": "current"}\n'
+    )
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.log = Path(self.tmp.name) / "history.jsonl"
+
+    def test_structured_and_derived_reads_agree(self) -> None:
+        self.log.write_text(self.CONTENT, encoding="utf-8")
+        entries = read_log_entries(self.log)
+        names, display = load_log(self.log)
+        logged = get_logged_items(self.log)
+        expected_items = ["current", "legacy - name", "plain name", "current"]
+        expected_display = [
+            "2026-01-01T00:00:00+00:00  current",
+            "2020-01-01T00:00:00Z - legacy - name",
+            "plain name",
+            "2026-01-02T00:00:00+00:00  current",
+        ]
+        self.assertEqual([entry.item for entry in entries], expected_items)
+        self.assertEqual(
+            [entry.timestamp for entry in entries],
+            ["2026-01-01T00:00:00+00:00", None, None, "2026-01-02T00:00:00+00:00"],
+        )
+        self.assertEqual([entry.display for entry in entries], expected_display)
+        self.assertEqual(display, expected_display)
+        self.assertEqual(names, set(expected_items))
+        self.assertEqual(logged, names)
+
+    def test_default_read_is_tolerant_but_strict_read_propagates(self) -> None:
+        self.log.write_text(self.CONTENT, encoding="utf-8")
+        with patch(
+            "choosier.storage.Path.read_text",
+            side_effect=PermissionError("denied"),
+        ):
+            self.assertEqual(read_log_entries(self.log), [])
+            self.assertEqual(load_log(self.log), (set(), []))
+            with self.assertRaises(PermissionError):
+                read_log_entries(self.log, ignore_errors=False)
+            with self.assertRaises(PermissionError):
+                get_logged_items(self.log)
+
+
 class ArchiveLogTest(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
