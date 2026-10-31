@@ -150,6 +150,23 @@ Selections are stored as JSON Lines (`{"ts": ..., "item": ...}`) in
 across working directories. Legacy `<timestamp> - <item>` lines are still
 read. Logs over 1MB rotate to timestamped `.old` backups.
 
+## Architecture
+
+`choosier/services/` is the application layer. It is standard-library-only and
+UI-agnostic: browsing, state assembly, picking, opening, history operations,
+result models, and failure kinds live there and are shared by every interface.
+
+`choosier.storage` owns history file I/O: parsing, appending, rotation, atomic
+rewrites, archiving, and clearing. `HistoryService` is the application-layer
+owner of history reads and mutations, built on that single storage path.
+
+The CLI, TUI, and web app are thin adapters: they parse interface input, call
+one shared operation, and map the outcome onto their own output or response
+models. `choosier/web_media.py` is web-only and may use Pillow for image
+previews; the shared services never import it. The base package keeps no
+mandatory runtime dependency, and FastAPI, Textual, and Pillow remain optional
+extras.
+
 ## Development
 
 ```sh
