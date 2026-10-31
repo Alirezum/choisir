@@ -153,7 +153,7 @@ server or terminal running; confirm all service tests pass in under 10 seconds.
 
 ### Implementation for User Story 4
 
-- [ ] T033 [P] [US4] Create `tests/test_services_browse.py` covering directories-first/case-insensitive ordering, parent reporting at a root and non-root, missing/non-directory target, and listing permission failure via `choosier.services.browse.Path.iterdir`.
+- [X] T033 [P] [US4] Create `tests/test_services_browse.py` covering directories-first/case-insensitive ordering, parent reporting at a root and non-root, missing/non-directory target, and listing permission failure via `choosier.services.browse.Path.iterdir`.
 - [ ] T034 [P] [US4] Create `tests/test_services_state.py` covering invalid-path outcome precedence, conflicting-filter `ServiceError`, hidden/type filters, managed history/archive exclusion, full totals, the default 200 cap (first remaining, last history), `max_lines=None` TUI shape, and empty/malformed history.
 - [ ] T035 [P] [US4] Create `tests/test_services_pick.py` covering seeded repeatability, dry-run, `commit=False`, empty versus exhausted, invalid path, conflicting filters, write failure with the exact `"Error writing log:"` prefix by patching `choosier.storage.log_selection` with `OSError`, optional preview, and hidden/type filters.
 - [ ] T036 [P] [US4] Create `tests/test_services_opening.py` covering success, missing entry, and launcher failure via `choosier.launcher.launch_path`, including the exact `"Entry is gone"` and `"Cannot open:"` messages.
