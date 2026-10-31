@@ -9,6 +9,8 @@ ROOT = Path(__file__).resolve().parent.parent
 PACKAGE = ROOT / "choosier"
 SERVICES = PACKAGE / "services"
 MAIN = ROOT / "main.py"
+WEB = PACKAGE / "web.py"
+ADAPTERS = (WEB, PACKAGE / "cli.py", PACKAGE / "tui.py")
 
 ALLOWED_CHOOSIER_SUBMODULES = {"chooser", "preview", "launcher", "storage", "services"}
 FORBIDDEN_CHOOSIER_SUBMODULES = {"web", "tui", "web_media", "cli"}
@@ -21,11 +23,49 @@ FORBIDDEN_TOP_LEVEL_MODULES = {
     "rich",
     "PIL",
 }
+FORBIDDEN_ADAPTER_REFERENCES = (
+    "storage.log_selection",
+    "storage.remove_log_item",
+    "storage.remove_log_items",
+    "storage.archive_log",
+    "storage.reset_log",
+    "read_log_entries",
+    "parse_log_line",
+)
+ROUTE_DELEGATIONS = {
+    "browse": ("services.browse_directory",),
+    "state": ("services.build_state",),
+    "pick": ("services.pick",),
+    "preview": ("preview_entry",),
+    "image": ("web_media.read_image", "web_media.make_thumbnail"),
+    "video": ("web_media.read_video",),
+    "open_entry": ("services.open_entry",),
+    "archive": ("services.HistoryService",),
+    "clear": ("services.HistoryService",),
+    "remove_history_item": ("services.HistoryService",),
+    "remove_history_items": ("services.HistoryService",),
+}
 SINGLE_DEFINITIONS = {
     "read_log_entries": PACKAGE / "storage.py",
     "parse_log_line": PACKAGE / "storage.py",
     "HistoryService": SERVICES / "history.py",
 }
+
+
+def _web_route_sources() -> dict[str, str]:
+    """Map each nested route handler name to its source text."""
+    source = WEB.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    create_app = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "create_app"
+    )
+    return {
+        node.name: ast.get_source_segment(source, node) or ""
+        for node in ast.walk(create_app)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
 
 
 def _imported_modules(path: Path) -> set[str]:
@@ -88,6 +128,31 @@ class SingleDefinitionTest(unittest.TestCase):
         for name, expected in SINGLE_DEFINITIONS.items():
             with self.subTest(name=name):
                 self.assertEqual(found.get(name), [expected])
+
+
+class WebRouteDelegationTest(unittest.TestCase):
+    def test_business_routes_call_expected_services(self) -> None:
+        sources = _web_route_sources()
+        for route, expected in ROUTE_DELEGATIONS.items():
+            with self.subTest(route=route):
+                self.assertIn(route, sources)
+                for token in expected:
+                    self.assertIn(token, sources[route])
+
+    def test_defaults_route_is_transport_only(self) -> None:
+        source = _web_route_sources()["defaults"]
+        self.assertNotIn("services.", source)
+        self.assertNotIn("web_media.", source)
+        self.assertIn("DefaultsResponse(", source)
+
+
+class AdapterBypassTest(unittest.TestCase):
+    def test_adapters_do_not_bypass_service_history_paths(self) -> None:
+        for path in ADAPTERS:
+            source = path.read_text(encoding="utf-8")
+            for reference in FORBIDDEN_ADAPTER_REFERENCES:
+                with self.subTest(path=path.name, reference=reference):
+                    self.assertNotIn(reference, source)
 
 
 if __name__ == "__main__":
