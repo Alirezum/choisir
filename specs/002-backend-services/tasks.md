@@ -157,7 +157,7 @@ server or terminal running; confirm all service tests pass in under 10 seconds.
 - [X] T034 [P] [US4] Create `tests/test_services_state.py` covering invalid-path outcome precedence, conflicting-filter `ServiceError`, hidden/type filters, managed history/archive exclusion, full totals, the default 200 cap (first remaining, last history), `max_lines=None` TUI shape, and empty/malformed history.
 - [X] T035 [P] [US4] Create `tests/test_services_pick.py` covering seeded repeatability, dry-run, `commit=False`, empty versus exhausted, invalid path, conflicting filters, write failure with the exact `"Error writing log:"` prefix by patching `choosier.storage.log_selection` with `OSError`, optional preview, and hidden/type filters.
 - [X] T036 [P] [US4] Create `tests/test_services_opening.py` covering success, missing entry, and launcher failure via `choosier.launcher.launch_path`, including the exact `"Entry is gone"` and `"Cannot open:"` messages.
-- [ ] T037 [P] [US4] Create `tests/test_services_errors.py` covering every `FailureKind` value and `ServiceError` propagation of `kind`, `message`, and `details`, and assert the exception exposes no HTTP status or UI widget.
+- [X] T037 [P] [US4] Create `tests/test_services_errors.py` covering every `FailureKind` value and `ServiceError` propagation of `kind`, `message`, and `details`, and assert the exception exposes no HTTP status or UI widget.
 - [ ] T038 [US4] Run `time uv run pytest tests/test_services_*.py -q` with no web server or TUI session; confirm the subset passes in under 10 seconds (`SC-009`) and that no test opens a socket, browser, or interactive terminal.
 
 **Checkpoint**: Every extracted operation is directly testable, and the fast
