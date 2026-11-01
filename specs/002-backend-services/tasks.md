@@ -170,7 +170,7 @@ service subset passes within the required bound.
 **Purpose**: Documentation, packaging, full quality gates, and end-to-end
 validation across all stories.
 
-- [ ] T039 [P] Add a non-behavioral entry under `Unreleased` in `CHANGELOG.md` describing the service extraction, unified history access, and web-only media module; do not change version numbers, extras, entry points, or dependencies.
+- [X] T039 [P] Add a non-behavioral entry under `Unreleased` in `CHANGELOG.md` describing the service extraction, unified history access, and web-only media module; do not change version numbers, extras, entry points, or dependencies.
 - [ ] T040 [P] Install the CI extras with `uv sync --group dev --extra ui --extra web`, then build the frontend with `npm ci && npm run build` in `frontend/` so static-serving tests have `choosier/web_static/`.
 - [ ] T041 Run the full quality gate for `choosier/`, `main.py`, and `tests/` from the repository root: `uv run ruff check .`, `uv run ruff format --check .`, `uv run pytest`, `uv run mypy choosier main.py tests`, and `uv build`; fix every failure without changing frozen behavior.
 - [ ] T042 Verify packaging and imports: run `uv run python -m zipfile -l dist/choosier-*.whl` and confirm entries for `choosier/services/__init__.py`, `browse.py`, `errors.py`, `history.py`, `models.py`, `opening.py`, `pick.py`, and `state.py`; then run `uv run python -c "from choosier.services import HistoryService, build_state, browse_directory, pick, open_entry; from choosier.web_media import read_image, read_video; print('service imports OK')"`.

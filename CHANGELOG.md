@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Maintenance: extracted the shared application operations into the
+  standard-library-only `choosier/services/` package, unified history reads
+  and writes behind `read_log_entries` and `HistoryService`, and moved
+  web-only image/video handling into `choosier.web_media`. Public interfaces,
+  history formats, and runtime behavior are unchanged.
 - Web API: every failed `/api/*` request now returns one JSON envelope
   with `error.code`, `error.message`, and `error.details`. The legacy
   `detail` string is preserved and always equals `error.message`, so the
