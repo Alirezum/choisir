@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 
-import { api } from './api'
+import { api, apiErrorMessage } from './api'
 import BrowserPanel from './components/BrowserPanel.vue'
 import ChoiceBoard from './components/ChoiceBoard.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
@@ -63,10 +63,6 @@ const filters = computed(() => ({
   dirs_only: mode.value === 'dirs',
 }))
 
-function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
 function entryPath(item: string): string {
   const base = path.value.replace(/[/\\]+$/, '')
   return `${base}/${item}`
@@ -91,7 +87,7 @@ async function refresh(): Promise<void> {
       ...filters.value,
     })
   } catch (error) {
-    status.value = describeError(error)
+    status.value = apiErrorMessage(error)
   }
 }
 
@@ -157,7 +153,7 @@ async function pick(): Promise<void> {
         : `Picked ${item}. Dry run, so it wasn't logged.`
     }
   } catch (error) {
-    status.value = describeError(error)
+    status.value = apiErrorMessage(error)
   } finally {
     await refresh()
   }
@@ -168,7 +164,7 @@ async function openEntry(entry: string): Promise<void> {
     const result = await api.open(entry)
     status.value = `Opened ${result.opened}.`
   } catch (error) {
-    status.value = describeError(error)
+    status.value = apiErrorMessage(error)
   }
 }
 
@@ -195,7 +191,7 @@ async function previewHistoryItem(item: string): Promise<void> {
     status.value = `Previewing ${item} from history.`
   } catch (error) {
     if (request !== previewSerial) return
-    status.value = describeError(error)
+    status.value = apiErrorMessage(error)
   }
 }
 
@@ -207,7 +203,7 @@ async function archiveHistory(): Promise<void> {
         ? `No history file at ${result.log_file}.`
         : `Archived history to ${result.backup}.`
   } catch (error) {
-    status.value = describeError(error)
+    status.value = apiErrorMessage(error)
   } finally {
     await refresh()
     historyChecked.value = []
@@ -222,7 +218,7 @@ async function clearHistory(): Promise<void> {
       ? `Cleared ${result.log_file}.`
       : `No history file at ${result.log_file}.`
   } catch (error) {
-    status.value = describeError(error)
+    status.value = apiErrorMessage(error)
   } finally {
     await refresh()
     historyChecked.value = []
@@ -242,7 +238,7 @@ async function removeHistoryItem(item: string): Promise<void> {
       status.value = `Removed ${result.removed} entries for "${item}".`
     }
   } catch (error) {
-    status.value = describeError(error)
+    status.value = apiErrorMessage(error)
   } finally {
     removingItem.value = null
     historyChecked.value = historyChecked.value.filter((name) => name !== item)
@@ -290,7 +286,7 @@ async function deleteSelectedHistory(): Promise<void> {
       status.value = `Removed ${result.removed} entries from history.`
     }
   } catch (error) {
-    status.value = describeError(error)
+    status.value = apiErrorMessage(error)
   } finally {
     removingHistory.value = false
     historyChecked.value = historyChecked.value.filter(
@@ -340,7 +336,7 @@ onMounted(async () => {
     path.value = defaults.path
     logFile.value = defaults.log_file
   } catch (error) {
-    status.value = describeError(error)
+    status.value = apiErrorMessage(error)
   }
   await refresh()
 })

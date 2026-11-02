@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 
-import { api } from '../api'
+import { api, apiErrorMessage } from '../api'
 import type { BrowseResponse, BrowserEntry } from '../types'
 
 const props = defineProps<{ modelValue: string }>()
@@ -16,7 +16,7 @@ async function load(target: string): Promise<void> {
     listing.value = await api.browse(target)
     error.value = ''
   } catch (problem) {
-    error.value = problem instanceof Error ? problem.message : String(problem)
+    error.value = apiErrorMessage(problem)
     listing.value = null
   }
 }
