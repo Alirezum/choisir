@@ -167,6 +167,14 @@ previews; the shared services never import it. The base package keeps no
 mandatory runtime dependency, and FastAPI, Textual, and Pillow remain optional
 extras.
 
+On the web frontend, `frontend/src/api.ts` is the single API boundary: it is
+the only frontend module allowed to make network calls or name `/api/...`
+endpoints, and its routes are generated from the frozen API contract
+(`specs/001-standardize-api-responses/contracts/api-contract.json`).
+Components call the exported `api` object and `apiErrorMessage` helper only;
+`npm run check:api` and `npm run test:api` fail when the generated contract
+goes stale or a component bypasses the boundary.
+
 ## Development
 
 ```sh

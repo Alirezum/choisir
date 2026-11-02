@@ -60,6 +60,12 @@
   metadata and support `image`/`archive`/`video` kinds, with bounded
   image scanning (1,000 images, 20 MB each) and video container sniffing
   for MP4, WebM, MOV, and MKV.
+- Web UI: frontend API calls now go through one typed client layer
+  (`frontend/src/api.ts`) with routes generated from the frozen API
+  contract. Every failure is a typed `ApiError` displayed through a
+  single `apiErrorMessage` helper; CI and local guards (`check:api`,
+  `test:api`) catch contract drift and boundary bypasses. Visible
+  behavior is unchanged.
 
 ## 0.3.0 — 2026-10-19
 
