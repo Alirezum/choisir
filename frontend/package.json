@@ -7,7 +7,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "generate:api": "node scripts/generate-api-contract.mjs",
+    "check:api": "node scripts/generate-api-contract.mjs --check"
   },
   "dependencies": {
     "@fontsource-variable/archivo": "^5.3.0",
