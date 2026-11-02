@@ -1,18 +1,25 @@
-export interface DefaultsResponse {
-  path: string
-  log_file: string
-}
+import type { PickResponse, PreviewModel } from './api-contract.generated.ts'
 
-export interface BrowserEntry {
-  name: string
-  is_dir: boolean
-}
+export type {
+  ArchiveResponse,
+  BrowseResponse,
+  BrowserEntry,
+  ClearResponse,
+  DefaultsResponse,
+  HistoryEntry,
+  OpenResponse,
+  PickResponse,
+  PreviewImage,
+  PreviewModel,
+  PreviewVideo,
+  RemoveHistoryItemResponse,
+  RemoveHistoryItemsResponse,
+  StateResponse,
+} from './api-contract.generated.ts'
 
-export interface BrowseResponse {
-  path: string
-  parent: string | null
-  entries: BrowserEntry[]
-}
+export type PreviewKind = PreviewModel['kind']
+
+export type PickStatus = PickResponse['status']
 
 export interface StateQuery {
   path: string
@@ -21,59 +28,6 @@ export interface StateQuery {
   files_only?: boolean
   dirs_only?: boolean
 }
-
-export interface StateResponse {
-  valid_path: boolean
-  path: string
-  log_file: string
-  remaining: string[]
-  remaining_total: number
-  history: HistoryEntry[]
-  history_total: number
-}
-
-export interface HistoryEntry {
-  timestamp: string | null
-  item: string
-  display: string
-}
-
-export type PreviewKind =
-  | 'text'
-  | 'directory'
-  | 'binary'
-  | 'empty'
-  | 'gone'
-  | 'unreadable'
-  | 'archive'
-  | 'image'
-  | 'video'
-
-export interface PreviewImage {
-  index: number | null
-  name: string
-  media_type: string
-  size: number
-}
-
-export interface PreviewVideo {
-  name: string
-  media_type: string
-  size: number
-}
-
-export interface PreviewModel {
-  kind: PreviewKind
-  text: string
-  truncated: boolean
-  entry_count: number | null
-  size: number | null
-  images: PreviewImage[]
-  image_total: number
-  video: PreviewVideo | null
-}
-
-export type PickStatus = 'picked' | 'empty' | 'exhausted' | 'invalid_path'
 
 export interface PickRequest {
   path: string
@@ -85,36 +39,8 @@ export interface PickRequest {
   dirs_only: boolean
 }
 
-export interface PickResponse {
-  status: PickStatus
-  log_file: string
-  item: string | null
-  logged: boolean
-  preview: PreviewModel | null
-}
-
-export interface OpenResponse {
-  opened: string
-}
-
-export interface ArchiveResponse {
-  log_file: string
-  backup: string | null
-}
-
-export interface ClearResponse {
-  log_file: string
-  removed: boolean
-}
-
-export interface RemoveHistoryItemResponse {
-  log_file: string
-  item: string
-  removed: number
-}
-
-export interface RemoveHistoryItemsResponse {
-  log_file: string
+export interface RemoveHistoryItemsRequest {
+  path: string
+  log_file: string | null
   items: string[]
-  removed: number
 }
