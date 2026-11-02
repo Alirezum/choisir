@@ -5,6 +5,7 @@
 import { encodeQuery, type QueryValue } from './api-query.ts'
 import { operations, type ApiOperation } from './api-operations.ts'
 import { routes } from './api-contract.generated.ts'
+import { errorFromResponse, errorFromTransport, parseSuccessJson } from './api-errors.ts'
 import type {
   ArchiveResponse,
   BrowseResponse,
@@ -20,6 +21,8 @@ import type {
   StateResponse,
 } from './types.ts'
 
+export { ApiError, apiErrorMessage } from './api-errors.ts'
+
 function requestUrl(operation: ApiOperation, params: Record<string, QueryValue>): string {
   return `${routes[operations[operation]].path}${encodeQuery(params)}`
 }
@@ -29,25 +32,16 @@ function requestMethod(operation: ApiOperation): string {
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init)
-  if (!response.ok) {
-    let detail = `${response.status} ${response.statusText}`
-    try {
-      const body: unknown = await response.json()
-      if (
-        body !== null &&
-        typeof body === 'object' &&
-        'detail' in body &&
-        typeof body.detail === 'string'
-      ) {
-        detail = body.detail
-      }
-    } catch {
-      // keep the status line as the message
-    }
-    throw new Error(detail)
+  let response: Response
+  try {
+    response = await fetch(url, init)
+  } catch (cause) {
+    throw errorFromTransport(cause)
   }
-  return (await response.json()) as T
+  if (!response.ok) {
+    throw await errorFromResponse(response)
+  }
+  return parseSuccessJson<T>(response)
 }
 
 function postJson<T>(operation: ApiOperation, body: unknown): Promise<T> {
