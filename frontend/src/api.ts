@@ -1,3 +1,10 @@
+// The single API boundary for the frontend. Screens and components import this
+// facade only; see specs/003-frontend-api-client/contracts/
+// frontend-api-client.md for the public surface and encoding rules.
+
+import { encodeQuery, type QueryValue } from './api-query.ts'
+import { operations, type ApiOperation } from './api-operations.ts'
+import { routes } from './api-contract.generated.ts'
 import type {
   ArchiveResponse,
   BrowseResponse,
@@ -11,20 +18,14 @@ import type {
   RemoveHistoryItemsResponse,
   StateQuery,
   StateResponse,
-} from './types'
+} from './types.ts'
 
-type QueryValue = string | number | boolean | undefined | null
+function requestUrl(operation: ApiOperation, params: Record<string, QueryValue>): string {
+  return `${routes[operations[operation]].path}${encodeQuery(params)}`
+}
 
-function query(params: Record<string, QueryValue>): string {
-  const search = new URLSearchParams()
-  for (const [key, value] of Object.entries(params)) {
-    if (value === undefined || value === null || value === '' || value === false) {
-      continue
-    }
-    search.set(key, String(value))
-  }
-  const encoded = search.toString()
-  return encoded === '' ? '' : `?${encoded}`
+function requestMethod(operation: ApiOperation): string {
+  return routes[operations[operation]].method
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -49,53 +50,65 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T
 }
 
-function postJson<T>(url: string, body: unknown): Promise<T> {
-  return request<T>(url, {
-    method: 'POST',
+function postJson<T>(operation: ApiOperation, body: unknown): Promise<T> {
+  return request<T>(requestUrl(operation, {}), {
+    method: requestMethod(operation),
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
 }
 
 export const api = {
-  defaults: () => request<DefaultsResponse>('/api/defaults'),
+  defaults: () =>
+    request<DefaultsResponse>(requestUrl('defaults', {}), {
+      method: requestMethod('defaults'),
+    }),
 
-  browse: (path: string) => request<BrowseResponse>(`/api/browse${query({ path })}`),
+  browse: (path: string) =>
+    request<BrowseResponse>(requestUrl('browse', { path }), {
+      method: requestMethod('browse'),
+    }),
 
-  state: (params: StateQuery) => request<StateResponse>(`/api/state${query({ ...params })}`),
+  state: (params: StateQuery) =>
+    request<StateResponse>(requestUrl('state', { ...params }), {
+      method: requestMethod('state'),
+    }),
 
-  preview: (path: string) => request<PreviewModel>(`/api/preview${query({ path })}`),
+  pick: (body: PickRequest) => postJson<PickResponse>('pick', body),
+
+  preview: (path: string) =>
+    request<PreviewModel>(requestUrl('preview', { path }), {
+      method: requestMethod('preview'),
+    }),
 
   imageUrl: (
     path: string,
     index: number | null = null,
     variant: 'thumb' | 'preview' | null = null,
-  ) => `/api/image${query({ path, index, variant })}`,
+  ) => requestUrl('imageUrl', { path, index, variant }),
 
-  videoUrl: (path: string) => `/api/video${query({ path })}`,
+  videoUrl: (path: string) => requestUrl('videoUrl', { path }),
 
-  pick: (body: PickRequest) => postJson<PickResponse>('/api/pick', body),
-
-  open: (path: string) => postJson<OpenResponse>('/api/open', { path }),
+  open: (path: string) => postJson<OpenResponse>('open', { path }),
 
   archive: (path: string, logFile: string) =>
-    request<ArchiveResponse>(`/api/history/archive${query({ path, log_file: logFile })}`, {
-      method: 'POST',
+    request<ArchiveResponse>(requestUrl('archive', { path, log_file: logFile }), {
+      method: requestMethod('archive'),
     }),
 
   clear: (path: string, logFile: string) =>
-    request<ClearResponse>(`/api/history${query({ path, log_file: logFile })}`, {
-      method: 'DELETE',
+    request<ClearResponse>(requestUrl('clear', { path, log_file: logFile }), {
+      method: requestMethod('clear'),
     }),
 
   removeHistoryItem: (path: string, logFile: string, item: string) =>
     request<RemoveHistoryItemResponse>(
-      `/api/history/item${query({ path, item, log_file: logFile })}`,
-      { method: 'DELETE' },
+      requestUrl('removeHistoryItem', { path, item, log_file: logFile }),
+      { method: requestMethod('removeHistoryItem') },
     ),
 
   removeHistoryItems: (path: string, logFile: string, items: string[]) =>
-    postJson<RemoveHistoryItemsResponse>('/api/history/remove', {
+    postJson<RemoveHistoryItemsResponse>('removeHistoryItems', {
       path,
       log_file: logFile === '' ? null : logFile,
       items,
