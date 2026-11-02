@@ -8,6 +8,15 @@
 
 **Input**: User description: "Refactor monolithic frontend pages into modular, reusable UI components, separating state hooks and business logic from presentation views."
 
+## Clarifications
+
+### Session 2026-11-02
+
+- Q: Should this refactor add a development-only component test runner so each presentation view can be rendered and checked in isolation, or should view verification remain manual? → A: Add a development-only component test runner, wire it into CI, and test presentation views plus extracted behavior units.
+- Q: Which viewport ranges must the visual-parity check cover for this refactor? → A: All three existing ranges: desktop above 900px, tablet from 561px to 900px, and phone at 560px or below.
+- Q: How should visual parity be evidenced and retained, given that browser end-to-end automation is out of scope? → A: Commit a parity checklist under the feature directory, capture before/after screenshots locally for review, and add no image binaries or browser tooling.
+- Q: How should duplicated visual building blocks be detected — automated enforcement, documented review, or both? → A: A focused automated static check for repeated scaffold patterns where feasible, plus a documented review item for semantic duplication.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - One Owner per Web Workflow (Priority: P1)
@@ -43,7 +52,7 @@ A maintainer builds or changes a visual area — pick board, preview, image view
 2. **Given** a view whose data is empty, truncated, invalid, or at a boundary, **When** it renders, **Then** the same labels, empty states, truncation, and fallbacks as the baseline appear.
 3. **Given** a failed operation, **When** its message reaches a view, **Then** the view only renders the supplied message and does not inspect an error payload.
 4. **Given** a visual pattern used by two or more views, **When** a maintainer inspects the implementation, **Then** exactly one shared presentation building block provides it.
-5. **Given** a rendered view at supported viewport sizes, **When** compared with the baseline, **Then** layout, styling, focus visibility, and accessibility semantics are unchanged.
+5. **Given** a rendered view in all three supported ranges, **When** compared with the baseline, **Then** layout, styling, focus visibility, and accessibility semantics are unchanged.
 6. **Given** the image viewer, **When** a person zooms, pans, navigates, opens the original, or presses the documented shortcuts, **Then** behavior is unchanged while its interaction state is owned by a dedicated behavior unit.
 
 ---
@@ -100,17 +109,18 @@ A maintainer can trust that future changes do not quietly rebuild the monolith. 
 - **FR-009**: Every confirmation and destructive-action rule MUST be preserved: clear and batch removal require explicit confirmation; cancelling changes nothing; single-item removal requires its explicit row action; failures leave data intact.
 - **FR-010**: Asynchronous safety MUST be preserved: refresh debounce, stale-response rejection for previews and picks, disabled or busy controls during destructive work, and blocked shortcuts while a confirmation is open.
 - **FR-011**: Accessibility and keyboard contracts MUST be unchanged: tab roles and arrow/Home/End navigation, visible focus, Ctrl+N picking, viewer shortcuts, dialog focus trap and Escape, scroll lock, labels, live status announcements, and reading order.
-- **FR-012**: Visual output MUST be unchanged at supported viewport sizes; the existing styles and markup semantics remain authoritative so the refactor introduces no redesign.
+- **FR-012**: Visual output MUST be unchanged in all three supported ranges — desktop above 900px, tablet from 561px to 900px, and phone at 560px or below; the existing styles and markup semantics remain authoritative so the refactor introduces no redesign.
 - **FR-013**: Destructive or fallible flows MUST keep their exact current messages, including success, no-op, invalid-path, empty, exhausted, missing-history, validation, and failure text.
 - **FR-014**: Automated checks MUST fail when a presentation view performs data access or parses failures, when the composition root regains workflow logic, when a behavior unit depends on a view, or when a dependency cycle appears.
-- **FR-015**: Automated checks or a documented review step MUST detect reimplementation of a shared visual building block.
-- **FR-016**: Extracted state and behavior units MUST have isolated automated tests covering success, failure, and boundary cases; the existing shared-client tests MUST remain green and unchanged in intent.
-- **FR-017**: The production build, type check, existing frontend and backend quality gates, and manual flow replay MUST pass, with no reduction in behavior coverage and no new runtime dependency.
+- **FR-015**: Automated checks MUST detect repeated panel, header, empty-state, row, action-bar, or dialog scaffold patterns where feasible, and a documented review step MUST detect semantic duplication that static checks cannot judge; together they MUST identify reimplementation of a shared visual building block.
+- **FR-016**: Extracted state and behavior units and every presentation view MUST have isolated automated tests: behavior units covering success, failure, and boundary cases; views covering fixed, empty, and boundary data. The suite MUST use development-only test tooling, MUST run in CI, and MUST NOT add a runtime dependency; the existing shared-client tests MUST remain green and unchanged in intent.
+- **FR-017**: The production build, type check, existing frontend and backend quality gates, the UI test suite, and manual flow replay MUST pass, with no reduction in behavior coverage and no new runtime dependency.
 - **FR-018**: The feature MUST NOT add a global state library, router, UI or styling framework, server-side rendering, state persistence, telemetry, new routes, backend changes, API-contract changes, or user-visible features.
 - **FR-019**: Maintainer documentation MUST describe the target module layout, the allowed dependency direction, where state and workflow versus presentation concerns belong, and how to add a view or a workflow.
 - **FR-020**: A change to one workflow or one view MUST be localized to that concern and its tests, without requiring edits to unrelated behavior units or views, as confirmed by a change-impact review.
 - **FR-021**: The shared client from the prior work MUST remain the only frontend network boundary; no behavior unit or view may bypass it.
 - **FR-022**: User-visible text, ordering, and timing MUST be treated as a compatibility contract; any intentional deviation requires an explicit recorded decision, otherwise parity is mandatory.
+- **FR-023**: A parity checklist covering every flow, message class, keyboard and accessibility behavior, and all three viewport ranges MUST be committed under the feature directory and completed against the pre-refactor baseline; before/after screenshots are captured locally for review, with no image binaries or browser automation committed.
 
 ### Key Entities
 
@@ -122,7 +132,7 @@ A maintainer can trust that future changes do not quietly rebuild the monolith. 
 - **Shared presentation building block**: One reusable visual structure (panel scaffold, header, empty state, row, action bar, dialog) used by multiple views.
 - **View model**: Ready-to-render data supplied to a view, including display labels and fallbacks.
 - **User intent**: A declared action a view reports, such as pick, open, preview, archive, clear, remove, toggle selection, navigate, zoom, or close.
-- **Parity baseline**: The current interface's visible behavior, text, ordering, and accessibility contract captured before the refactor.
+- **Parity baseline**: The current interface's visible behavior, text, ordering, and accessibility contract captured before the refactor and recorded in the committed parity checklist.
 - **Boundary rule**: An allowed or forbidden dependency between the composition root, behavior units, views, shared building blocks, and the shared client.
 - **Boundary check**: An automated verification that rejects monolith regression, view data access, reverse dependencies, cycles, and duplicated scaffolds.
 
@@ -133,15 +143,16 @@ A maintainer can trust that future changes do not quietly rebuild the monolith. 
 - **SC-001**: 100% of existing web flows — browse, options, pick, preview, open, archive, clear, single removal, batch removal, and viewer — produce identical visible outcomes, status text, ordering, and enabled states compared with the pre-refactor baseline.
 - **SC-002**: A responsibility audit of the main screen finds zero data access, business validation, workflow sequencing, confirmation lifecycle, debounce, stale-response, or derived status logic; 100% of that logic is owned by named behavior units.
 - **SC-003**: A source audit finds zero presentation views that perform data access, construct addresses, parse failures, or own domain workflow state.
-- **SC-004**: 100% of extracted behavior units have isolated automated tests covering at least one success path, one failure path, and one boundary case; all pre-existing client tests still pass.
+- **SC-004**: 100% of extracted behavior units have isolated automated tests covering at least one success path, one failure path, and one boundary case, and 100% of presentation views have isolated automated rendering tests covering fixed, empty, and boundary data; the UI suite runs in CI and all pre-existing client tests still pass.
 - **SC-005**: A dependency audit finds zero reverse dependencies and zero cycles.
 - **SC-006**: 100% of visual structures used by two or more views are supplied by exactly one shared building block, with zero duplicated scaffolds.
-- **SC-007**: Each of five deliberate violations — data access in a view, workflow logic in the main screen, a behavior unit depending on a view, a dependency cycle, and a duplicated scaffold — is detected by an automated check or documented review step in 100% of trials.
+- **SC-007**: Each of five deliberate violations — data access in a view, workflow logic in the main screen, a behavior unit depending on a view, a dependency cycle, and a duplicated scaffold — is detected in 100% of trials, by the automated check where the pattern is static and by the documented review otherwise.
 - **SC-008**: Every named workflow can be located in exactly one owner within two minutes by a maintainer using the module layout and documentation.
 - **SC-009**: A change-impact review shows that editing one workflow or one view requires changes only in that concern, its shared building block if applicable, and its tests.
 - **SC-010**: The production build, type check, all frontend and backend quality gates, and the manual flow replay pass with zero new runtime dependencies and zero reduction in test coverage.
-- **SC-011**: A side-by-side comparison at supported viewport sizes finds zero visual differences and zero changes to focus order, labels, live announcements, or keyboard behavior.
+- **SC-011**: A side-by-side comparison in all three supported ranges — desktop above 900px, tablet from 561px to 900px, and phone at 560px or below — finds zero visual differences and zero changes to focus order, labels, live announcements, or keyboard behavior.
 - **SC-012**: A new contributor can add a presentation view or a behavior unit by following the documentation without modifying unrelated modules, verified by a walkthrough.
+- **SC-013**: The committed parity checklist covers 100% of flows, message classes, keyboard and accessibility behaviors, and the three viewport ranges, and records zero unexplained differences between the baseline and the refactored interface.
 
 ## Assumptions
 
@@ -153,7 +164,9 @@ A maintainer can trust that future changes do not quietly rebuild the monolith. 
 - State and workflow logic includes data access, validation, sequencing, confirmation lifecycle, debounce, stale-response handling, selection rules, and derived display text. Pure formatting used only for rendering may live with the view.
 - The shared client boundary from the prior feature remains authoritative and unchanged; views and behavior units keep using it, and nothing bypasses it.
 - Existing styles and markup semantics are reused so the refactor does not become a redesign; class names and structure may be reorganized only when visual and accessibility parity is proven.
-- Verification uses static boundary checks, isolated behavior tests, isolated view rendering, type checking, the production build, the existing test suites, and a manual flow replay; browser end-to-end automation is not required.
-- Introducing development-only test support is acceptable if it does not add a runtime dependency or change shipped behavior; if no suitable support exists, behavior tests may be written without a browser.
+- "Supported viewport sizes" means the three ranges already defined by the interface: desktop above 900px, tablet from 561px to 900px, and phone at 560px or below.
+- Verification uses static boundary checks, isolated behavior tests, isolated view rendering, type checking, the production build, the existing test suites, a committed parity checklist, and a manual flow replay with locally captured screenshots.
+- A development-only component test runner and DOM environment are added and run in CI; they add no runtime dependency and do not change shipped behavior. Browser end-to-end automation and automated screenshot comparison remain out of scope.
 - Exact module names, folder layout, state-unit granularity, and check implementation are planning decisions. This specification fixes separation of concerns, dependency direction, behavior parity, reuse, and enforcement.
+- No performance or bundle-size target is introduced beyond the requirement that current behavior, responsiveness, and startup experience do not regress; avoiding new runtime dependencies is the guard against added weight.
 - No new feature, route, persistence, authentication, telemetry, retry, caching, offline mode, or backend capability is introduced.
