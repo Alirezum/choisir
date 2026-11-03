@@ -86,7 +86,7 @@ access, validation, timers, watchers, computed state, or status derivation. Run
 - [x] T021 [US1] Write the failing test `frontend/tests/ui/state/use-workspace.test.ts`, then implement `frontend/src/state/use-workspace.ts` as composition-only wiring: instantiate all US1 units, connect path/log reset callbacks (invalidate preview, clear choice/selection/pending confirmation), and return the binding surface; do not add validation, messages, API calls, or workflow rules (depends on T014–T020).
 - [x] T022 [US1] Rewrite the `<script setup>` block of `frontend/src/App.vue` to use only `useWorkspace(...)`, template refs, and bindings; remove all direct API calls, watchers, computed state, timers, validation, confirmation logic, and status construction while preserving the existing template classes, layout, and view props (depends on T021).
 - [x] T023 [US1] Run `npm run test:ui`, `npm run test:api`, and `npm run build` in `frontend/`; fix any regressions without changing visible behavior or exact strings.
-- [ ] T024 [US1] Replay the US1 flow set (options, pick variants, preview-from-history, open, archive, clear, single/batch removal, tabs, Ctrl+N) and record the results in `specs/004-modular-ui-components/parity-checklist.md`; fix regressions before moving on.
+- [x] T024 [US1] Replay the US1 flow set (options, pick variants, preview-from-history, open, archive, clear, single/batch removal, tabs, Ctrl+N) and record the results in `specs/004-modular-ui-components/parity-checklist.md`; fix regressions before moving on.
 
 **Checkpoint**: `App.vue` is a composition root for every workflow except the
 browser and preview internals; US1 is independently functional.
