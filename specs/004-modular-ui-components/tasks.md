@@ -32,13 +32,13 @@ documentation. US2 and US3 depend on the units and wiring delivered by US1.
 **Purpose**: Add the development-only test runner, shared type/test scaffolding, and
 the parity baseline before any behavior moves.
 
-- [ ] T001 Add `vitest@^5.1.0`, `@vue/test-utils@^2.5.1`, and `happy-dom@^21.0.4` to `devDependencies` in `frontend/package.json`, run `npm install` in `frontend/`, and commit the updated `frontend/package-lock.json`; do not change the runtime `dependencies` block.
-- [ ] T002 [P] Create `frontend/vitest.config.ts` using the Vue plugin, `environment: 'happy-dom'`, `include: ['tests/ui/**/*.test.ts']`, and `restoreMocks: true`.
-- [ ] T003 Update `frontend/package.json` with `"check:ui": "node scripts/check-ui-boundaries.mjs"` and `"test:ui": "vitest run"`, and add `vitest.config.ts` to the `include` list in `frontend/tsconfig.node.json` (depends on T001).
-- [ ] T004 [P] Create `frontend/src/view-models.ts` with the view-model interfaces, intent payload types, and workspace binding interface described in `data-model.md`; keep it type-only with no runtime logic.
-- [ ] T005 [P] Create `frontend/tests/ui/test-helpers.ts` with a minimal host-component mount helper, a deferred-promise helper, `flushPromises`, and shared API mock factories for state-unit tests.
-- [ ] T006 [P] Create `specs/004-modular-ui-components/parity-checklist.md` with the header, three viewport sections, flow matrix, message-class rows, five violation-trial slots, and sign-off fields required by `contracts/verification-contracts.md §5`.
-- [ ] T007 Capture the pre-refactor baseline on `main@d25abef`: run every flow in `contracts/verification-contracts.md §5.2` at desktop >900px, tablet 561–900px, and phone ≤560px, fill the baseline columns in `specs/004-modular-ui-components/parity-checklist.md`, and keep screenshots local (do not commit images).
+- [x] T001 Add `vitest@^5.1.0`, `@vue/test-utils@^2.5.1`, and `happy-dom@^21.0.4` to `devDependencies` in `frontend/package.json`, run `npm install` in `frontend/`, and commit the updated `frontend/package-lock.json`; do not change the runtime `dependencies` block.
+- [x] T002 [P] Create `frontend/vitest.config.ts` using the Vue plugin, `environment: 'happy-dom'`, `include: ['tests/ui/**/*.test.ts']`, and `restoreMocks: true`.
+- [x] T003 Update `frontend/package.json` with `"check:ui": "node scripts/check-ui-boundaries.mjs"` and `"test:ui": "vitest run"`, and add `vitest.config.ts` to the `include` list in `frontend/tsconfig.node.json` (depends on T001).
+- [x] T004 [P] Create `frontend/src/view-models.ts` with the view-model interfaces, intent payload types, and workspace binding interface described in `data-model.md`; keep it type-only with no runtime logic.
+- [x] T005 [P] Create `frontend/tests/ui/test-helpers.ts` with a minimal host-component mount helper, a deferred-promise helper, `flushPromises`, and shared API mock factories for state-unit tests.
+- [x] T006 [P] Create `specs/004-modular-ui-components/parity-checklist.md` with the header, three viewport sections, flow matrix, message-class rows, five violation-trial slots, and sign-off fields required by `contracts/verification-contracts.md §5`.
+- [x] T007 Capture the pre-refactor baseline on `main@d25abef`: run every flow in `contracts/verification-contracts.md §5.2` at desktop >900px, tablet 561–900px, and phone ≤560px, fill the baseline columns in `specs/004-modular-ui-components/parity-checklist.md`, and keep screenshots local (do not commit images).
 
 **Checkpoint**: Test runner, shared types, test helpers, and baseline evidence are ready.
 
