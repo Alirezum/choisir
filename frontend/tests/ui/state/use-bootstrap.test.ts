@@ -1,0 +1,104 @@
+import { describe, expect, it, vi } from 'vitest'
+
+import { api } from '../../../src/api.ts'
+import { useBootstrap } from '../../../src/state/use-bootstrap.ts'
+import { useFolderOptions } from '../../../src/state/use-folder-options.ts'
+import { useWorkspaceState } from '../../../src/state/use-workspace-state.ts'
+import type { StateResponse } from '../../../src/types.ts'
+import { flushPromises, mountHost } from '../test-helpers.ts'
+
+const stateResponse = (): StateResponse => ({
+  valid_path: true,
+  path: '/tmp/choosier',
+  log_file: '',
+  remaining: [],
+  remaining_total: 0,
+  history: [],
+  history_total: 0,
+})
+
+function setup(
+  defaults: () => Promise<{ path: string; log_file: string }> = () =>
+    Promise.resolve({
+      path: '/tmp/choosier',
+      log_file: '/tmp/choosier/custom.jsonl',
+    }),
+) {
+  const defaultsMock = vi.spyOn(api, 'defaults').mockImplementation(defaults)
+  const options = useFolderOptions()
+  const refresh = vi.fn(async () => {})
+  const reportError = vi.fn()
+  const { result, wrapper } = mountHost(() =>
+    useBootstrap({
+      options,
+      refresh,
+      status: { reportError },
+    }),
+  )
+  return { defaultsMock, options, refresh, reportError, result, wrapper }
+}
+
+describe('useBootstrap', () => {
+  it('loads defaults into the folder options and runs the immediate refresh on mount', async () => {
+    const { options, refresh, reportError, wrapper } = setup()
+
+    await flushPromises()
+
+    expect(api.defaults).toHaveBeenCalledTimes(1)
+    expect(options.path.value).toBe('/tmp/choosier')
+    expect(options.logFile.value).toBe('/tmp/choosier/custom.jsonl')
+    expect(refresh).toHaveBeenCalledTimes(1)
+    expect(reportError).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('reports a defaults failure through the shared path and still refreshes', async () => {
+    const failure = new Error('defaults failed')
+    const { options, refresh, reportError, wrapper } = setup(() =>
+      Promise.reject(failure),
+    )
+
+    await flushPromises()
+
+    expect(reportError).toHaveBeenCalledWith(failure)
+    expect(options.path.value).toBe('')
+    expect(options.logFile.value).toBe('')
+    expect(refresh).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
+  it('preserves the watcher-triggered debounced refresh after defaults load', async () => {
+    vi.useFakeTimers()
+    const options = useFolderOptions()
+    const reportError = vi.fn()
+    vi.spyOn(api, 'state').mockResolvedValue(stateResponse())
+    const state = useWorkspaceState({
+      path: options.path,
+      logFile: options.logFile,
+      includeHidden: options.includeHidden,
+      mode: options.mode,
+      filters: options.filters,
+      status: { reportError },
+    })
+    vi.spyOn(api, 'defaults').mockResolvedValue({
+      path: '/tmp/choosier',
+      log_file: '/tmp/choosier/custom.jsonl',
+    })
+    const { wrapper } = mountHost(() =>
+      useBootstrap({
+        options,
+        refresh: state.refresh,
+        status: { reportError },
+      }),
+    )
+
+    await flushPromises()
+    expect(api.state).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(250)
+    expect(api.state).toHaveBeenCalledTimes(2)
+
+    wrapper.unmount()
+    vi.useRealTimers()
+  })
+})
