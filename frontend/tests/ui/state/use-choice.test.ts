@@ -98,4 +98,16 @@ describe('useChoice', () => {
     expect(applyPreview(request, previewModel('beta'))).toBe(false)
     expect(current.value).toBeNull()
   })
+
+  it('reports whether a preview request is still current', () => {
+    const { beginPreview, isCurrent, invalidate } = useChoice()
+    const request = beginPreview(choice('alpha.txt'))
+
+    expect(isCurrent(request)).toBe(true)
+    expect(isCurrent(request + 1)).toBe(false)
+
+    invalidate()
+
+    expect(isCurrent(request)).toBe(false)
+  })
 })

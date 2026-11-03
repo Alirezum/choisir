@@ -9,6 +9,7 @@ export interface ChoiceBinding {
   setPicked: (picked: Choice) => void
   beginPreview: (target: Choice) => number
   applyPreview: (request: number, preview: PreviewModel) => boolean
+  isCurrent: (request: number) => boolean
   invalidate: () => void
 }
 
@@ -42,6 +43,10 @@ export function useChoice(): ChoiceBinding {
     return true
   }
 
+  function isCurrent(request: number): boolean {
+    return request === previewSerial
+  }
+
   function invalidate(): void {
     previewSerial += 1
     choice.value = null
@@ -53,6 +58,7 @@ export function useChoice(): ChoiceBinding {
     setPicked,
     beginPreview,
     applyPreview,
+    isCurrent,
     invalidate,
   }
 }
