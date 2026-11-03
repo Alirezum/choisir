@@ -160,9 +160,6 @@ export interface WorkspaceBinding {
   historyDeleteMessage: ComputedRef<string>
   historyDeleteLabel: ComputedRef<string>
 
-  browserListing: Ref<BrowseResponse | null>
-  browserError: Ref<string>
-
   tabCount: (id: TabId) => number | null
 
   pick: () => Promise<void>
@@ -174,13 +171,12 @@ export interface WorkspaceBinding {
   confirmClear: () => Promise<void>
   cancelClear: () => void
   removeHistoryItem: (item: string) => Promise<void>
-  selectHistoryItem: (item: string, shift: boolean) => void
+  toggleHistoryCheck: (item: string) => void
+  addHistoryRange: (items: string[]) => void
   toggleAllHistory: () => void
   requestDeleteSelected: () => void
   confirmDeleteSelected: () => Promise<void>
   cancelDeleteSelected: () => void
-  navigateBrowser: (entry: BrowserEntry) => void
-  useBrowserFolder: () => void
   onTabSelect: (id: TabId) => void
   onTabKey: (event: KeyboardEvent, id: TabId) => void
 }
