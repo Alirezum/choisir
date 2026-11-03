@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "generate:api": "node scripts/generate-api-contract.mjs",
     "check:api": "node scripts/generate-api-contract.mjs --check",
-    "test:api": "node --test \"tests/**/*.test.mjs\""
+    "check:ui": "node scripts/check-ui-boundaries.mjs",
+    "test:api": "node --test \"tests/**/*.test.mjs\"",
+    "test:ui": "vitest run"
   },
   "dependencies": {
     "@fontsource-variable/archivo": "^5.3.0",
