@@ -2,6 +2,7 @@ import { ref } from 'vue'
 
 import type { WorkspaceBinding } from '../view-models.ts'
 import { useBootstrap } from './use-bootstrap.ts'
+import { useBrowser } from './use-browser.ts'
 import { useChoice } from './use-choice.ts'
 import { useFolderOptions } from './use-folder-options.ts'
 import { useHistoryActions } from './use-history-actions.ts'
@@ -70,6 +71,13 @@ export function useWorkspace(): WorkspaceBinding {
     openEntry: picker.openEntry,
   })
   const tabs = useTabs({ state: workspaceState.state })
+  const browser = useBrowser({
+    path: options.path,
+    useFolder: (target) => {
+      options.path.value = target
+    },
+    status,
+  })
 
   useShortcuts({ pick: picker.pick, clearing: historyActions.clearing })
   useBootstrap({
@@ -107,6 +115,9 @@ export function useWorkspace(): WorkspaceBinding {
     historyDeleteMessage: historyActions.historyDeleteMessage,
     historyDeleteLabel: historyActions.historyDeleteLabel,
 
+    browserListing: browser.listing,
+    browserError: browser.error,
+
     tabCount: tabs.count,
 
     pick: picker.pick,
@@ -125,5 +136,7 @@ export function useWorkspace(): WorkspaceBinding {
     cancelDeleteSelected: historyActions.cancelDelete,
     onTabSelect: tabs.select,
     onTabKey: tabs.onKey,
+    navigateBrowser: browser.navigate,
+    useBrowserFolder: browser.useThisFolder,
   }
 }

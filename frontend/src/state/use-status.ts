@@ -8,6 +8,7 @@ export interface StatusBinding {
   status: Ref<string>
   setStatus: (message: string) => void
   reportError: (error: unknown) => void
+  describeError: (error: unknown) => string
 }
 
 /**
@@ -21,9 +22,13 @@ export function useStatus(): StatusBinding {
     status.value = message
   }
 
-  function reportError(error: unknown): void {
-    status.value = apiErrorMessage(error)
+  function describeError(error: unknown): string {
+    return apiErrorMessage(error)
   }
 
-  return { status, setStatus, reportError }
+  function reportError(error: unknown): void {
+    status.value = describeError(error)
+  }
+
+  return { status, setStatus, reportError, describeError }
 }

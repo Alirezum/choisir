@@ -5,9 +5,9 @@ import { describe, expect, it } from 'vitest'
 import PanelShell from '../../../src/components/PanelShell.vue'
 
 describe('PanelShell', () => {
-  it('renders the shared panel scaffold, slots, and header class', () => {
+  it('renders the shared panel scaffold, slots, header class, and title', () => {
     const wrapper = mount(PanelShell, {
-      props: { headerClass: 'history-header' },
+      props: { headerClass: 'history-header', headerTitle: '/tmp/choosier' },
       attrs: { class: 'browser' },
       slots: {
         header: () => h('span', '5 picked'),
@@ -18,6 +18,9 @@ describe('PanelShell', () => {
 
     expect(wrapper.classes()).toEqual(expect.arrayContaining(['panel', 'browser']))
     expect(wrapper.find('.panel-header').classes()).toContain('history-header')
+    expect(wrapper.find('.panel-header').attributes('title')).toBe(
+      '/tmp/choosier',
+    )
     expect(wrapper.find('.panel-header').text()).toBe('5 picked')
     expect(wrapper.find('.body-copy').text()).toBe('Panel body')
     expect(wrapper.find('.panel-actions').text()).toBe('Archive history')

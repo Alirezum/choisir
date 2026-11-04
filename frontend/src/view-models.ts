@@ -117,7 +117,7 @@ export interface HistoryItemIntent {
 }
 
 export interface BrowserNavigateIntent {
-  entry: BrowserEntry
+  target: BrowserEntry | string
 }
 
 export interface BrowserUseFolderIntent {
@@ -163,6 +163,9 @@ export interface WorkspaceBinding {
   historyDeleteMessage: ComputedRef<string>
   historyDeleteLabel: ComputedRef<string>
 
+  browserListing: Ref<BrowseResponse | null>
+  browserError: Ref<string>
+
   tabCount: (id: TabId) => number | null
 
   pick: () => Promise<void>
@@ -181,4 +184,6 @@ export interface WorkspaceBinding {
   cancelDeleteSelected: () => void
   onTabSelect: (id: TabId) => void
   onTabKey: (event: KeyboardEvent, id: TabId) => void
+  navigateBrowser: (target: BrowserEntry | string) => void
+  useBrowserFolder: () => void
 }

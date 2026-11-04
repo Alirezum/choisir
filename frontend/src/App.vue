@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import BrowserPanel from './components/BrowserPanel.vue'
+import BrowserPanel from './views/BrowserPanel.vue'
 import ChoiceBoard from './views/ChoiceBoard.vue'
 import ConfirmDialog from './views/ConfirmDialog.vue'
 import HistoryPanel from './views/HistoryPanel.vue'
@@ -37,6 +37,8 @@ const {
   historyDeleteMessage,
   historyDeleteLabel,
 
+  browserListing,
+  browserError,
   tabCount,
 
   pick,
@@ -54,6 +56,8 @@ const {
   cancelDeleteSelected,
   onTabSelect,
   onTabKey,
+  navigateBrowser,
+  useBrowserFolder,
 } = useWorkspace()
 
 // The template's `ref="pathInput"` writes into this binding; the picker unit
@@ -166,7 +170,13 @@ void pathInput
             aria-labelledby="tab-browse"
             tabindex="0"
           >
-            <BrowserPanel v-model="path" />
+            <BrowserPanel
+              :path="path"
+              :listing="browserListing"
+              :error="browserError"
+              @navigate="navigateBrowser"
+              @use-folder="useBrowserFolder"
+            />
           </div>
 
           <div

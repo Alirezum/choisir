@@ -1,46 +1,25 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import PanelShell from '../components/PanelShell.vue'
+import type { BrowseResponse, BrowserEntry } from '../types.ts'
 
-import { api, apiErrorMessage } from '../api'
-import type { BrowseResponse, BrowserEntry } from '../types'
-
-const props = defineProps<{ modelValue: string }>()
-const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
-
-const listing = ref<BrowseResponse | null>(null)
-const error = ref('')
-
-async function load(target: string): Promise<void> {
-  if (target.trim() === '') return
-  try {
-    listing.value = await api.browse(target)
-    error.value = ''
-  } catch (problem) {
-    error.value = apiErrorMessage(problem)
-    listing.value = null
-  }
-}
-
-watch(() => props.modelValue, (value) => void load(value), { immediate: true })
-
-function navigate(entry: BrowserEntry): void {
-  if (!entry.is_dir || listing.value === null) return
-  const base = listing.value.path.replace(/[/\\]+$/, '')
-  void load(`${base}/${entry.name}`)
-}
-
-function useThisFolder(): void {
-  if (listing.value !== null) {
-    emit('update:modelValue', listing.value.path)
-  }
-}
+const props = defineProps<{
+  path: string
+  listing: BrowseResponse | null
+  error: string
+}>()
+const emit = defineEmits<{
+  navigate: [target: BrowserEntry | string]
+  useFolder: []
+}>()
 </script>
 
 <template>
-  <div class="panel browser">
-    <div class="panel-header path-line" :title="listing?.path ?? props.modelValue">
-      {{ listing?.path ?? props.modelValue }}
-    </div>
+  <PanelShell
+    class="browser"
+    header-class="path-line"
+    :header-title="props.listing?.path ?? props.path"
+  >
+    <template #header>{{ props.listing?.path ?? props.path }}</template>
     <p v-if="error !== ''" class="panel-empty error">{{ error }}</p>
     <template v-else>
       <ul class="list browser-list">
@@ -48,7 +27,7 @@ function useThisFolder(): void {
           <button
             class="browser-row"
             type="button"
-            @click="load(listing.parent)"
+            @click="emit('navigate', listing.parent)"
           >
             <svg
               class="row-icon"
@@ -68,7 +47,7 @@ function useThisFolder(): void {
             class="browser-row"
             type="button"
             :title="`Open ${entry.name}`"
-            @click="navigate(entry)"
+            @click="emit('navigate', entry)"
           >
             <svg
               class="row-icon"
@@ -109,15 +88,15 @@ function useThisFolder(): void {
         </li>
       </ul>
     </template>
-    <div class="panel-actions">
+    <template #actions>
       <button
         class="primary"
         type="button"
         :disabled="listing === null"
-        @click="useThisFolder"
+        @click="emit('useFolder')"
       >
         Use this folder
       </button>
-    </div>
-  </div>
+    </template>
+  </PanelShell>
 </template>

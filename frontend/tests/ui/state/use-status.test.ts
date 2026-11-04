@@ -37,4 +37,12 @@ describe('useStatus', () => {
 
     expect(status.value).toBe('plain failure')
   })
+
+  it('describes an error without changing the status line', () => {
+    const { status, describeError } = useStatus()
+
+    expect(describeError(new Error('transport failed'))).toBe('transport failed')
+    expect(describeError('plain failure')).toBe('plain failure')
+    expect(status.value).toBe('Choose a folder, then press Pick.')
+  })
 })
