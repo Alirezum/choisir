@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import ImageViewer from '../components/ImageViewer.vue'
+import ImageViewer from './ImageViewer.vue'
 import { usePreview } from '../state/use-preview.ts'
 import type { PreviewModel } from '../types.ts'
 
@@ -93,7 +93,6 @@ const {
     <ImageViewer
       v-if="viewerIndex !== null && images.length > 0"
       :images="images"
-      :path="path"
       :start="viewerIndex"
       @close="closeViewer"
     />

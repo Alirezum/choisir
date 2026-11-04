@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import EmptyState from '../components/EmptyState.vue'
 import PanelShell from '../components/PanelShell.vue'
 import type { BrowseResponse, BrowserEntry } from '../types.ts'
 
@@ -20,7 +21,7 @@ const emit = defineEmits<{
     :header-title="props.listing?.path ?? props.path"
   >
     <template #header>{{ props.listing?.path ?? props.path }}</template>
-    <p v-if="error !== ''" class="panel-empty error">{{ error }}</p>
+    <EmptyState v-if="error !== ''" class="error">{{ error }}</EmptyState>
     <template v-else>
       <ul class="list browser-list">
         <li v-if="listing?.parent">
