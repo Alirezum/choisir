@@ -117,7 +117,7 @@ full interface at all three viewport ranges.
 - [x] T033 [US2] Create `frontend/src/views/PanelTabs.vue` + `frontend/tests/ui/views/PanelTabs.test.ts` with tab roles, ARIA selected/controls, roving tabindex, counts, and select/keydown intents; replace the inline tab strip in `frontend/src/App.vue` with this view.
 - [x] T034 [US2] Finalize `frontend/src/state/use-workspace.ts` and the `frontend/src/App.vue` template for all converted views: pass complete view models, bind intents, render dialogs from history state, and remove any stale props/imports; keep layout/classes unchanged.
 - [x] T035 [US2] Run `npm run test:ui` and `npm run build` in `frontend/`; fix view/unit regressions and confirm every view has a matching test file.
-- [ ] T036 [US2] Replay the full interface at desktop >900px, tablet 561–900px, and phone ≤560px; update every flow/message/keyboard row in `specs/004-modular-ui-components/parity-checklist.md` and capture before/after screenshots locally.
+- [x] T036 [US2] Replay the full interface at desktop >900px, tablet 561–900px, and phone ≤560px; update every flow/message/keyboard row in `specs/004-modular-ui-components/parity-checklist.md` and capture before/after screenshots locally.
 - [ ] T037 [US2] Extend `frontend/tests/ui/state/use-workspace.test.ts` with integration coverage for path/log resets, defaults, debounce, stale previews, browser/preview bindings, and confirmation lifecycle.
 - [ ] T038 [US2] Run a source audit with `rg` for `api`, `fetch`, `/api/`, `watch(`, `computed(`, `setTimeout`, and `panel-header|panel-empty|panel-actions` under `frontend/src/views/`; fix every violation before marking US2 complete.
 

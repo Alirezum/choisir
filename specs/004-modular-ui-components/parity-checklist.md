@@ -4,8 +4,8 @@
 **Branch**: `004-modular-ui-components`
 **Baseline commit**: `main@d25abef`
 **Implementation range**: `d25abef..HEAD` (final range recorded at sign-off)
-**Baseline date**: 2026-11-03
-**Reviewer**: local implementation session (Chromium headless replay)
+**Baseline date**: 2026-11-03; re-captured 2026-11-04
+**Reviewer**: local implementation session (Chromium headless CDP replay)
 
 This checklist is the retained evidence for the behavior-preserving refactor.
 Screenshots are captured locally and are not committed. Fill "After" during US2
@@ -15,9 +15,9 @@ and sign off only when every row is identical or an exception is recorded.
 
 | Range | Width | Browser size used | Baseline | After | Result |
 |---|---|---|---|---|---|
-| Desktop | >900px | 1280×900 | Captured; no horizontal overflow | Captured; no horizontal overflow | PASS |
-| Tablet | 561–900px | 800×900 | Captured; no horizontal overflow | Captured; no horizontal overflow | PASS |
-| Phone | ≤560px | 390×844 | Captured; no horizontal overflow | Captured; no horizontal overflow | PASS |
+| Desktop | >900px | 1280×900 | Captured at 1280×900; `scrollWidth - innerWidth = 0` | Captured at 1280×900; `scrollWidth - innerWidth = 0` | PASS |
+| Tablet | 561–900px | 800×900 | Captured at 800×900; no horizontal overflow | Captured at 800×900; no horizontal overflow | PASS |
+| Phone | ≤560px | 390×844 | Captured at 390×844; no horizontal overflow | Captured at 390×844; no horizontal overflow | PASS |
 
 ## Flow matrix
 
@@ -28,66 +28,77 @@ the untouched implementation when the flow is not safely triggerable headlessly.
 
 | # | Flow / check | Baseline (main@d25abef) | After | Result |
 |---|---|---|---|---|
-| 1 | Initial load with defaults | Defaults path loaded; Remaining 10, History 0; board "Nothing picked yet"; preview empty copy shown | PASS — defaults path loaded; Remaining 10, History 0; board and preview empty copy unchanged | PASS |
+| 1 | Initial load with defaults | `/tmp/opencode/choosier` loaded; Remaining 10, History 0; board `Nothing picked yet` / `Press Pick to choose the first one.`; preview `Pick an item to preview it here.` | PASS — same path, counts, board copy, and preview copy | PASS |
 | 1a | Initial status text | `Choose a folder, then press Pick.` | PASS — exact text | PASS |
-| 2 | Browse: initial load for current path | Root header shows current path; folders first, then files; Parent folder row present | PASS — root header, parent-first order, rows, and disabled Use button match | PASS |
+| 2 | Browse: initial load for current path | Root header shows `/tmp/opencode/choosier`; parent row first, `folder-a` before files, then `alpha.txt` … `photo.png`; Use enabled | PASS — same header, parent-first order, sorted rows, and enabled Use button | PASS |
 | 2a | Browse: parent navigation | Parent row loads `/tmp/opencode`; header updates | PASS — parent navigation reached `/tmp/opencode`; header updated | PASS |
-| 2b | Browse: child navigation | `folder-a` loads child path; Parent row returns | PASS — `folder-a` child path loaded; Parent row returns | PASS |
-| 2c | Browse: empty folder copy | `This folder is empty.` | PASS — exact copy | PASS |
-| 2d | Browse: unreadable/missing path error | Source-verified: shared error message, listing cleared | PASS — source-verified; shared error path unchanged | PASS |
-| 3 | Options: log file change | Applies to next pick; state refresh scheduled | PASS — live labels/placeholders match; `use-workspace-state` debounces log changes and `use-picker` sends the nullable log file | PASS |
-| 3a | Options: seed change | Applies to next pick | PASS — `use-picker` sends the parsed nullable seed; invalid seed text matches | PASS |
-| 3b | Options: dry run change | Applies to next pick | PASS — `use-picker` sends `dry_run` and emits the dry-run message when not logged | PASS |
-| 3c | Options: hidden change | Refreshes filters after 250ms; hidden entries appear | PASS — unit test covers the 250ms hidden-filter refresh | PASS |
-| 3d | Options: mode changes (all/files/dirs) | Mutually exclusive files/dirs filters | PASS — unit tests cover the mutually exclusive filters | PASS |
-| 4 | Pick: success | `Picked only.txt.`; board flaps animate; preview text shown | PASS — `Picked only.txt.`; board flaps animate; preview text unchanged | PASS |
-| 4a | Pick: dry run | Source-verified: `Picked <item>. Dry run, so it wasn't logged.` | PASS — unit-tested exact dry-run copy | PASS |
-| 4b | Pick: blank path | `Enter a folder path.`; focus returns to `.path-input` | PASS — exact text; focus returned to `.path-input` | PASS |
+| 2b | Browse: child navigation | `folder-a` loads `/tmp/opencode/choosier/folder-a`; rows are Parent, `empty`, `inner.txt` | PASS — child path and rows match | PASS |
+| 2c | Browse: empty folder copy | `This folder is empty.` | PASS — exact copy at `folder-a/empty` | PASS |
+| 2d | Browse: unreadable/missing path error | Live: `Not a directory` in the shared `.panel-empty error` element; listing cleared | PASS — live-verified exact shared error path | PASS |
+| 3 | Options: log file change | Inputs/labels/placeholders match; a changed log path persists and is used by the next state refresh/pick | PASS — live input change plus unit-tested 250 ms state refresh | PASS |
+| 3a | Options: seed change | Seed input persists; the picker sends the parsed nullable seed | PASS — live seed input plus unit-tested null/parse behavior | PASS |
+| 3b | Options: dry run change | Dry-run checkbox toggles; the next pick is not logged | PASS — live dry-run pick in row 4a; history stayed 0 | PASS |
+| 3c | Options: hidden change | Checkbox toggles; hidden entries refresh after 250 ms | PASS — live checkbox plus unit-tested debounce | PASS |
+| 3d | Options: mode changes (all/files/dirs) | Radios are mutually exclusive; files/dirs filters map to the API flags | PASS — live mode change to `files`; unit-tested mutual exclusion | PASS |
+| 4 | Pick: success | `Picked only.txt.`; board shows 8 flaps; preview body `Only text.`; Remaining 0, History 1 | PASS — exact text, flap count, preview, and counts | PASS |
+| 4a | Pick: dry run | `Picked dry.txt. Dry run, so it wasn't logged.`; History remains 0 | PASS — exact text and counts | PASS |
+| 4b | Pick: blank path | `Enter a folder path.`; focus returns to `.path-input` | PASS — live exact text; focus return covered by `use-picker` test | PASS |
 | 4c | Pick: non-integer seed | `Seed must be a whole number.` | PASS — exact text | PASS |
 | 4d | Pick: invalid path | `That folder doesn't exist.` | PASS — exact text | PASS |
 | 4e | Pick: empty folder | `That folder has nothing to pick.` | PASS — exact text | PASS |
 | 4f | Pick: exhausted | `All items have been picked. Clear or archive history to start over.` | PASS — exact text | PASS |
-| 4g | Pick: backend failure | Source-verified: shared `apiErrorMessage` text; refresh still runs | PASS — unit-tested shared error path; refresh still runs | PASS |
+| 4g | Pick: backend failure | Source-verified: shared `apiErrorMessage` text; refresh still runs | PASS — unit-tested shared error path; no live failure induced | PASS |
 | 5 | Preview: text | Text body rendered; meta line absent | PASS — text body rendered; no meta line | PASS |
-| 5a | Preview: single image | `1 image`; meta `PNG, 779 B`; grid has `is-single` and `variant=preview` URL | PASS — `1 image`; `PNG, 779 B`; `is-single`; preview-variant URL | PASS |
-| 5b | Preview: archive frames | `3 images`; meta `Archive`; frames numbered `01`–`03` | PASS — `3 images`; `Archive`; frames `01`–`03` (baseline JSON missed the meta line; the baseline screenshot confirms it was rendered) | PASS |
+| 5a | Preview: single image | `1 image`; meta `PNG, 1.7 KB`; grid has `is-single` and `variant=preview` URL | PASS — exact label/meta/class; preview-variant URL | PASS |
+| 5b | Preview: archive frames | `3 images`; meta `Archive`; frames numbered `01`–`03` with thumbnail URLs | PASS — exact labels, numbers, and `variant=thumb` URLs | PASS |
 | 5c | Preview: truncated image total | Source-verified: `N of M images` when `image_total > images.length`; not exercised because the cap is 1000 images | PASS — source-verified; preview internals unchanged in US1 | PASS |
-| 5d | Preview: video | `MP4, 7.2 KB`; video element with `/api/video` source; no fallback | PASS — `MP4, 7.2 KB`; `/api/video` source; no fallback | PASS |
-| 5e | Preview: video playback failure | Source-verified: fallback copy with **Open** guidance | PASS — source-verified; fallback copy unchanged | PASS |
+| 5d | Preview: video | `MP4, 2.2 KB`; video element with `/api/video` source and `aria-label` | PASS — exact meta, URL, and aria-label | PASS |
+| 5e | Preview: video playback failure | Fallback copy with **Open** guidance | PASS — live-dispatched media error produced the exact fallback copy | PASS |
 | 6 | Open: current item | `Opened only.txt.` | PASS — exact text | PASS |
-| 6a | Open: no current item | Source-verified: `Pick something first.` (Open control is hidden until an item exists) | PASS — unit-tested exact copy | PASS |
-| 7 | History: archive with log | `Archived history to .choosier-*.jsonl.old.`; history clears after refresh | PASS — `.choosier-20261103T145743Z.jsonl.old.`; history cleared (timestamp is dynamic) | PASS |
+| 6a | Open: no current item | Source-verified/unit-tested: `Pick something first.` (Open control is hidden until an item exists) | PASS — exact copy covered by `use-picker` test | PASS |
+| 7 | History: archive with log | `Archived history to .choosier-20261104T084346Z.jsonl.old.`; history clears after refresh | PASS — same message pattern; history 0 | PASS |
 | 7a | History: archive without log | `No history file at /tmp/opencode/choosier-empty/.choosier.jsonl.` | PASS — exact text | PASS |
-| 7b | History: clear confirm | Dialog title `Clear history?`, detail is the log path; confirm shows `Cleared <log>.`; history becomes 0 | PASS — title/detail/focus match; `Cleared <log>.`; history 0 | PASS |
-| 7c | History: clear cancel | Dialog closes; no request; history unchanged | PASS — dialog closed; unit test confirms no request | PASS |
-| 7d | History: single removal, 0/1/many | `No history entry for "ghost.txt".`; `Removed "solo.txt" from history.`; `Removed 2 entries for "paired.txt".` | PASS — all three messages exact | PASS |
-| 7e | History: row click preview | Row checked and selected; `Previewing alpha.txt from history.` | PASS — row checked and selected; exact status | PASS |
+| 7b | History: clear confirm | Dialog title `Clear history?`, detail is the log path; confirm shows `Cleared <log>.`; history becomes 0 | PASS — title/detail/focus match; `Cleared /tmp/opencode/choosier-history-cancel/.choosier.jsonl.`; history 0 | PASS |
+| 7c | History: clear cancel | Dialog closes; no request; history unchanged | PASS — Escape and overlay-click cancels; 6 history rows remained | PASS |
+| 7d | History: single removal, 0/1/many | `No history entry for "ghost.txt".`; `Removed "solo.txt" from history.`; `Removed 2 entries for "paired.txt".` | PASS — 1 and 2 messages live; 0 is unit-tested exact copy | PASS |
+| 7e | History: row click preview | Row checked and selected; `Previewing alpha.txt from history.` | PASS — row checked/selected; exact status | PASS |
 | 7f | History: shift-click range | Anchor at first row; shift-click third row produced 3 checked rows | PASS — 3 checked rows | PASS |
-| 7g | History: select all / clear selection | 5 rows checked; link becomes `Clear selection`; delete label `Delete selected (5)` | PASS — 5 checked; `Clear selection`; `Delete selected (5)` | PASS |
+| 7g | History: select all / clear selection | 5 unique rows checked from 6 log entries; link becomes `Clear selection`; delete label `Delete selected (5)` | PASS — 5 checked; `Clear selection`; `Delete selected (5)` | PASS |
 | 7h | History: batch delete confirm | Title `Delete history for 5 items?`; detail explains re-pickability; labels `Cancel` / `Delete 5 items`; cancel focused | PASS — exact title/detail/labels; Cancel focused | PASS |
-| 7i | History: batch delete 0/1/many | 1 item: `Removed 1 entry from history.`; 4 items: `Removed 4 entries from history.`; 0 is source-verified `No matching history entries to remove.` | PASS — 1 and 4 exact; 0 unit-tested exact copy | PASS |
-| 7j | History: batch cancel | Dialog closes; all 5 checks remain | PASS — dialog closed; 5 checks remain | PASS |
+| 7i | History: batch delete 0/1/many | 1 item: `Removed 1 entry from history.`; 5 unique items (6 entries): `Removed 6 entries from history.`; 0 is source-verified `No matching history entries to remove.` | PASS — 1 and 6 exact; 0 unit-tested exact copy | PASS |
+| 7j | History: batch cancel | Dialog closes; all 5 checks remain | PASS — dialog closed; 5 checks remained | PASS |
 | 7k | History: busy guards | Source-verified: remove/archive/clear disabled or ignored while busy | PASS — unit-tested busy guards | PASS |
-| 7l | History: path/log change clears selection and pending delete | Source-verified: both watchers clear checked items and pending delete | PASS — unit-tested path/log resets | PASS |
-| 8 | Viewer: open/close | Opens at clicked index; Close/Escape returns | PASS — opened at clicked index; Escape returned | PASS |
-| 8a | Viewer: next/previous wrap | 3 images: next at 3/3 → 1/3; previous at 1/3 → 3/3 | PASS — both wraps match | PASS |
-| 8b | Viewer: zoom levels/limits | Buttons/wheel: `Fit` → `125%` → `200%`; reset returns `Fit`; clamp is 1–8 | PASS — 125%/200%, reset `Fit`, clamp 1–8 | PASS |
+| 7l | History: path/log change clears selection and pending delete | Live: changing the path closed the open batch dialog and cleared the old path's checks | PASS — dialog closed; new path showed 0 history | PASS |
+| 8 | Viewer: open/close | Opens at clicked index; Close/Escape returns | PASS — opened at index 0; Escape returned | PASS |
+| 8a | Viewer: next/previous wrap | 3 images: next at 1/3 → 2/3; previous at 2/3 → 1/3; previous at 1/3 → 3/3; next at 3/3 → 1/3 | PASS — all wraps match | PASS |
+| 8b | Viewer: zoom levels/limits | Buttons/wheel: `Fit` → `125%` → `150%`; reset returns `Fit`; double-click gives `200%`; clamp is 1–8 | PASS — 125%/150%, reset `Fit`, double-click `200%`; clamp unit-tested | PASS |
 | 8c | Viewer: double-click | Toggles `Fit` ↔ `200%` | PASS — toggles `Fit` ↔ `200%` | PASS |
-| 8d | Viewer: drag clamp | 2x drag clamped to image bounds; transform `translate(80px, 60px) scale(2)` at the observed edge | PASS — transform and 160×120 clamp match | PASS |
-| 8e | Viewer: original link | `/api/image?path=…&index=0` in a new tab | PASS — exact href | PASS |
+| 8d | Viewer: drag clamp | 2x drag clamped to image bounds; transform `translate(240px, 150px) scale(2)` at the observed edge | PASS — transform and 480×300 clamp match | PASS |
+| 8e | Viewer: original link | `/api/image?...&index=0` in a new tab, without a `variant` parameter | PASS — exact href | PASS |
 | 8f | Viewer: scroll lock restore | Body overflow `hidden` while open; restored to `''` after close | PASS — `hidden` then `''` | PASS |
 | 8g | Viewer: single image | Counter `1 / 1`; no next/previous controls | PASS — `1 / 1`; no nav controls | PASS |
-| 9 | Keyboard: Ctrl+N | Picks from the page; status changed to `Picked ctrln.txt.`; blocked while the clear dialog is open | PASS — `Picked ctrln.txt.`; blocked while the clear dialog was open | PASS |
-| 9a | Keyboard: tabs | ArrowRight → History, Home → Remaining, End → Options; focus follows | PASS — all three moves; focus follows | PASS |
+| 9 | Keyboard: Ctrl+N | Picks from the page; status changed to `Picked ctrln.txt.`; blocked while the clear dialog or viewer is open | PASS — exact text; both blocked states live-verified | PASS |
+| 9a | Keyboard: tabs | ArrowRight → History, Home → Remaining, End → Options; focus follows | PASS — all three moves; focus follows (unit-tested) | PASS |
 | 9b | Keyboard: focus visibility | Source/CSS-reviewed: interactive controls keep visible focus styling | PASS — no style changes; CSS-reviewed | PASS |
-| 9c | Keyboard: dialog | Cancel focused initially; Tab trapped; Escape closes; overlay click cancels | PASS — initial focus and Escape verified; Tab trap source-verified | PASS |
+| 9c | Keyboard: dialog | Cancel focused initially; Tab trapped; Escape closes; overlay click cancels | PASS — initial focus, both Tab directions, Escape, and overlay click live-verified | PASS |
 | 9d | Accessibility: status live region | `role="status"`, `aria-live="polite"` | PASS — exact attributes | PASS |
 | 9e | Accessibility: tab semantics | `role=tablist/tab/tabpanel`, `aria-selected`, `aria-controls`, roving tabindex | PASS — roles/ARIA/roving tabindex match | PASS |
 | 10 | Empty states and headers | Board, Remaining, History, Browser, Preview copy unchanged | PASS — all empty-state and header copy matches | PASS |
-| 10a | History header/counts | `5 picked`; `showing the last N` when truncated (source-verified) | PASS — `5 picked`; only dynamic timestamps differ | PASS |
+| 10a | History header/counts | `6 picked` for the 6-entry fixture; `showing the last N` when truncated (source-verified) | PASS — `6 picked`; only dynamic timestamps differ | PASS |
 | 10b | Remaining header/counts | `10 remaining`; `showing the first N` when truncated (source-verified) | PASS — `10 remaining` | PASS |
-| 10c | Choice board truncation | 48 flaps, last flap `…`; full 84-character name in `title`; screen-reader heading keeps full name | PASS — 48 flaps, last `…`, 84-character title, 91-character SR heading | PASS |
-| 10d | Board stats and empty titles | `Nothing to pick` + `This folder is empty.`; `All picked` + `Clear or archive history to start over.` | PASS — both title/meta pairs exact | PASS |
+| 10c | Choice board truncation | 48 flaps, last flap `…`; full 84-character name in `title`; screen-reader heading keeps full name | PASS — 48 flaps, last `…`, 84-character title, full SR heading | PASS |
+| 10d | Board stats and empty titles | `Nothing picked yet` + `Press Pick to choose the first one.`; `Nothing to pick` + `This folder is empty.`; `All picked` + `Clear or archive history to start over.` | PASS — all three title/meta pairs exact | PASS |
+
+### US2 replay notes (T036, 2026-11-04)
+
+The US2 replay re-captured `main@d25abef` and the refactored tree with the same
+fixtures and the same headless Chromium CDP script. Both runs recorded 71 states
+and 25 screenshots. The recorded JSON is identical after normalizing the archive
+backup timestamp and the history clock times (the only dynamic values). 21 of
+the 25 screenshots are byte-identical; the four exceptions differ only in
+transient board-flap animation frames, native video-control chrome, or a handful
+of 1-value antialiasing pixels at panel corners. No functional, textual, timing,
+keyboard, or accessibility differences were observed.
 
 ### US1 replay notes (T024, 2026-11-03)
 
@@ -106,8 +117,8 @@ matches except the expected dynamic values below:
   baseline capture timing flake, not a behavior change.
 
 No functional, textual, timing, keyboard, or accessibility regressions were
-observed in the US1 flow set. US2 conversion must keep these rows green; T036
-re-runs the full replay at all three viewport ranges.
+observed in the US1 flow set. T036 re-ran the full replay at all three viewport
+ranges and recorded the US2 notes above.
 
 
 ## Message classes
@@ -145,31 +156,50 @@ Expected exact text at baseline. `*` marks an interpolated value.
 
 Local directory: `/tmp/opencode/choosier-parity/baseline/` (not committed).
 
+Re-captured on 2026-11-04 from a clean `main@d25abef` worktree serving the same
+built frontend against the same fixtures as the after run.
+
 | Evidence | Contents |
 |---|---|
-| `baseline-results.json` | Initial load, pick, options, validation, image/archive/video preview, browser, history, dialogs, Ctrl+N, tabs, ARIA, viewport overflow |
-| `baseline-extra-results.json` | Board empty states, truncation, clear success, archive without log, single/batch removal counts, viewer zoom/drag/close |
+| `results.json` | 71 recorded states: initial load, options, browser, pick/validation, text/image/archive/video previews, viewer interactions, dry run, history/dialogs/archive/clear, keyboard/ARIA, empty states, and board truncation |
 | `initial-desktop.png`, `initial-tablet.png`, `initial-phone.png` | Initial load at 1280×900, 800×900, 390×844 |
 | `pick-text-desktop.png` | Picked text item, preview, remaining/history counts |
 | `preview-image-desktop.png`, `preview-archive-desktop.png`, `preview-video-desktop.png` | Preview types |
 | `viewer-single-desktop.png`, `viewer-archive-desktop.png`, `viewer-zoom-desktop.png` | Viewer states |
-| `browser-root-desktop.png`, `browser-empty-desktop.png` | Browser states |
+| `browser-root-desktop.png`, `browser-empty-desktop.png`, `browser-error-desktop.png` | Browser states |
 | `history-desktop.png`, `history-after-remove-desktop.png`, `history-tablet.png`, `history-phone.png` | History and responsive states |
 | `options-desktop.png`, `options-tablet.png`, `options-phone.png` | Options responsive states |
-| `batch-dialog-desktop.png`, `clear-dialog-desktop.png`, `clear-confirmed-desktop.png`, `remove-zero-desktop.png` | Confirmation and removal states |
+| `batch-dialog-desktop.png`, `clear-dialog-desktop.png`, `clear-confirmed-desktop.png` | Confirmation and removal states |
 | `board-empty-desktop.png`, `board-truncated-desktop.png` | Board empty/truncation states |
 
 ## After evidence
 
 Local directory: `/tmp/opencode/choosier-parity/after/` (not committed).
 
-| Evidence | Contents |
-|---|---|
-| `baseline-results.json`, `baseline-extra-results.json` | Same harness as the baseline; keys and values identical except the dynamic values recorded in the US1 replay notes |
-| `*-desktop.png`, `*-tablet.png`, `*-phone.png` | US1 replay screenshots at 1280×900, 800×900, 390×844 |
+The after run used the same harness and fixture reset as the baseline. It
+contains `results.json` and the same 25 screenshot names:
 
-The US1 replay directory currently contains the 24 screenshots and both JSON
-files listed above. US2 re-captures the full matrix in the same local directory.
+```text
+batch-dialog-desktop.png            history-desktop.png
+board-empty-desktop.png             history-phone.png
+board-truncated-desktop.png         history-tablet.png
+browser-empty-desktop.png           initial-desktop.png
+browser-error-desktop.png           initial-phone.png
+browser-root-desktop.png            initial-tablet.png
+clear-confirmed-desktop.png         options-desktop.png
+clear-dialog-desktop.png            options-phone.png
+history-after-remove-desktop.png    options-tablet.png
+pick-text-desktop.png               preview-archive-desktop.png
+preview-image-desktop.png           preview-video-desktop.png
+viewer-archive-desktop.png          viewer-single-desktop.png
+viewer-zoom-desktop.png
+```
+
+`results.json` matches the baseline after normalizing the dynamic archive
+timestamp and history clock times. 21 screenshots are byte-identical; the four
+remaining images differ only in transient flap animation frames, native video
+controls, or 1-value antialiasing pixels. No unexplained visual difference was
+found at any viewport.
 
 ## Boundary violation trials
 
