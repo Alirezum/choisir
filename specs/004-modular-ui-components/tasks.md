@@ -106,7 +106,7 @@ full interface at all three viewport ranges.
 
 ### Tests and implementation for User Story 2
 
-- [ ] T025 [US2] Move `ChoiceBoard.vue`, `StatusBar.vue`, `OptionsPanel.vue`, `RemainingPanel.vue`, and `ConfirmDialog.vue` from `frontend/src/components/` to `frontend/src/views/`, update imports in `frontend/src/App.vue`, and add isolated tests `frontend/tests/ui/views/ChoiceBoard.test.ts`, `StatusBar.test.ts`, `OptionsPanel.test.ts`, `RemainingPanel.test.ts`, and `ConfirmDialog.test.ts`.
+- [x] T025 [US2] Move `ChoiceBoard.vue`, `StatusBar.vue`, `OptionsPanel.vue`, `RemainingPanel.vue`, and `ConfirmDialog.vue` from `frontend/src/components/` to `frontend/src/views/`, update imports in `frontend/src/App.vue`, and add isolated tests `frontend/tests/ui/views/ChoiceBoard.test.ts`, `StatusBar.test.ts`, `OptionsPanel.test.ts`, `RemainingPanel.test.ts`, and `ConfirmDialog.test.ts`.
 - [ ] T026 [P] [US2] Write the failing tests, then refactor `frontend/src/views/RemainingPanel.vue` to use `PanelShell` and `EmptyState` while preserving header, list, empty copy, and classes; update `frontend/tests/ui/views/RemainingPanel.test.ts`.
 - [ ] T027 [P] [US2] Write the failing test, then refactor `frontend/src/views/OptionsPanel.vue` to use `PanelShell` with the existing `options-panel` class, labels, placeholders, and v-model fields; update `frontend/tests/ui/views/OptionsPanel.test.ts`.
 - [ ] T028 [US2] Extend `frontend/src/state/use-history-selection.ts` with the anchor and shift-range behavior from `data-model.md`, update `frontend/tests/ui/state/use-history-selection.test.ts`, and expose the range intent through the workspace binding.

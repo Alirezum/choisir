@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import BrowserPanel from './components/BrowserPanel.vue'
-import ChoiceBoard from './components/ChoiceBoard.vue'
-import ConfirmDialog from './components/ConfirmDialog.vue'
+import ChoiceBoard from './views/ChoiceBoard.vue'
+import ConfirmDialog from './views/ConfirmDialog.vue'
 import HistoryPanel from './components/HistoryPanel.vue'
-import OptionsPanel from './components/OptionsPanel.vue'
+import OptionsPanel from './views/OptionsPanel.vue'
 import PreviewPanel from './components/PreviewPanel.vue'
-import RemainingPanel from './components/RemainingPanel.vue'
-import StatusBar from './components/StatusBar.vue'
+import RemainingPanel from './views/RemainingPanel.vue'
+import StatusBar from './views/StatusBar.vue'
 import { useWorkspace } from './state/use-workspace'
 
 const {
