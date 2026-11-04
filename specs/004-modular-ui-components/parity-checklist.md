@@ -120,6 +120,22 @@ No functional, textual, timing, keyboard, or accessibility regressions were
 observed in the US1 flow set. T036 re-ran the full replay at all three viewport
 ranges and recorded the US2 notes above.
 
+### US2 source audit (T038, 2026-11-04)
+
+Run from `frontend/src/views/`:
+
+```bash
+for pattern in 'api' 'fetch' '/api/' 'watch\(' 'computed\(' 'setTimeout' \
+  'panel-header|panel-empty|panel-actions'; do
+  rg -n -e "$pattern" .
+done
+```
+
+All seven searches returned no matches (`CLEAN`). No view imports or calls the
+API client, reads query state, owns a watcher/computed/timer, or re-implements
+the shared panel scaffold. `PanelShell.vue` and `EmptyState.vue` remain the only
+owners of `panel-*` markup, and each view keeps its presentation-only role.
+
 
 ## Message classes
 
