@@ -34,6 +34,11 @@ export function useWorkspace(): WorkspaceBinding {
     historyActions.cancelDelete()
   }
 
+  function selectHistoryItem(item: string, shift: boolean): void {
+    const applied = selection.select(item, shift)
+    if (applied && !shift) void historyActions.previewHistoryItem(item)
+  }
+
   const workspaceState = useWorkspaceState({
     path: options.path,
     logFile: options.logFile,
@@ -109,6 +114,7 @@ export function useWorkspace(): WorkspaceBinding {
     confirmClear: historyActions.confirmClear,
     cancelClear: historyActions.cancelClear,
     removeHistoryItem: historyActions.removeOne,
+    selectHistoryItem,
     toggleHistoryCheck: selection.toggle,
     addHistoryRange: selection.addRange,
     toggleAllHistory: selection.toggleAll,

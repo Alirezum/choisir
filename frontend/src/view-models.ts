@@ -171,6 +171,7 @@ export interface WorkspaceBinding {
   confirmClear: () => Promise<void>
   cancelClear: () => void
   removeHistoryItem: (item: string) => Promise<void>
+  selectHistoryItem: (item: string, shift: boolean) => void
   toggleHistoryCheck: (item: string) => void
   addHistoryRange: (items: string[]) => void
   toggleAllHistory: () => void

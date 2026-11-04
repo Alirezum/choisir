@@ -1,13 +1,16 @@
-import { ref, type Ref } from 'vue'
+import { ref, watch, type Ref } from 'vue'
 
 import type { HistoryEntry } from '../types.ts'
 
 export interface HistorySelectionDeps {
   entries: () => HistoryEntry[]
+  isBusy?: () => boolean
 }
 
 export interface HistorySelectionBinding {
   checkedItems: Ref<string[]>
+  anchor: Ref<string | null>
+  select: (item: string, shift: boolean) => boolean
   toggle: (item: string) => void
   addRange: (items: string[]) => void
   toggleAll: () => void
@@ -21,14 +24,25 @@ function uniqueItems(entries: HistoryEntry[]): string[] {
 }
 
 /**
- * Owns the checked history rows only. Anchor and shift-range interaction move
- * here in US2; removal cleanup and confirmation state stay with the actions
- * unit.
+ * Owns the checked history rows and the shift-range anchor. Plain clicks
+ * toggle and move the anchor; shift clicks extend the range from the anchor
+ * without changing it. Returns whether the intent was applied so the
+ * composition can decide about previewing.
  */
 export function useHistorySelection(
   deps: HistorySelectionDeps,
 ): HistorySelectionBinding {
   const checkedItems = ref<string[]>([])
+  const anchor = ref<string | null>(null)
+
+  watch(deps.entries, (entries) => {
+    if (anchor.value !== null && !entries.some((entry) => entry.item === anchor.value)) {
+      anchor.value = null
+    }
+  })
+  watch(checkedItems, (items) => {
+    if (items.length === 0) anchor.value = null
+  })
 
   function toggle(item: string): void {
     checkedItems.value = checkedItems.value.includes(item)
@@ -40,7 +54,32 @@ export function useHistorySelection(
     checkedItems.value = [...new Set([...checkedItems.value, ...items])]
   }
 
+  function namesInRange(from: string, to: string): string[] {
+    const names = deps.entries().map((entry) => entry.item)
+    const start = names.indexOf(from)
+    const end = names.indexOf(to)
+    if (start === -1 || end === -1) return [to]
+    return names.slice(Math.min(start, end), Math.max(start, end) + 1)
+  }
+
+  function select(item: string, shift: boolean): boolean {
+    if (deps.isBusy?.() === true) return false
+    if (shift) {
+      if (anchor.value === null) {
+        anchor.value = item
+        addRange([item])
+        return true
+      }
+      addRange(namesInRange(anchor.value, item))
+      return true
+    }
+    anchor.value = item
+    toggle(item)
+    return true
+  }
+
   function toggleAll(): void {
+    anchor.value = null
     const items = uniqueItems(deps.entries())
     const allSelected =
       items.length > 0 && items.every((item) => checkedItems.value.includes(item))
@@ -48,6 +87,7 @@ export function useHistorySelection(
   }
 
   function clear(): void {
+    anchor.value = null
     checkedItems.value = []
   }
 
@@ -59,12 +99,18 @@ export function useHistorySelection(
   }
 
   function pruneMissing(): void {
-    const present = new Set(deps.entries().map((entry) => entry.item))
+    const entries = deps.entries()
+    const present = new Set(entries.map((entry) => entry.item))
     checkedItems.value = checkedItems.value.filter((item) => present.has(item))
+    if (anchor.value !== null && !present.has(anchor.value)) {
+      anchor.value = null
+    }
   }
 
   return {
     checkedItems,
+    anchor,
+    select,
     toggle,
     addRange,
     toggleAll,
