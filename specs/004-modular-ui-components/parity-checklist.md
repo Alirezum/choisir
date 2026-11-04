@@ -3,8 +3,9 @@
 **Feature**: `004-modular-ui-components`
 **Branch**: `004-modular-ui-components`
 **Baseline commit**: `main@d25abef`
-**Implementation range**: `d25abef..HEAD` (final range recorded at sign-off)
+**Implementation range**: `d25abef..HEAD` (HEAD at the Phase 5 sign-off commit; code through `90d7980`)
 **Baseline date**: 2026-11-03; re-captured 2026-11-04
+**Sign-off date**: 2026-11-04
 **Reviewer**: local implementation session (Chromium headless CDP replay)
 
 This checklist is the retained evidence for the behavior-preserving refactor.
@@ -237,28 +238,56 @@ Semantic duplication review (static checks cannot judge this):
 
 | Finding | Location | Resolution |
 |---|---|---|
-| Pending | | |
+| Panel scaffold markup exists only in the shared blocks | `src/components/PanelShell.vue`, `src/components/EmptyState.vue` | No duplicate panel/header/empty/actions scaffold remains. A repository search finds `panel`, `panel-header`, `panel-empty`, and `panel-actions` only in the two shared blocks; the remaining `preview-panel`, `options-panel`, and `panel-link` tokens are unique consumer classes for layout or links, not scaffold copies. No change needed. |
+| List row structures look similar at a glance | `src/views/RemainingPanel.vue`, `HistoryPanel.vue`, `BrowserPanel.vue` | Reviewed side by side: each row renders different content and has different intents (plain remaining item, checked history row with open/remove actions, parent/child browser navigation). There is no visually identical duplicate row structure to consolidate. No change needed. |
 
 ## Automated gates
 
 | Gate | Result |
 |---|---|
-| `npm run check:api` | Pending |
-| `npm run test:api` | Pending |
-| `npm run check:ui` | Pending |
-| `npm run test:ui` | Pending |
-| `npm run build` | Pending |
-| `uv run ruff check .` | Pending |
-| `uv run ruff format --check .` | Pending |
-| `uv run pytest` | Pending |
-| `uv run mypy choosier main.py tests` | Pending |
-| `uv build` | Pending |
+| `npm run check:api` | PASS — `API contract is current: frontend/src/api-contract.generated.ts`; exit 0 |
+| `npm run test:api` | PASS — 45 tests, 45 passed, 0 failed |
+| `npm run check:ui` | PASS — `UI boundaries clean: 36 source files, 29 test files.`; exit 0 |
+| `npm run test:ui` | PASS — 27 test files, 232 tests passed |
+| `npm run build` | PASS — `vue-tsc -b` and Vite production build succeeded |
+| `uv run ruff check .` | PASS — `All checks passed!` |
+| `uv run ruff format --check .` | PASS — `94 files already formatted` |
+| `uv run pytest` | PASS — 239 passed, 1 dependency deprecation warning |
+| `uv run mypy choosier main.py tests` | PASS — `Success: no issues found in 39 source files` |
+| `uv build` | PASS — built `dist/choosier-0.3.0.tar.gz` and `dist/choosier-0.3.0-py3-none-any.whl`; built with `--no-build-isolation` from the cached setuptools 84.2.1 because `files.pythonhosted.org` timed out |
+
+The frontend gates ran with Node 22.18.0, the minimum version that supports the
+`.ts` type stripping used by `test:api`. The Node and Python gate results above
+are from the final Phase 5 run on 2026-11-04.
+
+### T048 coverage audit (2026-11-04)
+
+`npm run check:ui` reports `UI boundaries clean: 36 source files, 29 test files.`
+with exit 0. The audited production surface is 14 state units, 10 views, and 2
+shared blocks. Every one of those 26 modules has its mapped test file under
+`tests/ui/`; the 27th Vitest file is the boundary check itself. The check also
+confirms:
+
+- no view imports the API client or a domain state unit, except the two
+  documented view-local allowances (`PreviewPanel` → `use-preview`,
+  `ImageViewer` → `use-image-viewer`);
+- no state unit imports a view or a shared presentation block;
+- no relative-import cycle exists;
+- no view contains a raw `panel`, `panel-header`, `panel-empty`, or
+  `panel-actions` scaffold class;
+- the previously run self-tests cover every rule, including the missing-test-file
+  case and the allowlist.
+
+The clean result above is the final coverage audit; no rule was weakened to
+reach it.
 
 ## Sign-off
 
-- [ ] Every flow row is `PASS` or has a recorded decision.
-- [ ] All three viewport ranges match the baseline.
-- [ ] All five violation trials were detected.
-- [ ] All automated gates pass.
-- [ ] No screenshots or browser tooling are committed.
-- [ ] Final implementation commit range recorded above.
+- [x] Every flow row is `PASS` or has a recorded decision.
+- [x] All three viewport ranges match the baseline.
+- [x] All five violation trials were detected.
+- [x] All automated gates pass.
+- [x] No screenshots or browser tooling are committed.
+- [x] Final implementation commit range recorded above.
+
+Signed off on 2026-11-04 by the local implementation session.

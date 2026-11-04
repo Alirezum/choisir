@@ -145,9 +145,9 @@ the tree, and confirm all checks pass. Run the full frontend gate.
 - [x] T043 [P] [US3] Update `frontend/README.md` with the `state/` → `views/` → `components/` layer model, allowed dependency direction, view-local unit allowlist, `check:ui`/`test:ui` commands, and the one-test-file-per-module rule.
 - [x] T044 [P] [US3] Update the frontend structure/API-boundary section in `README.md` to state that the shared client remains the only network boundary, state units own data access, and views are presentation-only.
 - [x] T045 [P] [US3] Add an `Unreleased` entry to `CHANGELOG.md` describing the behavior-preserving modular UI refactor, the new state/view layers, and the development-only test/boundary tooling.
-- [ ] T046 [US3] Run `npm run check:api`, `npm run test:api`, `npm run check:ui`, `npm run test:ui`, and `npm run build` in `frontend/`; fix every failure without weakening a rule.
-- [ ] T047 [US3] Complete the final parity sign-off in `specs/004-modular-ui-components/parity-checklist.md`, including all viewports, message classes, keyboard/accessibility rows, and the five trial results.
-- [ ] T048 [US3] Run a final coverage audit: `npm run check:ui` must report no missing test files, no forbidden view imports, no cycles, and no raw scaffold tokens; record the clean result in `specs/004-modular-ui-components/parity-checklist.md`.
+- [x] T046 [US3] Run `npm run check:api`, `npm run test:api`, `npm run check:ui`, `npm run test:ui`, and `npm run build` in `frontend/`; fix every failure without weakening a rule.
+- [x] T047 [US3] Complete the final parity sign-off in `specs/004-modular-ui-components/parity-checklist.md`, including all viewports, message classes, keyboard/accessibility rows, and the five trial results.
+- [x] T048 [US3] Run a final coverage audit: `npm run check:ui` must report no missing test files, no forbidden view imports, no cycles, and no raw scaffold tokens; record the clean result in `specs/004-modular-ui-components/parity-checklist.md`.
 
 **Checkpoint**: The modular boundaries are enforced in CI, documented, and proven by
 the five violation trials.
