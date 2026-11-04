@@ -166,7 +166,7 @@ export interface WorkspaceBinding {
   browserListing: Ref<BrowseResponse | null>
   browserError: Ref<string>
 
-  tabCount: (id: TabId) => number | null
+  tabCounts: ComputedRef<Record<TabId, number | null>>
 
   pick: () => Promise<void>
   openCurrent: () => Promise<void>

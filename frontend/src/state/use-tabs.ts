@@ -1,4 +1,4 @@
-import { nextTick, ref, type Ref } from 'vue'
+import { computed, nextTick, ref, type ComputedRef, type Ref } from 'vue'
 
 import type { StateResponse } from '../types.ts'
 import type { PanelTab, TabId } from '../view-models.ts'
@@ -17,6 +17,7 @@ export interface TabsDeps {
 export interface TabsBinding {
   tabs: readonly PanelTab[]
   activeTab: Ref<TabId>
+  counts: ComputedRef<Record<TabId, number | null>>
   select: (id: TabId) => void
   count: (id: TabId) => number | null
   onKey: (event: KeyboardEvent, id: TabId) => void
@@ -39,6 +40,21 @@ export function useTabs(deps: TabsDeps): TabsBinding {
     return null
   }
 
+  const counts = computed<Record<TabId, number | null>>(() => {
+    const record: Record<TabId, number | null> = {
+      remaining: null,
+      history: null,
+      browse: null,
+      options: null,
+    }
+    const state = deps.state.value
+    if (state !== null) {
+      record.remaining = state.remaining_total
+      record.history = state.history_total
+    }
+    return record
+  })
+
   function onKey(event: KeyboardEvent, id: TabId): void {
     const current = PANEL_TABS.findIndex((tab) => tab.id === id)
     let next = current
@@ -60,5 +76,5 @@ export function useTabs(deps: TabsDeps): TabsBinding {
     void nextTick(() => document.getElementById(`tab-${target.id}`)?.focus())
   }
 
-  return { tabs: PANEL_TABS, activeTab, select, count, onKey }
+  return { tabs: PANEL_TABS, activeTab, counts, select, count, onKey }
 }

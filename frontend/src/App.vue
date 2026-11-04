@@ -6,6 +6,7 @@ import HistoryPanel from './views/HistoryPanel.vue'
 import OptionsPanel from './views/OptionsPanel.vue'
 import PreviewPanel from './views/PreviewPanel.vue'
 import RemainingPanel from './views/RemainingPanel.vue'
+import PanelTabs from './views/PanelTabs.vue'
 import StatusBar from './views/StatusBar.vue'
 import { useWorkspace } from './state/use-workspace'
 
@@ -39,7 +40,7 @@ const {
 
   browserListing,
   browserError,
-  tabCount,
+  tabCounts,
 
   pick,
   openCurrent,
@@ -100,26 +101,13 @@ void pathInput
         />
 
         <section class="side" aria-label="Folder panels">
-          <nav class="tabs" role="tablist" aria-label="Folder panels">
-            <button
-              v-for="tab in tabs"
-              :id="`tab-${tab.id}`"
-              :key="tab.id"
-              type="button"
-              role="tab"
-              :class="{ active: activeTab === tab.id }"
-              :aria-selected="activeTab === tab.id"
-              :aria-controls="`panel-${tab.id}`"
-              :tabindex="activeTab === tab.id ? 0 : -1"
-              @click="onTabSelect(tab.id)"
-              @keydown="onTabKey($event, tab.id)"
-            >
-              {{ tab.label
-              }}<span v-if="tabCount(tab.id) !== null" class="count">{{
-                tabCount(tab.id)
-              }}</span>
-            </button>
-          </nav>
+          <PanelTabs
+            :tabs="tabs"
+            :active-tab="activeTab"
+            :counts="tabCounts"
+            @select="onTabSelect"
+            @keydown="onTabKey"
+          />
 
           <div
             id="panel-remaining"

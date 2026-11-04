@@ -53,7 +53,7 @@ describe('useWorkspace', () => {
     expect(workspace.historyDeleteCount.value).toBe(0)
     expect(workspace.historyDeleteMessage.value).toBe('')
     expect(workspace.historyDeleteLabel.value).toBe('Delete 0 items')
-    expect(workspace.tabCount('remaining')).toBeNull()
+    expect(workspace.tabCounts.value.remaining).toBeNull()
 
     wrapper.unmount()
   })
@@ -69,7 +69,7 @@ describe('useWorkspace', () => {
     expect(workspace.path.value).toBe('/tmp/choosier')
     expect(workspace.logFile.value).toBe('/tmp/choosier/custom.jsonl')
     expect(workspace.state.value?.remaining_total).toBe(1)
-    expect(workspace.tabCount('remaining')).toBe(1)
+    expect(workspace.tabCounts.value.remaining).toBe(1)
 
     wrapper.unmount()
   })

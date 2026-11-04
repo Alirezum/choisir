@@ -118,7 +118,7 @@ export function useWorkspace(): WorkspaceBinding {
     browserListing: browser.listing,
     browserError: browser.error,
 
-    tabCount: tabs.count,
+    tabCounts: tabs.counts,
 
     pick: picker.pick,
     openCurrent: picker.openCurrent,

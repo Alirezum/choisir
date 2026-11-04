@@ -54,6 +54,26 @@ describe('useTabs', () => {
     expect(tabs.count('options')).toBeNull()
   })
 
+  it('exposes the count record ready for the tab view', () => {
+    const { state, tabs } = setup()
+
+    expect(tabs.counts.value).toEqual({
+      remaining: null,
+      history: null,
+      browse: null,
+      options: null,
+    })
+
+    state.value = stateResponse(7, 3)
+
+    expect(tabs.counts.value).toEqual({
+      remaining: 7,
+      history: 3,
+      browse: null,
+      options: null,
+    })
+  })
+
   it('selects a tab', () => {
     const { tabs } = setup()
 
