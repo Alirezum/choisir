@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Web UI: refactored the frontend into modular state units, presentation-only
+  views, and shared panel/empty-state blocks while preserving all behavior,
+  visuals, text, timing, keyboard interaction, accessibility, and API/history
+  contracts. Added development-only Vitest and Vue Test Utils coverage for every
+  state unit, view, and shared block, plus a dependency-free `npm run check:ui`
+  boundary gate.
 - Maintenance: extracted the shared application operations into the
   standard-library-only `choosier/services/` package, unified history reads
   and writes behind `read_log_entries` and `HistoryService`, and moved
