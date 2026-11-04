@@ -1,15 +1,17 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
+import EmptyState from '../../../src/components/EmptyState.vue'
+import PanelShell from '../../../src/components/PanelShell.vue'
 import RemainingPanel from '../../../src/views/RemainingPanel.vue'
 
 describe('RemainingPanel', () => {
-  it('renders the live count and every remaining row', () => {
+  it('renders through the shared shell with the live count and every row', () => {
     const wrapper = mount(RemainingPanel, {
       props: { items: ['alpha.txt', 'beta.txt'], total: 2 },
     })
 
-    expect(wrapper.find('.panel').classes()).toContain('panel')
+    expect(wrapper.findComponent(PanelShell).exists()).toBe(true)
     expect(wrapper.find('.panel-header').text()).toBe('2 remaining')
     const rows = wrapper.findAll('.name-row')
     expect(rows).toHaveLength(2)
@@ -27,11 +29,12 @@ describe('RemainingPanel', () => {
     )
   })
 
-  it('shows the all-picked empty copy when nothing remains', () => {
+  it('shows the all-picked empty copy through the shared empty state', () => {
     const wrapper = mount(RemainingPanel, {
       props: { items: [], total: 0 },
     })
 
+    expect(wrapper.findComponent(EmptyState).exists()).toBe(true)
     expect(wrapper.find('.panel-empty').text()).toBe(
       'Everything in this folder has been picked.',
     )

@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+import EmptyState from '../components/EmptyState.vue'
+import PanelShell from '../components/PanelShell.vue'
+
 const props = defineProps<{ items: string[]; total: number }>()
 
 const header = computed(() => {
@@ -12,19 +15,19 @@ const header = computed(() => {
 </script>
 
 <template>
-  <div class="panel">
-    <div class="panel-header">{{ header }}</div>
+  <PanelShell>
+    <template #header>{{ header }}</template>
     <ul v-if="items.length > 0" class="list">
       <li v-for="name in items" :key="name" class="name-row" :title="name">
         {{ name }}
       </li>
     </ul>
-    <p v-else class="panel-empty">
+    <EmptyState v-else>
       {{
         total === 0
           ? 'Everything in this folder has been picked.'
           : 'No items match the current options.'
       }}
-    </p>
-  </div>
+    </EmptyState>
+  </PanelShell>
 </template>
