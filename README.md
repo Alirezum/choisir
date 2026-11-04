@@ -171,9 +171,14 @@ On the web frontend, `frontend/src/api.ts` is the single API boundary: it is
 the only frontend module allowed to make network calls or name `/api/...`
 endpoints, and its routes are generated from the frozen API contract
 (`specs/001-standardize-api-responses/contracts/api-contract.json`).
-Components call the exported `api` object and `apiErrorMessage` helper only;
+State units under `frontend/src/state/` call the exported `api` object and own
+all data access; views under `frontend/src/views/` are presentation-only and
+receive ready-to-render data and intents, while `src/components/` holds only
+shared presentation blocks. Failures become messages only in
+`src/state/use-status.ts`, through `apiErrorMessage`.
 `npm run check:api` and `npm run test:api` fail when the generated contract
-goes stale or a component bypasses the boundary.
+goes stale or the API client is bypassed; `npm run check:ui` enforces the
+state/view/component dependency direction and the per-module test mapping.
 
 ## Development
 
