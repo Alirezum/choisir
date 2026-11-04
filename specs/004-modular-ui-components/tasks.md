@@ -140,7 +140,7 @@ the tree, and confirm all checks pass. Run the full frontend gate.
 
 - [x] T039 [US3] Implement `frontend/scripts/check-ui-boundaries.mjs` with rules R-01 through R-07 from `contracts/verification-contracts.md`: view API isolation, view state allowlist, state isolation, composition-root thinness, acyclic graph, shared-scaffold tokens, and test-file mapping; export pure helpers and fail closed on unreadable/unresolved files.
 - [x] T040 [US3] Create `frontend/tests/ui/boundary-check.test.ts` with failing and passing fixtures for each of R-01–R-07, including the two allowlisted view→unit imports and the missing-test-file case (depends on T039).
-- [ ] T041 [US3] Add `Check UI boundaries` (`npm run check:ui`) and `Test UI` (`npm run test:ui`) steps to `.github/workflows/ci.yml` after `Test API client` and before `Build frontend`.
+- [x] T041 [US3] Add `Check UI boundaries` (`npm run check:ui`) and `Test UI` (`npm run test:ui`) steps to `.github/workflows/ci.yml` after `Test API client` and before `Build frontend`.
 - [ ] T042 [US3] Run the five violation trials from `contracts/verification-contracts.md §4` against `frontend/scripts/check-ui-boundaries.mjs`, restore the tree after each trial, and record the detected rule/file in `specs/004-modular-ui-components/parity-checklist.md`.
 - [ ] T043 [P] [US3] Update `frontend/README.md` with the `state/` → `views/` → `components/` layer model, allowed dependency direction, view-local unit allowlist, `check:ui`/`test:ui` commands, and the one-test-file-per-module rule.
 - [ ] T044 [P] [US3] Update the frontend structure/API-boundary section in `README.md` to state that the shared client remains the only network boundary, state units own data access, and views are presentation-only.

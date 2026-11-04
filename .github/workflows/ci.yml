@@ -28,6 +28,12 @@ jobs:
       - name: Test API client
         working-directory: frontend
         run: npm run test:api
+      - name: Check UI boundaries
+        working-directory: frontend
+        run: npm run check:ui
+      - name: Test UI
+        working-directory: frontend
+        run: npm run test:ui
       - name: Build frontend
         working-directory: frontend
         run: npm run build
