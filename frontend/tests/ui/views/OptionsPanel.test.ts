@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
+import PanelShell from '../../../src/components/PanelShell.vue'
 import OptionsPanel from '../../../src/views/OptionsPanel.vue'
 
 const mountPanel = (
@@ -14,9 +15,13 @@ const mountPanel = (
 ) => mount(OptionsPanel, { props })
 
 describe('OptionsPanel', () => {
-  it('renders the header, labels, and placeholders', () => {
+  it('renders through the shared shell with the header, labels, and placeholders', () => {
     const wrapper = mountPanel()
 
+    expect(wrapper.findComponent(PanelShell).exists()).toBe(true)
+    expect(wrapper.classes()).toEqual(
+      expect.arrayContaining(['panel', 'options-panel']),
+    )
     expect(wrapper.find('.panel-header').text()).toBe(
       'Changes apply to the next pick.',
     )

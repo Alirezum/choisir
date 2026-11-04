@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import PanelShell from '../components/PanelShell.vue'
+
 const logFile = defineModel<string>('log', { required: true })
 const seed = defineModel<string>('seed', { required: true })
 const dryRun = defineModel<boolean>('dry', { required: true })
@@ -7,8 +9,8 @@ const mode = defineModel<'all' | 'files' | 'dirs'>('mode', { required: true })
 </script>
 
 <template>
-  <div class="panel options-panel">
-    <div class="panel-header">Changes apply to the next pick.</div>
+  <PanelShell class="options-panel">
+    <template #header>Changes apply to the next pick.</template>
     <div class="options-body">
       <label class="field">
         <span>Log file</span>
@@ -36,5 +38,5 @@ const mode = defineModel<'all' | 'files' | 'dirs'>('mode', { required: true })
         <label><input v-model="mode" type="radio" value="dirs" /> Folders only</label>
       </fieldset>
     </div>
-  </div>
+  </PanelShell>
 </template>
