@@ -159,15 +159,15 @@ the five violation trials.
 **Purpose**: Remove leftovers, verify the whole quality gate, and merge only after
 the complete validation.
 
-- [ ] T049 [P] Remove dead code and stale imports from `frontend/src/`; verify `frontend/src/components/` contains only `PanelShell.vue` and `EmptyState.vue`, and `frontend/src/views/` contains every visual area.
-- [ ] T050 [P] Verify `frontend/package.json` runtime `dependencies` are unchanged; only `vitest`, `@vue/test-utils`, and `happy-dom` appear in `devDependencies`; `frontend/package-lock.json` is intentional and committed.
-- [ ] T051 [P] Run `npm run check:api` and `npm run test:api` in `frontend/`; confirm the frozen contract is unchanged and all 45 existing API-client tests pass.
-- [ ] T052 [P] Run `npm run check:ui`, `npm run test:ui`, and `npm run build` in `frontend/`; confirm zero boundary violations, all UI tests pass, and the production build succeeds.
-- [ ] T053 [P] Run `uv run ruff check .`, `uv run ruff format --check .`, `uv run pytest`, `uv run mypy choosier main.py tests`, and `uv build` from the repository root; confirm `choosier/`, `main.py`, and `tests/` are untouched and green.
-- [ ] T054 Run the full `specs/004-modular-ui-components/quickstart.md` validation, including the three viewport ranges and all targeted behavior checks; record any deviation and fix it before sign-off.
-- [ ] T055 Review the final diff against `main@d25abef` across `frontend/src/`, `frontend/package.json`, `choosier/`, and `tests/`: confirm no backend, API-contract, history-format, visual-design, or runtime-dependency change; confirm every production module has a test; confirm `specs/004-modular-ui-components/parity-checklist.md` is complete.
-- [ ] T056 Mark every completed task `[X]` in `specs/004-modular-ui-components/tasks.md`, run the full gate one final time, and make the final atomic commit with a Conventional Commit message.
-- [ ] T057 After all gates and the sign-off recorded in `specs/004-modular-ui-components/parity-checklist.md` pass, fast-forward merge `004-modular-ui-components` into `main`, push `main` to `origin`, and delete the merged feature branch only if the user confirms; report the merge range and final commit.
+- [x] T049 [P] Remove dead code and stale imports from `frontend/src/`; verify `frontend/src/components/` contains only `PanelShell.vue` and `EmptyState.vue`, and `frontend/src/views/` contains every visual area.
+- [x] T050 [P] Verify `frontend/package.json` runtime `dependencies` are unchanged; only `vitest`, `@vue/test-utils`, and `happy-dom` appear in `devDependencies`; `frontend/package-lock.json` is intentional and committed.
+- [x] T051 [P] Run `npm run check:api` and `npm run test:api` in `frontend/`; confirm the frozen contract is unchanged and all 45 existing API-client tests pass.
+- [x] T052 [P] Run `npm run check:ui`, `npm run test:ui`, and `npm run build` in `frontend/`; confirm zero boundary violations, all UI tests pass, and the production build succeeds.
+- [x] T053 [P] Run `uv run ruff check .`, `uv run ruff format --check .`, `uv run pytest`, `uv run mypy choosier main.py tests`, and `uv build` from the repository root; confirm `choosier/`, `main.py`, and `tests/` are untouched and green.
+- [x] T054 Run the full `specs/004-modular-ui-components/quickstart.md` validation, including the three viewport ranges and all targeted behavior checks; record any deviation and fix it before sign-off.
+- [x] T055 Review the final diff against `main@d25abef` across `frontend/src/`, `frontend/package.json`, `choosier/`, and `tests/`: confirm no backend, API-contract, history-format, visual-design, or runtime-dependency change; confirm every production module has a test; confirm `specs/004-modular-ui-components/parity-checklist.md` is complete.
+- [x] T056 Mark every completed task `[X]` in `specs/004-modular-ui-components/tasks.md`, run the full gate one final time, and make the final atomic commit with a Conventional Commit message.
+- [x] T057 After all gates and the sign-off recorded in `specs/004-modular-ui-components/parity-checklist.md` pass, fast-forward merge `004-modular-ui-components` into `main`, push `main` to `origin`, and delete the merged feature branch only if the user confirms; report the merge range and final commit.
 
 ---
 

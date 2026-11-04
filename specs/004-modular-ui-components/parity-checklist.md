@@ -3,7 +3,7 @@
 **Feature**: `004-modular-ui-components`
 **Branch**: `004-modular-ui-components`
 **Baseline commit**: `main@d25abef`
-**Implementation range**: `d25abef..HEAD` (HEAD at the Phase 5 sign-off commit; code through `90d7980`)
+**Implementation range**: `d25abef..HEAD` (HEAD at the Phase 6 final commit; feature code through `ce75c46`)
 **Baseline date**: 2026-11-03; re-captured 2026-11-04
 **Sign-off date**: 2026-11-04
 **Reviewer**: local implementation session (Chromium headless CDP replay)
@@ -240,6 +240,37 @@ Semantic duplication review (static checks cannot judge this):
 |---|---|---|
 | Panel scaffold markup exists only in the shared blocks | `src/components/PanelShell.vue`, `src/components/EmptyState.vue` | No duplicate panel/header/empty/actions scaffold remains. A repository search finds `panel`, `panel-header`, `panel-empty`, and `panel-actions` only in the two shared blocks; the remaining `preview-panel`, `options-panel`, and `panel-link` tokens are unique consumer classes for layout or links, not scaffold copies. No change needed. |
 | List row structures look similar at a glance | `src/views/RemainingPanel.vue`, `HistoryPanel.vue`, `BrowserPanel.vue` | Reviewed side by side: each row renders different content and has different intents (plain remaining item, checked history row with open/remove actions, parent/child browser navigation). There is no visually identical duplicate row structure to consolidate. No change needed. |
+
+## Final validation (Phase 6)
+
+### Final replay (T054, 2026-11-04)
+
+The final quickstart replay re-ran the retained headless Chromium harness against
+the current tree with freshly reset fixtures. It recorded **71 states and 25
+screenshots** in `/tmp/opencode/choosier-parity/final/` (not committed). The
+recorded JSON matches the US2 after run after normalizing the history clock times
+and the extra development artifacts now present in `/tmp/opencode` (Node 22.18,
+the temporary build environment, and the Phase 5 logs). Every fixture entry and
+its order in the browser parent view is unchanged.
+
+Viewport overflow is `0` at 1280×900 and `-15` at 800×900 and 390×844, identical
+to the baseline and after runs (no horizontal overflow). 24 of 25 screenshots are
+byte-identical; the only difference is 78 pixels in a 12×8 region of
+`board-truncated-desktop.png`, a transient flap-animation frame. Targeted checks
+matched the recorded baseline: blank-path focus return, invalid seed/path, empty
+and exhausted pick messages, dry-run text, archive with/without log, clear,
+single and batch removal counts, Ctrl+N blocking while a dialog or viewer is
+open, viewer scroll-lock restore, and the status/tab ARIA attributes.
+
+### Final diff audit (T055, 2026-11-04)
+
+`git diff d25abef..HEAD` touches only `frontend/`, the feature documentation,
+`.github/workflows/ci.yml`, `README.md`, and `CHANGELOG.md`. `choosier/`, the
+Python `tests/`, `frontend/src/api-contract.generated.ts`, and
+`frontend/src/styles.css` are unchanged. `frontend/package.json` has no runtime
+dependency change: only `vitest`, `@vue/test-utils`, and `happy-dom` were added
+to `devDependencies`. All 14 state units, 10 views, and 2 shared blocks have
+their mapped test files. No screenshots or browser tooling are tracked.
 
 ## Automated gates
 
