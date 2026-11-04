@@ -223,11 +223,15 @@ Perform each trial on a clean tree, confirm the expected failure, then restore.
 
 | # | Trial | Expected rule | Result |
 |---|---|---|---|
-| 1 | View imports/calls the shared client | R-01 view API isolation | Pending |
-| 2 | `App.vue` gains a watcher or API call | R-04 composition-root thinness | Pending |
-| 3 | State unit imports a view | R-03 state isolation | Pending |
-| 4 | Two-file relative-import cycle | R-05 acyclic graph | Pending |
-| 5 | Raw `.panel`/`.panel-header` markup in a view | R-06 shared scaffold | Pending |
+| 1 | View imports/calls the shared client | R-01 view API isolation | Detected: `R-01 src/views/StatusBar.vue` (`imports API module api.ts`); exit 1 |
+| 2 | `App.vue` gains a watcher or API call | R-04 composition-root thinness | Detected: `R-04 src/App.vue` (`contains watch(`); exit 1 |
+| 3 | State unit imports a view | R-03 state isolation | Detected: `R-03 src/state/use-tabs.ts` (`imports presentation module src/views/PreviewPanel.vue`); exit 1 |
+| 4 | Two-file relative-import cycle | R-05 acyclic graph | Detected: `R-05 src/__cycle_a.ts` (`cycle: src/__cycle_a.ts -> src/__cycle_b.ts -> src/__cycle_a.ts`); exit 1 |
+| 5 | Raw `.panel`/`.panel-header` markup in a view | R-06 shared scaffold | Detected: `R-06 src/views/StatusBar.vue` (`raw scaffold class "panel"`); exit 1 |
+
+Each trial was applied to a clean tree, checked with `npm run check:ui`, and
+restored with `git checkout -- <file>` (or by deleting the two temporary cycle
+files). The working tree was clean before each trial and after restoration.
 
 Semantic duplication review (static checks cannot judge this):
 
