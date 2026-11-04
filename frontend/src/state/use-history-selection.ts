@@ -1,4 +1,4 @@
-import { ref, watch, type Ref } from 'vue'
+import { computed, ref, watch, type ComputedRef, type Ref } from 'vue'
 
 import type { HistoryEntry } from '../types.ts'
 
@@ -10,6 +10,8 @@ export interface HistorySelectionDeps {
 export interface HistorySelectionBinding {
   checkedItems: Ref<string[]>
   anchor: Ref<string | null>
+  checkedCount: ComputedRef<number>
+  allSelected: ComputedRef<boolean>
   select: (item: string, shift: boolean) => boolean
   toggle: (item: string) => void
   addRange: (items: string[]) => void
@@ -34,6 +36,13 @@ export function useHistorySelection(
 ): HistorySelectionBinding {
   const checkedItems = ref<string[]>([])
   const anchor = ref<string | null>(null)
+  const checkedCount = computed(() => checkedItems.value.length)
+  const allSelected = computed(() => {
+    const entries = deps.entries()
+    if (entries.length === 0) return false
+    const checked = new Set(checkedItems.value)
+    return entries.every((entry) => checked.has(entry.item))
+  })
 
   watch(deps.entries, (entries) => {
     if (anchor.value !== null && !entries.some((entry) => entry.item === anchor.value)) {
@@ -110,6 +119,8 @@ export function useHistorySelection(
   return {
     checkedItems,
     anchor,
+    checkedCount,
+    allSelected,
     select,
     toggle,
     addRange,

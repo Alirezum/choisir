@@ -102,6 +102,33 @@ describe('useHistorySelection', () => {
     wrapper.unmount()
   })
 
+  it('reports allSelected only when every entry is checked', () => {
+    const { selection, wrapper } = setup(['alpha.txt', 'beta.txt'])
+
+    expect(selection.allSelected.value).toBe(false)
+
+    selection.addRange(['alpha.txt'])
+    expect(selection.allSelected.value).toBe(false)
+
+    selection.addRange(['beta.txt'])
+    expect(selection.allSelected.value).toBe(true)
+
+    selection.toggle('alpha.txt')
+    expect(selection.allSelected.value).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('reports the checked count', () => {
+    const { selection, wrapper } = setup()
+
+    selection.addRange(['alpha.txt', 'beta.txt'])
+    expect(selection.checkedCount.value).toBe(2)
+
+    selection.clear()
+    expect(selection.checkedCount.value).toBe(0)
+    wrapper.unmount()
+  })
+
   it('a plain select sets the anchor and checks the item', () => {
     const { selection, wrapper } = setup(['alpha.txt', 'beta.txt'])
         selection.select('beta.txt', false)

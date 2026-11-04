@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed } from 'vue'
 
-import type { HistoryEntry } from '../types'
+import EmptyState from '../components/EmptyState.vue'
+import PanelShell from '../components/PanelShell.vue'
+import type { HistoryEntry } from '../types.ts'
 
 const props = defineProps<{
   entries: HistoryEntry[]
@@ -9,54 +11,19 @@ const props = defineProps<{
   busy: boolean
   selected: string | null
   checkedItems: string[]
+  header: string
+  allSelected: boolean
+  checkedCount: number
 }>()
 const emit = defineEmits<{
   archive: []
   clear: []
   remove: [item: string]
-  select: [item: string]
   open: [item: string]
-  toggleCheck: [item: string]
-  rangeCheck: [items: string[]]
+  select: [item: string, shift: boolean]
   toggleAll: []
   removeSelected: []
 }>()
-
-const anchor = ref<string | null>(null)
-
-const header = computed(() => {
-  if (props.entries.length < props.total) {
-    return `${props.total} picked (showing the last ${props.entries.length})`
-  }
-  return `${props.total} picked`
-})
-
-const checkedCount = computed(() => props.checkedItems.length)
-
-const allSelected = computed(() => {
-  if (props.entries.length === 0) return false
-  const checked = new Set(props.checkedItems)
-  return props.entries.every((entry) => checked.has(entry.item))
-})
-
-watch(
-  () => props.entries,
-  (entries) => {
-    if (
-      anchor.value !== null &&
-      !entries.some((entry) => entry.item === anchor.value)
-    ) {
-      anchor.value = null
-    }
-  },
-)
-
-watch(
-  () => props.checkedItems.length,
-  (count) => {
-    if (count === 0) anchor.value = null
-  },
-)
 
 function formatTimestamp(timestamp: string | null): string {
   if (timestamp === null) return ''
@@ -89,57 +56,22 @@ const rows = computed(() => {
     checked: checked.has(entry.item),
   }))
 })
-
-function namesInRange(from: string, to: string): string[] {
-  const names = props.entries.map((entry) => entry.item)
-  const start = names.indexOf(from)
-  const end = names.indexOf(to)
-  if (start === -1 || end === -1) return [to]
-  return names.slice(Math.min(start, end), Math.max(start, end) + 1)
-}
-
-function selectRange(item: string): void {
-  if (props.busy) return
-  if (anchor.value === null) {
-    anchor.value = item
-    emit('rangeCheck', [item])
-    return
-  }
-  emit('rangeCheck', namesInRange(anchor.value, item))
-}
-
-function onRowClick(item: string, event: MouseEvent): void {
-  if (props.busy) return
-  if (event.shiftKey) {
-    event.preventDefault()
-    selectRange(item)
-    return
-  }
-  anchor.value = item
-  emit('toggleCheck', item)
-  emit('select', item)
-}
-
-function onToggleAll(): void {
-  anchor.value = null
-  emit('toggleAll')
-}
 </script>
 
 <template>
-  <div class="panel">
-    <div class="panel-header history-header">
+  <PanelShell header-class="history-header">
+    <template #header>
       <span>{{ header }}</span>
       <button
         v-if="rows.length > 0"
         class="panel-link"
         type="button"
         :disabled="busy"
-        @click="onToggleAll"
+        @click="emit('toggleAll')"
       >
         {{ allSelected ? 'Clear selection' : 'Select all' }}
       </button>
-    </div>
+    </template>
     <p v-if="rows.length > 0" class="history-hint">
       Click a row to preview and select it. Shift-click to select a range.
     </p>
@@ -156,7 +88,7 @@ function onToggleAll(): void {
             :aria-pressed="row.checked ? 'true' : 'false'"
             :aria-current="row.selected ? 'true' : undefined"
             :title="`Preview and select ${row.item}`"
-            @click="onRowClick(row.item, $event)"
+            @click="emit('select', row.item, $event.shiftKey)"
           >
             <time
               v-if="row.time !== ''"
@@ -191,10 +123,10 @@ function onToggleAll(): void {
         </div>
       </li>
     </ul>
-    <p v-else class="panel-empty">
+    <EmptyState v-else>
       Picked items land here. Remove one to make it available again.
-    </p>
-    <div class="panel-actions">
+    </EmptyState>
+    <template #actions>
       <button
         v-if="checkedCount > 0"
         class="danger"
@@ -215,6 +147,6 @@ function onToggleAll(): void {
       >
         Clear history
       </button>
-    </div>
-  </div>
+    </template>
+  </PanelShell>
 </template>

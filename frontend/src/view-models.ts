@@ -155,6 +155,9 @@ export interface WorkspaceBinding {
   removingItem: Ref<string | null>
   removingHistory: Ref<boolean>
   historyChecked: Ref<string[]>
+  historyHeader: ComputedRef<string>
+  historyAllSelected: ComputedRef<boolean>
+  historyCheckedCount: ComputedRef<number>
   pendingHistoryDelete: Ref<string[] | null>
   historyDeleteCount: ComputedRef<number>
   historyDeleteMessage: ComputedRef<string>
@@ -172,8 +175,6 @@ export interface WorkspaceBinding {
   cancelClear: () => void
   removeHistoryItem: (item: string) => Promise<void>
   selectHistoryItem: (item: string, shift: boolean) => void
-  toggleHistoryCheck: (item: string) => void
-  addHistoryRange: (items: string[]) => void
   toggleAllHistory: () => void
   requestDeleteSelected: () => void
   confirmDeleteSelected: () => Promise<void>

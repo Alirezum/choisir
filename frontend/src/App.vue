@@ -2,7 +2,7 @@
 import BrowserPanel from './components/BrowserPanel.vue'
 import ChoiceBoard from './views/ChoiceBoard.vue'
 import ConfirmDialog from './views/ConfirmDialog.vue'
-import HistoryPanel from './components/HistoryPanel.vue'
+import HistoryPanel from './views/HistoryPanel.vue'
 import OptionsPanel from './views/OptionsPanel.vue'
 import PreviewPanel from './components/PreviewPanel.vue'
 import RemainingPanel from './views/RemainingPanel.vue'
@@ -30,6 +30,9 @@ const {
   removingItem,
   removingHistory,
   historyChecked,
+  historyHeader,
+  historyAllSelected,
+  historyCheckedCount,
   pendingHistoryDelete,
   historyDeleteMessage,
   historyDeleteLabel,
@@ -39,14 +42,12 @@ const {
   pick,
   openCurrent,
   openHistoryItem,
-  previewHistoryItem,
   archiveHistory,
   requestClear,
   confirmClear,
   cancelClear,
   removeHistoryItem,
-  toggleHistoryCheck,
-  addHistoryRange,
+  selectHistoryItem,
   toggleAllHistory,
   requestDeleteSelected,
   confirmDeleteSelected,
@@ -144,13 +145,14 @@ void pathInput
               :busy="removingItem !== null || removingHistory"
               :selected="choice?.item ?? null"
               :checked-items="historyChecked"
+              :header="historyHeader"
+              :all-selected="historyAllSelected"
+              :checked-count="historyCheckedCount"
               @archive="archiveHistory"
               @clear="requestClear"
               @remove="removeHistoryItem"
-              @select="previewHistoryItem"
+              @select="selectHistoryItem"
               @open="openHistoryItem"
-              @toggle-check="toggleHistoryCheck"
-              @range-check="addHistoryRange"
               @toggle-all="toggleAllHistory"
               @remove-selected="requestDeleteSelected"
             />

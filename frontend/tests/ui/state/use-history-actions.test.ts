@@ -6,7 +6,7 @@ import { useChoice } from '../../../src/state/use-choice.ts'
 import { useFolderOptions } from '../../../src/state/use-folder-options.ts'
 import { useHistoryActions } from '../../../src/state/use-history-actions.ts'
 import { useHistorySelection } from '../../../src/state/use-history-selection.ts'
-import type { HistoryEntry, PreviewModel } from '../../../src/types.ts'
+import type { HistoryEntry, PreviewModel, StateResponse } from '../../../src/types.ts'
 import { deferred } from '../test-helpers.ts'
 
 const preview: PreviewModel = {
@@ -37,11 +37,21 @@ function setup(items: string[] = ['alpha.txt', 'beta.txt', 'gamma.txt']) {
   const reportError = vi.fn()
   const refresh = vi.fn(async () => {})
   const openEntry = vi.fn(async () => {})
+  const state = ref<StateResponse | null>({
+    valid_path: true,
+    path: '/tmp/choosier',
+    log_file: '',
+    remaining: [],
+    remaining_total: 0,
+    history: entries.value,
+    history_total: items.length,
+  })
 
   const result = useHistoryActions({
     options,
     choice,
     selection,
+    state,
     status: { setStatus, reportError },
     refresh,
     openEntry,
@@ -51,6 +61,7 @@ function setup(items: string[] = ['alpha.txt', 'beta.txt', 'gamma.txt']) {
     options,
     choice,
     entries,
+    state,
     selection,
     setStatus,
     reportError,
@@ -368,4 +379,28 @@ describe('useHistoryActions', () => {
 
     expect(openEntry).toHaveBeenCalledWith('/tmp/choosier/alpha.txt')
   })
+
+  it('derives the history header from the loaded state', () => {
+    const { result, state } = setup(['alpha.txt', 'beta.txt'])
+
+    expect(result.historyHeader.value).toBe('2 picked')
+
+    state.value = {
+      valid_path: true,
+      path: '/tmp/choosier',
+      log_file: '',
+      remaining: [],
+      remaining_total: 0,
+      history: entriesOf(['alpha.txt']),
+      history_total: 5,
+    }
+    expect(result.historyHeader.value).toBe('5 picked (showing the last 1)')
+
+    state.value = null
+    expect(result.historyHeader.value).toBe('0 picked')
+  })
 })
+
+function entriesOf(items: string[]): HistoryEntry[] {
+  return items.map(entry)
+}

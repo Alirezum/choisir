@@ -1,6 +1,7 @@
 import { computed, ref, type ComputedRef, type Ref } from 'vue'
 
 import { api } from '../api.ts'
+import type { StateResponse } from '../types.ts'
 import type { ChoiceBinding } from './use-choice.ts'
 import type { FolderOptionsBinding } from './use-folder-options.ts'
 import type { HistorySelectionBinding } from './use-history-selection.ts'
@@ -10,6 +11,7 @@ export interface HistoryActionsDeps {
   options: Pick<FolderOptionsBinding, 'path' | 'logFile' | 'entryPath'>
   choice: Pick<ChoiceBinding, 'beginPreview' | 'applyPreview' | 'isCurrent'>
   selection: Pick<HistorySelectionBinding, 'checkedItems' | 'clear' | 'remove'>
+  state: Ref<StateResponse | null>
   status: Pick<StatusBinding, 'setStatus' | 'reportError'>
   refresh: () => Promise<void>
   openEntry: (entry: string) => Promise<void>
@@ -20,6 +22,7 @@ export interface HistoryActionsBinding {
   removingItem: Ref<string | null>
   removingHistory: Ref<boolean>
   pendingHistoryDelete: Ref<string[] | null>
+  historyHeader: ComputedRef<string>
   historyDeleteCount: ComputedRef<number>
   historyDeleteMessage: ComputedRef<string>
   historyDeleteLabel: ComputedRef<string>
@@ -49,6 +52,14 @@ export function useHistoryActions(
   const removingHistory = ref(false)
   const pendingHistoryDelete = ref<string[] | null>(null)
 
+  const historyHeader = computed(() => {
+    const entries = deps.state.value?.history ?? []
+    const total = deps.state.value?.history_total ?? 0
+    if (entries.length < total) {
+      return `${total} picked (showing the last ${entries.length})`
+    }
+    return `${total} picked`
+  })
   const historyDeleteCount = computed(
     () => pendingHistoryDelete.value?.length ?? 0,
   )
@@ -191,6 +202,7 @@ export function useHistoryActions(
     removingItem,
     removingHistory,
     pendingHistoryDelete,
+    historyHeader,
     historyDeleteCount,
     historyDeleteMessage,
     historyDeleteLabel,
