@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-
 const MAX_FLAPS = 48
 
 const props = defineProps<{
@@ -12,24 +10,24 @@ const props = defineProps<{
 
 const emit = defineEmits<{ pick: []; open: [] }>()
 
-const characters = computed(() => {
+function characters(): string[] {
   if (props.item === null) return []
   const parts = Array.from(props.item)
   if (parts.length <= MAX_FLAPS) return parts
   return [...parts.slice(0, MAX_FLAPS - 1), '…']
-})
+}
 
-const emptyTitle = computed(() => {
+function emptyTitle(): string {
   if (props.remaining > 0) return 'Nothing picked yet'
   return props.picked > 0 ? 'All picked' : 'Nothing to pick'
-})
+}
 
-const emptyMeta = computed(() => {
+function emptyMeta(): string {
   if (props.remaining > 0) return 'Press Pick to choose the first one.'
   return props.picked > 0
     ? 'Clear or archive history to start over.'
     : 'This folder is empty.'
-})
+}
 </script>
 
 <template>
@@ -45,7 +43,7 @@ const emptyMeta = computed(() => {
         :title="item"
       >
         <span
-          v-for="(character, index) in characters"
+          v-for="(character, index) in characters()"
           :key="index"
           class="flap"
           :class="{ 'is-space': character === ' ' }"
@@ -56,8 +54,8 @@ const emptyMeta = computed(() => {
         </span>
       </div>
       <div v-else class="board-empty">
-        <p class="board-empty-title">{{ emptyTitle }}</p>
-        <p class="board-empty-meta">{{ emptyMeta }}</p>
+        <p class="board-empty-title">{{ emptyTitle() }}</p>
+        <p class="board-empty-meta">{{ emptyMeta() }}</p>
       </div>
       <div class="board-meta">
         <span class="board-stat"><strong>{{ remaining }}</strong> remaining</span>

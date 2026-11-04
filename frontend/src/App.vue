@@ -35,6 +35,7 @@ const {
   historyAllSelected,
   historyCheckedCount,
   pendingHistoryDelete,
+  clearMessage,
   historyDeleteMessage,
   historyDeleteLabel,
 
@@ -192,7 +193,7 @@ void pathInput
 
   <ConfirmDialog
     v-if="clearing"
-    :message="`Clear history?\n${state?.log_file ?? path}`"
+    :message="clearMessage"
     @confirm="confirmClear"
     @cancel="cancelClear"
   />

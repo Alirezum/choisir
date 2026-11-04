@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-
 import EmptyState from '../components/EmptyState.vue'
 import PanelShell from '../components/PanelShell.vue'
 import type { HistoryEntry } from '../types.ts'
@@ -46,7 +44,7 @@ function formatTimestamp(timestamp: string | null): string {
   })
 }
 
-const rows = computed(() => {
+function rows() {
   const checked = new Set(props.checkedItems)
   return props.entries.map((entry, index) => ({
     ...entry,
@@ -55,7 +53,7 @@ const rows = computed(() => {
     selected: entry.item === props.selected,
     checked: checked.has(entry.item),
   }))
-})
+}
 </script>
 
 <template>
@@ -63,7 +61,7 @@ const rows = computed(() => {
     <template #header>
       <span>{{ header }}</span>
       <button
-        v-if="rows.length > 0"
+        v-if="rows().length > 0"
         class="panel-link"
         type="button"
         :disabled="busy"
@@ -72,11 +70,11 @@ const rows = computed(() => {
         {{ allSelected ? 'Clear selection' : 'Select all' }}
       </button>
     </template>
-    <p v-if="rows.length > 0" class="history-hint">
+    <p v-if="rows().length > 0" class="history-hint">
       Click a row to preview and select it. Shift-click to select a range.
     </p>
-    <ul v-if="rows.length > 0" class="list history-list">
-      <li v-for="row in rows" :key="row.key">
+    <ul v-if="rows().length > 0" class="list history-list">
+      <li v-for="row in rows()" :key="row.key">
         <div
           class="history-row"
           :class="{ 'is-selected': row.selected, 'is-checked': row.checked }"

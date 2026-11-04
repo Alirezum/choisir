@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 
 const props = withDefaults(
   defineProps<{
@@ -17,9 +17,13 @@ const emit = defineEmits<{ confirm: []; cancel: [] }>()
 const dialog = ref<HTMLElement | null>(null)
 const cancelButton = ref<HTMLButtonElement | null>(null)
 
-const lines = computed(() => props.message.split('\n'))
-const title = computed(() => lines.value[0] ?? props.message)
-const detail = computed(() => lines.value.slice(1).join('\n'))
+function title(): string {
+  return props.message.split('\n')[0] ?? props.message
+}
+
+function detail(): string {
+  return props.message.split('\n').slice(1).join('\n')
+}
 
 function onKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape') {
@@ -60,8 +64,8 @@ onMounted(() => {
       aria-modal="true"
       aria-labelledby="confirm-title"
     >
-      <h2 id="confirm-title" class="dialog-title">{{ title }}</h2>
-      <p v-if="detail !== ''" class="dialog-detail">{{ detail }}</p>
+      <h2 id="confirm-title" class="dialog-title">{{ title() }}</h2>
+      <p v-if="detail() !== ''" class="dialog-detail">{{ detail() }}</p>
       <div class="dialog-actions">
         <button ref="cancelButton" type="button" @click="emit('cancel')">
           {{ cancelLabel }}

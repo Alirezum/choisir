@@ -120,10 +120,6 @@ export interface BrowserNavigateIntent {
   target: BrowserEntry | string
 }
 
-export interface BrowserUseFolderIntent {
-  path: string
-}
-
 export interface TabSelectIntent {
   id: TabId
 }
@@ -159,6 +155,7 @@ export interface WorkspaceBinding {
   historyAllSelected: ComputedRef<boolean>
   historyCheckedCount: ComputedRef<number>
   pendingHistoryDelete: Ref<string[] | null>
+  clearMessage: ComputedRef<string>
   historyDeleteCount: ComputedRef<number>
   historyDeleteMessage: ComputedRef<string>
   historyDeleteLabel: ComputedRef<string>

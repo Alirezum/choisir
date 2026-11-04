@@ -40,7 +40,7 @@ function setup(items: string[] = ['alpha.txt', 'beta.txt', 'gamma.txt']) {
   const state = ref<StateResponse | null>({
     valid_path: true,
     path: '/tmp/choosier',
-    log_file: '',
+    log_file: '/tmp/choosier/.choosier.jsonl',
     remaining: [],
     remaining_total: 0,
     history: entries.value,
@@ -398,6 +398,28 @@ describe('useHistoryActions', () => {
 
     state.value = null
     expect(result.historyHeader.value).toBe('0 picked')
+  })
+
+  it('derives the clear confirmation message from the state log and path', () => {
+    const { result, state } = setup()
+
+    expect(result.clearMessage.value).toBe(
+      'Clear history?\n/tmp/choosier/.choosier.jsonl',
+    )
+
+    state.value = {
+      valid_path: true,
+      path: '/tmp/choosier',
+      log_file: '',
+      remaining: [],
+      remaining_total: 0,
+      history: [],
+      history_total: 0,
+    }
+    expect(result.clearMessage.value).toBe('Clear history?\n')
+
+    state.value = null
+    expect(result.clearMessage.value).toBe('Clear history?\n/tmp/choosier')
   })
 })
 

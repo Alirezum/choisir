@@ -111,6 +111,7 @@ export function useWorkspace(): WorkspaceBinding {
     historyAllSelected: selection.allSelected,
     historyCheckedCount: selection.checkedCount,
     pendingHistoryDelete: historyActions.pendingHistoryDelete,
+    clearMessage: historyActions.clearMessage,
     historyDeleteCount: historyActions.historyDeleteCount,
     historyDeleteMessage: historyActions.historyDeleteMessage,
     historyDeleteLabel: historyActions.historyDeleteLabel,

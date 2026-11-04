@@ -22,6 +22,7 @@ export interface HistoryActionsBinding {
   removingItem: Ref<string | null>
   removingHistory: Ref<boolean>
   pendingHistoryDelete: Ref<string[] | null>
+  clearMessage: ComputedRef<string>
   historyHeader: ComputedRef<string>
   historyDeleteCount: ComputedRef<number>
   historyDeleteMessage: ComputedRef<string>
@@ -51,6 +52,11 @@ export function useHistoryActions(
   const removingItem = ref<string | null>(null)
   const removingHistory = ref(false)
   const pendingHistoryDelete = ref<string[] | null>(null)
+
+  const clearMessage = computed(
+    () =>
+      `Clear history?\n${deps.state.value?.log_file ?? options.path.value}`,
+  )
 
   const historyHeader = computed(() => {
     const entries = deps.state.value?.history ?? []
@@ -202,6 +208,7 @@ export function useHistoryActions(
     removingItem,
     removingHistory,
     pendingHistoryDelete,
+    clearMessage,
     historyHeader,
     historyDeleteCount,
     historyDeleteMessage,
