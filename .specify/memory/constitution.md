@@ -53,6 +53,21 @@ SHOULD be the smallest reversible change that satisfies the requirement.
 Rationale: the project is small; predictable quality gates matter more than
 cleverness.
 
+### VI. Intentional Frontend Design
+Frontend visual design, redesign, or styling work MUST load and follow the
+`frontend-design` skill (`.agents/skills/frontend-design/SKILL.md`) before
+making aesthetic decisions. Its plan, review-against-the-brief, build, and
+critique process MUST be applied instead of defaulting to generic or templated
+UI patterns; when the brief leaves an axis free, that freedom MUST be spent on
+a deliberate choice for this product. This principle governs aesthetic
+direction only: functional behavior, accessibility, visual parity, and public
+contracts remain binding, and no runtime dependency, design system, or
+framework may be added to satisfy it.
+
+Rationale: choosier's interfaces are part of its user-facing identity;
+unguided styling drifts toward templated defaults and erodes the deliberate
+visual language already established.
+
 ## Technical Constraints
 
 - The Python core has no mandatory third-party runtime dependencies; `ui`
@@ -107,4 +122,4 @@ committing the amended constitution.
   - Allowed types: `feat`, `fix`, `refactor`, `test`, `chore`, `docs`, `style`.
 - **Validation:** Never commit code that fails existing test suites or linters.
 
-**Version**: 1.1.0 | **Ratified**: 2026-10-29 | **Last Amended**: 2026-10-29
+**Version**: 1.2.0 | **Ratified**: 2026-10-29 | **Last Amended**: 2026-11-05
