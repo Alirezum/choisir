@@ -4,25 +4,26 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../../../src/api.ts'
 import { useWorkspace } from '../../../src/state/use-workspace.ts'
 import type {
+  FilteredStateResponse,
   HistoryEntry,
   PreviewModel,
   RemoveHistoryItemsResponse,
-  StateResponse,
 } from '../../../src/types.ts'
-import { deferred, flushPromises, mountHost } from '../test-helpers.ts'
+import {
+  deferred,
+  filteredStateResponse,
+  flushPromises,
+  mountHost,
+} from '../test-helpers.ts'
 
 const stateResponse = (
-  overrides: Partial<StateResponse> = {},
-): StateResponse => ({
-  valid_path: true,
-  path: '/tmp/choosier',
-  log_file: '/tmp/choosier/.choosier.jsonl',
-  remaining: ['alpha.txt'],
-  remaining_total: 1,
-  history: [],
-  history_total: 0,
-  ...overrides,
-})
+  overrides: Partial<FilteredStateResponse> = {},
+): FilteredStateResponse =>
+  filteredStateResponse({
+    remaining: ['alpha.txt'],
+    remaining_total: 1,
+    ...overrides,
+  })
 
 const historyEntry = (item: string, index: number): HistoryEntry => ({
   timestamp: `2026-11-04T09:${String(15 + index).padStart(2, '0')}:00+00:00`,
@@ -46,7 +47,7 @@ function setup(
   state = stateResponse(),
 ) {
   vi.spyOn(api, 'defaults').mockResolvedValue(defaults)
-  vi.spyOn(api, 'state').mockResolvedValue(state)
+  vi.spyOn(api, 'stateFiltered').mockResolvedValue(state)
   vi.spyOn(api, 'browse').mockResolvedValue({
     path: defaults.path,
     parent: '/tmp',
@@ -182,7 +183,7 @@ describe('useWorkspace', () => {
     await nextTick()
     await vi.advanceTimersByTimeAsync(250)
 
-    const state = vi.mocked(api.state)
+    const state = vi.mocked(api.stateFiltered)
     state.mockClear()
 
     workspace.includeHidden.value = true
@@ -203,7 +204,251 @@ describe('useWorkspace', () => {
       include_hidden: true,
       files_only: false,
       dirs_only: true,
+      excluded_types: [],
+      excluded_entries: [],
     })
+
+    wrapper.unmount()
+  })
+
+  it('exposes filterPanel from the latest options and remaining total', async () => {
+    const state = filteredStateResponse({
+      remaining: ['alpha.txt', 'beta.txt', 'sub'],
+      remaining_total: 3,
+      filter_options: {
+        types: [
+          { key: 'dir', label: 'Folders', count: 1 },
+          { key: 'file:.txt', label: '.txt files', count: 2 },
+        ],
+        entries: [
+          { name: 'alpha.txt', type_key: 'file:.txt' },
+          { name: 'beta.txt', type_key: 'file:.txt' },
+          { name: 'sub', type_key: 'dir' },
+        ],
+        entries_total: 5,
+        entries_truncated: true,
+      },
+      known_entry_exclusions: [],
+    })
+    const { workspace, wrapper } = setup(
+      { path: '/tmp/choosier', log_file: '' },
+      state,
+    )
+
+    await flushPromises()
+
+    expect(workspace.filterPanel.value.ready).toBe(true)
+    expect(workspace.filterPanel.value.validPath).toBe(true)
+    expect(workspace.filterPanel.value.empty).toBe(false)
+    expect(workspace.filterPanel.value.eligibleEntries).toBe(3)
+    expect(workspace.filterPanel.value.entriesTotal).toBe(5)
+    expect(workspace.filterPanel.value.entriesTruncated).toBe(true)
+    expect(workspace.filterPanel.value.checkedTypeKeys).toEqual(
+      new Set(['dir', 'file:.txt']),
+    )
+    expect(workspace.filterPanel.value.checkedEntryNames).toEqual(
+      new Set(['alpha.txt', 'beta.txt', 'sub']),
+    )
+    expect(workspace.filterPanel.value.summary).toBe(
+      'No filter: all 2 types checked; 3 of 5 entries eligible.',
+    )
+
+    wrapper.unmount()
+  })
+
+  it('toggles type and entry exclusions, refreshes, and clears them', async () => {
+    const state = filteredStateResponse({
+      remaining: ['alpha.txt'],
+      remaining_total: 1,
+      filter_options: {
+        types: [
+          { key: 'dir', label: 'Folders', count: 1 },
+          { key: 'file:.txt', label: '.txt files', count: 2 },
+        ],
+        entries: [
+          { name: 'alpha.txt', type_key: 'file:.txt' },
+          { name: 'beta.txt', type_key: 'file:.txt' },
+          { name: 'sub', type_key: 'dir' },
+        ],
+        entries_total: 3,
+        entries_truncated: false,
+      },
+      known_entry_exclusions: [],
+    })
+    const { workspace, wrapper } = setup(
+      { path: '/tmp/choosier', log_file: '' },
+      state,
+    )
+    await flushPromises()
+    vi.useFakeTimers()
+    const stateRequest = vi.mocked(api.stateFiltered)
+    stateRequest.mockClear()
+
+    workspace.toggleFilterType('dir')
+    workspace.toggleFilterEntry('beta.txt')
+    await nextTick()
+
+    expect(workspace.filterPanel.value.active).toBe(true)
+    expect(workspace.filterPanel.value.checkedTypeKeys.has('dir')).toBe(false)
+    expect(
+      workspace.filterPanel.value.checkedEntryNames.has('beta.txt'),
+    ).toBe(false)
+    expect(workspace.filterPanel.value.summary).toBe(
+      'Filter active: 1 of 2 types checked; 1 of 3 entries eligible.',
+    )
+
+    await vi.advanceTimersByTimeAsync(250)
+    expect(stateRequest).toHaveBeenCalledTimes(1)
+    expect(stateRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/tmp/choosier',
+        excluded_types: ['dir'],
+        excluded_entries: ['beta.txt'],
+      }),
+    )
+
+    workspace.clearFilters()
+    await nextTick()
+
+    expect(workspace.filterPanel.value.active).toBe(false)
+    expect(workspace.filterPanel.value.checkedTypeKeys.size).toBe(2)
+    expect(workspace.filterPanel.value.checkedEntryNames.size).toBe(3)
+
+    await vi.advanceTimersByTimeAsync(250)
+    expect(stateRequest).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        excluded_types: [],
+        excluded_entries: [],
+      }),
+    )
+
+    wrapper.unmount()
+  })
+
+  it('select-all and clear actions update only their own checklist', async () => {
+    const state = filteredStateResponse({
+      filter_options: {
+        types: [
+          { key: 'dir', label: 'Folders', count: 1 },
+          { key: 'file:.txt', label: '.txt files', count: 2 },
+        ],
+        entries: [
+          { name: 'alpha.txt', type_key: 'file:.txt' },
+          { name: 'sub', type_key: 'dir' },
+        ],
+        entries_total: 2,
+        entries_truncated: false,
+      },
+      known_entry_exclusions: [],
+    })
+    const { workspace, wrapper } = setup(
+      { path: '/tmp/choosier', log_file: '' },
+      state,
+    )
+    await flushPromises()
+
+    workspace.clearFilterTypes()
+    expect(workspace.filterPanel.value.checkedTypeKeys.size).toBe(0)
+    expect(workspace.filterPanel.value.checkedEntryNames.size).toBe(2)
+
+    workspace.selectAllFilterTypes()
+    expect(workspace.filterPanel.value.checkedTypeKeys.size).toBe(2)
+
+    workspace.clearFilterEntries()
+    expect(workspace.filterPanel.value.checkedEntryNames.size).toBe(0)
+    expect(workspace.filterPanel.value.checkedTypeKeys.size).toBe(2)
+
+    workspace.selectAllFilterEntries()
+    expect(workspace.filterPanel.value.checkedEntryNames.size).toBe(2)
+
+    wrapper.unmount()
+  })
+
+  it('resets exclusions and the panel on path and log changes', async () => {
+    const state = filteredStateResponse({
+      filter_options: {
+        types: [{ key: 'dir', label: 'Folders', count: 1 }],
+        entries: [{ name: 'sub', type_key: 'dir' }],
+        entries_total: 1,
+        entries_truncated: false,
+      },
+      known_entry_exclusions: [],
+    })
+    const { workspace, wrapper } = setup(
+      { path: '/tmp/choosier', log_file: '' },
+      state,
+    )
+    await flushPromises()
+
+    workspace.toggleFilterType('dir')
+    workspace.toggleFilterEntry('sub')
+    expect(workspace.filterPanel.value.active).toBe(true)
+
+    workspace.path.value = '/tmp/choosier/next'
+    await nextTick()
+    expect(workspace.filterPanel.value.active).toBe(false)
+    expect(workspace.filterPanel.value.checkedTypeKeys).toEqual(new Set(['dir']))
+    expect(workspace.filterPanel.value.checkedEntryNames).toEqual(new Set(['sub']))
+
+    workspace.toggleFilterType('dir')
+    workspace.toggleFilterEntry('sub')
+    expect(workspace.filterPanel.value.active).toBe(true)
+
+    workspace.logFile.value = '/tmp/choosier/custom.jsonl'
+    await nextTick()
+    expect(workspace.filterPanel.value.active).toBe(false)
+    expect(workspace.filterPanel.value.checkedTypeKeys).toEqual(new Set(['dir']))
+    expect(workspace.filterPanel.value.checkedEntryNames).toEqual(new Set(['sub']))
+
+    wrapper.unmount()
+  })
+
+  it('prunes exclusions the server no longer reports after a refresh', async () => {
+    const first = filteredStateResponse({
+      filter_options: {
+        types: [
+          { key: 'dir', label: 'Folders', count: 1 },
+          { key: 'file:.txt', label: '.txt files', count: 1 },
+        ],
+        entries: [
+          { name: 'alpha.txt', type_key: 'file:.txt' },
+          { name: 'sub', type_key: 'dir' },
+        ],
+        entries_total: 2,
+        entries_truncated: false,
+      },
+      known_entry_exclusions: [],
+    })
+    const { workspace, wrapper } = setup(
+      { path: '/tmp/choosier', log_file: '' },
+      first,
+    )
+    await flushPromises()
+    vi.mocked(api.stateFiltered).mockResolvedValue(
+      filteredStateResponse({
+        filter_options: {
+          types: [{ key: 'file:.txt', label: '.txt files', count: 1 }],
+          entries: [{ name: 'alpha.txt', type_key: 'file:.txt' }],
+          entries_total: 1,
+          entries_truncated: false,
+        },
+        known_entry_exclusions: [],
+      }),
+    )
+
+    vi.useFakeTimers()
+    workspace.toggleFilterType('dir')
+    workspace.toggleFilterEntry('sub')
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(250)
+
+    expect(workspace.filterPanel.value.checkedTypeKeys).toEqual(
+      new Set(['file:.txt']),
+    )
+    expect(workspace.filterPanel.value.checkedEntryNames).toEqual(
+      new Set(['alpha.txt']),
+    )
+    expect(workspace.filterPanel.value.active).toBe(false)
 
     wrapper.unmount()
   })
@@ -303,7 +548,7 @@ describe('useWorkspace', () => {
     expect(clear).not.toHaveBeenCalled()
 
     workspace.requestClear()
-    const refreshes = vi.mocked(api.state).mock.calls.length
+    const refreshes = vi.mocked(api.stateFiltered).mock.calls.length
     await workspace.confirmClear()
 
     expect(clear).toHaveBeenCalledWith(
@@ -314,7 +559,7 @@ describe('useWorkspace', () => {
     expect(workspace.status.value).toBe(
       'Cleared /tmp/choosier/.choosier.jsonl.',
     )
-    expect(vi.mocked(api.state).mock.calls.length).toBeGreaterThan(refreshes)
+    expect(vi.mocked(api.stateFiltered).mock.calls.length).toBeGreaterThan(refreshes)
 
     wrapper.unmount()
   })

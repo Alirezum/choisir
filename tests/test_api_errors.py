@@ -4,6 +4,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 try:
@@ -366,6 +367,141 @@ class ApiErrorEnvelopeTest(unittest.TestCase):
             "text/plain",
             response.headers.get("content-type", ""),
         )
+
+
+@unittest.skipUnless(HAS_WEB, "web extra (fastapi) not installed")
+class FilterValidationApiTest(unittest.TestCase):
+    """Every exclusion rejection from the filter API contract section 5."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.target = Path(self.tmp.name) / "target"
+        self.target.mkdir()
+        (self.target / "a.txt").touch()
+        (self.target / "README").touch()
+        self.log = self.target / ".choosier.jsonl"
+        self.client = TestClient(create_app())
+
+    def _post(
+        self,
+        route: str,
+        **body: object,
+    ) -> Any:
+        payload: dict[str, object] = {"path": str(self.target), "dry_run": True}
+        payload.update(body)
+        return self.client.post(f"/api/{route}", json=payload)
+
+    def _assert_rejected(
+        self,
+        route: str,
+        field: str,
+        **body: object,
+    ) -> None:
+        response = self._post(route, **body)
+        error = assert_error_envelope(self, response, 422, "validation_error")
+        self.assertIn(field, error["error"]["message"])
+        issues = error["error"]["details"]["issues"]
+        self.assertTrue(
+            any(field in issue["location"] for issue in issues),
+            issues,
+        )
+        self.assertFalse(self.log.exists())
+
+    def test_malformed_type_keys_are_rejected(self) -> None:
+        for value in (
+            "DIR",
+            "file:jpg",
+            "file:.",
+            "file",
+            "",
+            "other:.jpg",
+            "file:.jpg/evil",
+            "file:.jp\x00g",
+        ):
+            with self.subTest(value=value):
+                self._assert_rejected("state", "excluded_types", excluded_types=[value])
+                self._assert_rejected("pick", "excluded_types", excluded_types=[value])
+
+    def test_malformed_entry_names_are_rejected(self) -> None:
+        for value in ("", ".", "..", "dir/name", "nul\x00name"):
+            with self.subTest(value=value):
+                self._assert_rejected(
+                    "state", "excluded_entries", excluded_entries=[value]
+                )
+                self._assert_rejected(
+                    "pick", "excluded_entries", excluded_entries=[value]
+                )
+
+    def test_duplicates_are_deduplicated(self) -> None:
+        response = self._post(
+            "state",
+            excluded_types=["file:.txt", "file:.TXT", "file:.txt"],
+            excluded_entries=["README", "README"],
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["remaining"], [])
+        self.assertEqual(body["remaining_total"], 0)
+        self.assertEqual(body["known_entry_exclusions"], ["README"])
+
+    def test_backslash_entry_name_is_accepted(self) -> None:
+        response = self._post("state", excluded_entries=["back\\slash"])
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["known_entry_exclusions"], [])
+
+    def test_one_thousand_twenty_four_character_boundaries(self) -> None:
+        type_at_limit = "file:." + "x" * (1024 - len("file:."))
+        entry_at_limit = "y" * 1024
+        response = self._post(
+            "state",
+            excluded_types=[type_at_limit],
+            excluded_entries=[entry_at_limit],
+        )
+        self.assertEqual(response.status_code, 200)
+
+        self._assert_rejected(
+            "state", "excluded_types", excluded_types=[type_at_limit + "x"]
+        )
+        self._assert_rejected(
+            "state", "excluded_entries", excluded_entries=[entry_at_limit + "y"]
+        )
+
+    def test_exclusion_list_limits(self) -> None:
+        at_type_limit = ["file:.txt"] * 2000
+        response = self._post("state", excluded_types=at_type_limit)
+        self.assertEqual(response.status_code, 200)
+
+        self._assert_rejected(
+            "state",
+            "excluded_types",
+            excluded_types=[*at_type_limit, "file:.md"],
+        )
+
+        at_entry_limit = ["same"] * 20000
+        response = self._post("state", excluded_entries=at_entry_limit)
+        self.assertEqual(response.status_code, 200)
+
+        self._assert_rejected(
+            "state",
+            "excluded_entries",
+            excluded_entries=[*at_entry_limit, "other"],
+        )
+
+    def test_conflicting_folder_options_are_400(self) -> None:
+        for route in ("state", "pick"):
+            with self.subTest(route=route):
+                response = self._post(
+                    route,
+                    files_only=True,
+                    dirs_only=True,
+                )
+                error = assert_error_envelope(self, response, 400, "invalid_request")
+                self.assertEqual(
+                    error["error"]["message"],
+                    "files_only and dirs_only are mutually exclusive",
+                )
+                self.assertFalse(self.log.exists())
 
 
 if __name__ == "__main__":

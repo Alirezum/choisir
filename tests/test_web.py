@@ -5,6 +5,7 @@ import unittest
 import zipfile
 from io import BytesIO
 from pathlib import Path
+from typing import Any, cast
 from unittest.mock import patch
 
 try:
@@ -504,6 +505,169 @@ class WebApiTest(unittest.TestCase):
             "/api/open", json={"path": str(self.target / "gone")}
         )
         self.assertEqual(response.status_code, 404)
+
+
+class FilteredWebApiTest(unittest.TestCase):
+    """Route-level coverage for the additive filtered state and pick fields."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.target = Path(self.tmp.name) / "target"
+        self.target.mkdir()
+        for name in ("a.txt", "b.TXT", "README", "notes.md"):
+            (self.target / name).touch()
+        (self.target / "sub").mkdir()
+        self.log = self.target / ".choosier.jsonl"
+        self.client = TestClient(create_app())
+
+    def _post_state(self, **body: object) -> dict[str, Any]:
+        payload: dict[str, object] = {"path": str(self.target)}
+        payload.update(body)
+        response = self.client.post("/api/state", json=payload)
+        self.assertEqual(response.status_code, 200)
+        return cast(dict[str, Any], response.json())
+
+    def test_post_state_returns_filter_options(self) -> None:
+        body = self._post_state()
+        options = body["filter_options"]
+        self.assertEqual(
+            [(item["key"], item["count"]) for item in options["types"]],
+            [
+                ("dir", 1),
+                ("file:.md", 1),
+                ("file:.txt", 2),
+                ("file:", 1),
+            ],
+        )
+        self.assertEqual(
+            [item["name"] for item in options["entries"]],
+            ["README", "a.txt", "b.TXT", "notes.md", "sub"],
+        )
+        self.assertEqual(options["entries_total"], 5)
+        self.assertFalse(options["entries_truncated"])
+        self.assertEqual(body["known_entry_exclusions"], [])
+
+    def test_post_state_applies_type_and_entry_exclusions(self) -> None:
+        body = self._post_state(
+            excluded_types=["dir"],
+            excluded_entries=["notes.md", "stale.txt", "notes.md"],
+        )
+        self.assertEqual(body["remaining"], ["README", "a.txt", "b.TXT"])
+        self.assertEqual(body["remaining_total"], 3)
+        self.assertEqual(body["known_entry_exclusions"], ["notes.md"])
+
+    def test_post_state_canonicalizes_type_case(self) -> None:
+        body = self._post_state(excluded_types=["file:.TXT"])
+        self.assertEqual(body["remaining"], ["README", "notes.md", "sub"])
+        counts = {
+            item["key"]: item["count"] for item in body["filter_options"]["types"]
+        }
+        self.assertEqual(counts["file:.txt"], 2)
+
+    def test_post_state_invalid_path_has_empty_options(self) -> None:
+        response = self.client.post(
+            "/api/state",
+            json={
+                "path": str(self.target / "nope"),
+                "excluded_entries": ["a.txt"],
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertFalse(body["valid_path"])
+        self.assertEqual(body["remaining"], [])
+        self.assertEqual(body["filter_options"]["types"], [])
+        self.assertEqual(body["filter_options"]["entries"], [])
+        self.assertEqual(body["filter_options"]["entries_total"], 0)
+        self.assertFalse(body["filter_options"]["entries_truncated"])
+        self.assertEqual(body["known_entry_exclusions"], [])
+
+    def test_post_state_stale_exclusions_match_nothing(self) -> None:
+        body = self._post_state(
+            excluded_types=["file:.png"],
+            excluded_entries=["missing.bin"],
+        )
+        self.assertEqual(
+            body["remaining"],
+            ["README", "a.txt", "b.TXT", "notes.md", "sub"],
+        )
+        self.assertEqual(body["known_entry_exclusions"], [])
+
+    def test_post_state_conflicting_options_is_400(self) -> None:
+        response = self.client.post(
+            "/api/state",
+            json={
+                "path": str(self.target),
+                "files_only": True,
+                "dirs_only": True,
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error"]["message"],
+            "files_only and dirs_only are mutually exclusive",
+        )
+
+    def test_get_state_shape_is_unchanged(self) -> None:
+        response = self.client.get("/api/state", params={"path": str(self.target)})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            set(response.json()),
+            {
+                "valid_path",
+                "path",
+                "log_file",
+                "remaining",
+                "remaining_total",
+                "history",
+                "history_total",
+            },
+        )
+
+    def test_pick_honors_exclusions_without_writing_on_failure(self) -> None:
+        filtered_empty = self.client.post(
+            "/api/pick",
+            json={
+                "path": str(self.target),
+                "excluded_types": ["dir", "file:.md", "file:.txt", "file:"],
+            },
+        ).json()
+        self.assertEqual(filtered_empty["status"], "filtered_empty")
+        self.assertIsNone(filtered_empty["item"])
+        self.assertFalse(filtered_empty["logged"])
+        self.assertFalse(self.log.exists())
+
+        only_txt = {
+            "path": str(self.target),
+            "excluded_types": ["dir", "file:.md", "file:"],
+        }
+        first = self.client.post("/api/pick", json=only_txt).json()
+        second = self.client.post("/api/pick", json=only_txt).json()
+        self.assertEqual(first["status"], "picked")
+        self.assertEqual(second["status"], "picked")
+        self.assertEqual({first["item"], second["item"]}, {"a.txt", "b.TXT"})
+        third = self.client.post("/api/pick", json=only_txt).json()
+        self.assertEqual(third["status"], "filtered_exhausted")
+        self.assertIsNone(third["item"])
+        self.assertFalse(third["logged"])
+        self.assertEqual(self.log.read_text(encoding="utf-8").count("\n"), 2)
+
+    def test_pick_exclusion_intersection(self) -> None:
+        body = self.client.post(
+            "/api/pick",
+            json={
+                "path": str(self.target),
+                "seed": 1,
+                "dry_run": True,
+                "excluded_types": ["dir", "file:.md", "file:"],
+                "excluded_entries": ["b.TXT"],
+            },
+        ).json()
+        self.assertEqual(body["status"], "picked")
+        self.assertEqual(body["item"], "a.txt")
+        self.assertFalse(body["logged"])
+        self.assertFalse(self.log.exists())
 
 
 @unittest.skipUnless(HAS_WEB, "web extra (fastapi) not installed")

@@ -63,6 +63,70 @@ class ApiContractTest(unittest.TestCase):
             with self.subTest(route=f"{route['method']} {route['path']}"):
                 assert_success_schema(self.contract, route, self.openapi)
 
+    def test_additive_filter_contract_matches_openapi(self) -> None:
+        self.assertEqual(len(self.contract["routes"]), 13)
+        post_state = contract_route(self.contract, "POST", "/api/state")
+        self.assertEqual(post_state["success"]["statuses"], [200])
+        fields = post_state["success"]["schema"]["fields"]
+        self.assertIn("filter_options", fields)
+        self.assertIn("known_entry_exclusions", fields)
+        for schema_name in ("FilterTypeOption", "FilterEntryOption", "FilterOptions"):
+            self.assertIn(schema_name, self.contract["schemas"])
+
+        components = self.openapi["components"]["schemas"]
+        self.assertIn("FilterOptionsModel", components)
+        filter_options = components["FilterOptionsModel"]["properties"]
+        self.assertEqual(
+            set(filter_options),
+            {"types", "entries", "entries_total", "entries_truncated"},
+        )
+        self.assertEqual(
+            set(components["FilterTypeOptionModel"]["properties"]),
+            {"key", "label", "count"},
+        )
+        self.assertEqual(
+            set(components["FilterEntryOptionModel"]["properties"]),
+            {"name", "type_key"},
+        )
+
+        state_request = components["StateRequest"]["properties"]
+        self.assertIn("excluded_types", state_request)
+        self.assertIn("excluded_entries", state_request)
+        pick_request = components["PickRequest"]["properties"]
+        self.assertIn("excluded_types", pick_request)
+        self.assertIn("excluded_entries", pick_request)
+
+        pick = contract_route(self.contract, "POST", "/api/pick")
+        self.assertEqual(
+            pick["success"]["schema"]["fields"]["status"]["enum"],
+            [
+                "picked",
+                "empty",
+                "exhausted",
+                "invalid_path",
+                "filtered_empty",
+                "filtered_exhausted",
+            ],
+        )
+
+    def test_get_state_shape_stays_frozen(self) -> None:
+        route = contract_route(self.contract, "GET", "/api/state")
+        fields = route["success"]["schema"]["fields"]
+        self.assertEqual(
+            set(fields),
+            {
+                "valid_path",
+                "path",
+                "log_file",
+                "remaining",
+                "remaining_total",
+                "history",
+                "history_total",
+            },
+        )
+        self.assertNotIn("filter_options", fields)
+        self.assertNotIn("known_entry_exclusions", fields)
+
     def test_binary_routes_declare_contract_rules(self) -> None:
         binary_routes = [
             route

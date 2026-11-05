@@ -14,7 +14,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import (
     MalformedRangeHeader,
@@ -23,6 +23,12 @@ from starlette.responses import (
 
 from choosier import services, web_media
 from choosier.chooser import resolve_log_path
+from choosier.filters import (
+    FilterOptions,
+    FilterSelection,
+    FilterValidationError,
+    normalize_exclusions,
+)
 from choosier.preview import (
     Preview,
     PreviewKind,
@@ -192,7 +198,74 @@ class StateResponse(BaseModel):
     history_total: int
 
 
-class PickRequest(BaseModel):
+class FilterTypeOptionModel(BaseModel):
+    """One selectable file type with its base-candidate count."""
+
+    key: str
+    label: str
+    count: int
+
+
+class FilterEntryOptionModel(BaseModel):
+    """One selectable visible entry and its type key."""
+
+    name: str
+    type_key: str
+
+
+class FilterOptionsModel(BaseModel):
+    """The complete type list and bounded entry list for one folder."""
+
+    types: list[FilterTypeOptionModel]
+    entries: list[FilterEntryOptionModel]
+    entries_total: int
+    entries_truncated: bool
+
+
+class FilterExclusionsRequest(BaseModel):
+    """Optional type/entry exclusions shared by state and pick requests."""
+
+    excluded_types: list[str] = Field(default_factory=list)
+    excluded_entries: list[str] = Field(default_factory=list)
+
+    @field_validator("excluded_types")
+    @classmethod
+    def _normalize_types(cls, value: list[str]) -> list[str]:
+        try:
+            selection = normalize_exclusions(value, [])
+        except FilterValidationError as exc:
+            raise ValueError(str(exc)) from exc
+        return sorted(selection.excluded_types)
+
+    @field_validator("excluded_entries")
+    @classmethod
+    def _normalize_entries(cls, value: list[str]) -> list[str]:
+        try:
+            selection = normalize_exclusions([], value)
+        except FilterValidationError as exc:
+            raise ValueError(str(exc)) from exc
+        return sorted(selection.excluded_entries)
+
+    @property
+    def filter_selection(self) -> FilterSelection:
+        """Already-validated values as the service-layer selection object."""
+        return normalize_exclusions(self.excluded_types, self.excluded_entries)
+
+
+class StateRequest(FilterExclusionsRequest):
+    path: str
+    log_file: str | None = None
+    include_hidden: bool = False
+    files_only: bool = False
+    dirs_only: bool = False
+
+
+class FilteredStateResponse(StateResponse):
+    filter_options: FilterOptionsModel
+    known_entry_exclusions: list[str]
+
+
+class PickRequest(FilterExclusionsRequest):
     path: str
     log_file: str | None = None
     seed: int | None = None
@@ -203,7 +276,14 @@ class PickRequest(BaseModel):
 
 
 class PickResponse(BaseModel):
-    status: Literal["picked", "empty", "exhausted", "invalid_path"]
+    status: Literal[
+        "picked",
+        "empty",
+        "exhausted",
+        "invalid_path",
+        "filtered_empty",
+        "filtered_exhausted",
+    ]
     log_file: str
     item: str | None = None
     logged: bool = False
@@ -280,6 +360,36 @@ def _video_model(video: PreviewVideo) -> PreviewVideoModel:
         media_type=video.media_type,
         size=video.size,
     )
+
+
+def _filter_options_model(options: FilterOptions) -> FilterOptionsModel:
+    return FilterOptionsModel(
+        types=[
+            FilterTypeOptionModel(
+                key=item.key,
+                label=item.label,
+                count=item.count,
+            )
+            for item in options.types
+        ],
+        entries=[
+            FilterEntryOptionModel(name=item.name, type_key=item.type_key)
+            for item in options.entries
+        ],
+        entries_total=options.entries_total,
+        entries_truncated=options.entries_truncated,
+    )
+
+
+def _history_models(snapshot: services.StateSnapshot) -> list[HistoryEntryModel]:
+    return [
+        HistoryEntryModel(
+            timestamp=entry.timestamp,
+            item=entry.item,
+            display=entry.display,
+        )
+        for entry in snapshot.history
+    ]
 
 
 def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
@@ -413,15 +523,31 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
             log_file=str(snapshot.log_file),
             remaining=list(snapshot.remaining),
             remaining_total=snapshot.remaining_total,
-            history=[
-                HistoryEntryModel(
-                    timestamp=entry.timestamp,
-                    item=entry.item,
-                    display=entry.display,
-                )
-                for entry in snapshot.history
-            ],
+            history=_history_models(snapshot),
             history_total=snapshot.history_total,
+        )
+
+    @app.post("/api/state")
+    def state_filtered(request: StateRequest) -> FilteredStateResponse:
+        """Remaining picks, history, and filter options for this selection."""
+        snapshot = services.build_state(
+            request.path,
+            request.log_file,
+            include_hidden=request.include_hidden,
+            files_only=request.files_only,
+            dirs_only=request.dirs_only,
+            selection=request.filter_selection,
+        )
+        return FilteredStateResponse(
+            valid_path=snapshot.valid_path,
+            path=str(snapshot.path),
+            log_file=str(snapshot.log_file),
+            remaining=list(snapshot.remaining),
+            remaining_total=snapshot.remaining_total,
+            history=_history_models(snapshot),
+            history_total=snapshot.history_total,
+            filter_options=_filter_options_model(snapshot.filter_options),
+            known_entry_exclusions=list(snapshot.known_entry_exclusions),
         )
 
     @app.post("/api/pick")
@@ -435,6 +561,7 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
             include_hidden=request.include_hidden,
             files_only=request.files_only,
             dirs_only=request.dirs_only,
+            selection=request.filter_selection,
             include_preview=True,
         )
         return PickResponse(

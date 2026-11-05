@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from choosier.filters import FILTER_ENTRY_LIMIT, FilterSelection
 from choosier.services import (
     PANEL_MAX_LINES,
     FailureKind,
@@ -133,6 +134,100 @@ class StateSnapshotTest(unittest.TestCase):
         self.assertEqual(malformed.remaining, ("a", "b"))
         self.assertEqual(malformed.history, ())
         self.assertEqual(malformed.history_total, 0)
+
+
+class FilteredStateTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.target = Path(self.tmp.name) / "target"
+        self.target.mkdir()
+        self.log = self.target / ".choosier.jsonl"
+        for name in ("a.jpg", "B.JPG", "notes.txt", "README"):
+            (self.target / name).touch()
+        (self.target / "sub").mkdir()
+
+    def test_filter_options_describe_the_folder(self) -> None:
+        state = build_state(self.target, self.log, max_lines=None)
+        self.assertEqual(
+            [(item.key, item.count) for item in state.filter_options.types],
+            [("dir", 1), ("file:.jpg", 2), ("file:.txt", 1), ("file:", 1)],
+        )
+        self.assertEqual(
+            [item.name for item in state.filter_options.entries],
+            ["B.JPG", "README", "a.jpg", "notes.txt", "sub"],
+        )
+        self.assertEqual(state.filter_options.entries_total, 5)
+        self.assertFalse(state.filter_options.entries_truncated)
+
+    def test_filtered_remaining_and_total(self) -> None:
+        selection = FilterSelection(
+            excluded_types=frozenset({"file:.txt", "dir"}),
+            excluded_entries=frozenset({"B.JPG"}),
+        )
+        state = build_state(self.target, self.log, selection=selection, max_lines=None)
+        self.assertEqual(state.remaining, ("README", "a.jpg"))
+        self.assertEqual(state.remaining_total, 2)
+        # Option counts still describe the unfiltered folder composition.
+        self.assertEqual(
+            [(item.key, item.count) for item in state.filter_options.types],
+            [("dir", 1), ("file:.jpg", 2), ("file:.txt", 1), ("file:", 1)],
+        )
+
+    def test_option_counts_are_before_history_subtraction(self) -> None:
+        self.log.write_text(
+            '{"ts": "t", "item": "a.jpg"}\n{"ts": "t", "item": "B.JPG"}\n',
+            encoding="utf-8",
+        )
+        state = build_state(self.target, self.log, max_lines=None)
+        self.assertEqual(state.remaining, ("README", "notes.txt", "sub"))
+        self.assertEqual(state.remaining_total, 3)
+        counts = {item.key: item.count for item in state.filter_options.types}
+        self.assertEqual(counts["file:.jpg"], 2)
+        self.assertEqual(state.filter_options.entries_total, 5)
+
+    def test_known_entry_exclusions_matches_current_candidates(self) -> None:
+        selection = FilterSelection(
+            excluded_entries=frozenset({"notes.txt", "stale.txt"}),
+        )
+        state = build_state(self.target, self.log, selection=selection, max_lines=None)
+        self.assertEqual(state.known_entry_exclusions, ("notes.txt",))
+        # Stale exclusions are ignored when filtering.
+        self.assertEqual(
+            state.remaining,
+            ("B.JPG", "README", "a.jpg", "sub"),
+        )
+
+    def test_known_entry_exclusions_survive_the_visible_cap(self) -> None:
+        for index in range(FILTER_ENTRY_LIMIT + 10):
+            (self.target / f"f{index:05d}").touch()
+        outside = f"f{FILTER_ENTRY_LIMIT + 5:05d}"
+        selection = FilterSelection(excluded_entries=frozenset({outside}))
+        state = build_state(self.target, self.log, selection=selection, max_lines=None)
+        self.assertEqual(state.filter_options.entries_total, FILTER_ENTRY_LIMIT + 15)
+        self.assertTrue(state.filter_options.entries_truncated)
+        self.assertEqual(len(state.filter_options.entries), FILTER_ENTRY_LIMIT)
+        self.assertNotIn(outside, [item.name for item in state.filter_options.entries])
+        self.assertEqual(state.known_entry_exclusions, (outside,))
+        self.assertNotIn(outside, state.remaining)
+
+    def test_invalid_path_has_empty_options_and_known_exclusions(self) -> None:
+        selection = FilterSelection(excluded_entries=frozenset({"notes.txt"}))
+        state = build_state(
+            self.target / "missing",
+            self.log,
+            selection=selection,
+        )
+        self.assertFalse(state.valid_path)
+        self.assertEqual(state.filter_options.types, ())
+        self.assertEqual(state.filter_options.entries, ())
+        self.assertEqual(state.filter_options.entries_total, 0)
+        self.assertFalse(state.filter_options.entries_truncated)
+        self.assertEqual(state.known_entry_exclusions, ())
+
+    def test_no_selection_reports_no_known_exclusions(self) -> None:
+        state = build_state(self.target, self.log, max_lines=None)
+        self.assertEqual(state.known_entry_exclusions, ())
 
 
 if __name__ == "__main__":

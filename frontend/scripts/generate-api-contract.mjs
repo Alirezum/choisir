@@ -19,6 +19,7 @@ const RESPONSE_TYPE_NAMES = {
   'GET /api/defaults': 'DefaultsResponse',
   'GET /api/browse': 'BrowseResponse',
   'GET /api/state': 'StateResponse',
+  'POST /api/state': 'FilteredStateResponse',
   'POST /api/pick': 'PickResponse',
   'POST /api/open': 'OpenResponse',
   'POST /api/history/archive': 'ArchiveResponse',

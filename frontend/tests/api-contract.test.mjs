@@ -59,7 +59,7 @@ const routeFor = (operation) => routes[operations[operation]]
 
 test('the generated surfaces mirror the frozen backend contract', () => {
   const contractRouteKeys = contract.routes.map((route) => `${route.method} ${route.path}`)
-  assert.equal(contractRouteKeys.length, 12)
+  assert.equal(contractRouteKeys.length, 13)
   assert.deepEqual(Object.keys(routes), contractRouteKeys)
   assert.deepEqual([...errorCodes], Object.keys(contract.errorCodes))
 })
@@ -68,6 +68,7 @@ const operationNames = [
   'defaults',
   'browse',
   'state',
+  'stateFiltered',
   'pick',
   'preview',
   'imageUrl',
@@ -80,13 +81,13 @@ const operationNames = [
 ]
 
 test('every generated route maps to exactly one operation and back', () => {
-  assert.equal(Object.keys(operations).length, 12)
+  assert.equal(Object.keys(operations).length, 13)
   assert.deepEqual(Object.keys(operations), operationNames)
-  assert.equal(new Set(Object.values(operations)).size, 12)
+  assert.equal(new Set(Object.values(operations)).size, 13)
   assert.deepEqual(Object.values(operations), Object.keys(routes))
 })
 
-test('the facade exposes exactly the twelve operations', () => {
+test('the facade exposes exactly the thirteen operations', () => {
   assert.deepEqual(Object.keys(api), operationNames)
 })
 
@@ -141,6 +142,43 @@ test('state sends the path, a non-blank log_file, and only true filters', async 
   assert.equal(call.params.has('log_file'), false)
   assert.equal(call.params.has('include_hidden'), false)
   assert.equal(call.params.get('files_only'), 'true')
+})
+
+test('stateFiltered posts the folder flags and exclusions as JSON', async () => {
+  const body = {
+    path: '/w',
+    log_file: '/w/custom.log',
+    include_hidden: false,
+    files_only: true,
+    dirs_only: false,
+    excluded_types: ['file:.txt'],
+    excluded_entries: ['notes.md'],
+  }
+  await withStubbedFetch(() => api.stateFiltered(body))
+  const call = expectSingleCall()
+  assert.equal(call.method, routeFor('stateFiltered').method)
+  assert.equal(call.method, 'POST')
+  assert.equal(call.path, '/api/state')
+  assert.equal(call.contentType, 'application/json')
+  assert.deepEqual(call.body, body)
+
+  await withStubbedFetch(() =>
+    api.stateFiltered({
+      path: '/w',
+      log_file: null,
+      include_hidden: true,
+      files_only: false,
+      dirs_only: false,
+    }),
+  )
+  const minimal = expectSingleCall()
+  assert.deepEqual(minimal.body, {
+    path: '/w',
+    log_file: null,
+    include_hidden: true,
+    files_only: false,
+    dirs_only: false,
+  })
 })
 
 test('pick posts its body verbatim as JSON', async () => {

@@ -45,7 +45,8 @@ preview (text head, directory entry count, or binary/empty notice). The
 (`xdg-open` / `open` / file association) — only use it on directories
 you trust, since opening a file runs its associated application.
 `Archive history` files the current log away as a timestamped backup;
-`Clear history` deletes it (with confirmation).
+`Clear history` deletes it (with confirmation). The Options tab also holds
+the session-only type and entry filters described below.
 
 ## Web UI
 
@@ -96,6 +97,31 @@ range, use *Select all* / *Clear selection* for the visible rows, then
 in `frontend/` (Vite proxies `/api`); `npm run build` writes the bundle to
 `choosier/web_static/`, which the server serves on the same origin.
 
+## Type and entry filters
+
+The Options tab in both interactive interfaces lists every exact file type in
+the folder — folders, each lowercased final suffix, and files without an
+extension — plus up to 1,000 visible entries. All types and entries start
+checked. Unchecking a type skips every file with that suffix; unchecking an
+entry skips only that exact name. Type and entry filters combine by
+intersection.
+
+Filters are session-only: changing the folder or log file resets them. The
+entry list is bounded at 1,000 names with a notice that entries outside the
+list are unchanged there; the type list covers the folder completely and
+targets at most 200 distinct types. The summary reports the checked type count
+and the server-reported eligible entry count after filters and history. Clear
+filters resets both checklists. Filtering never changes user files and never
+adds, removes, or rewrites history.
+
+`POST /api/state` is the additive filtered state route: it returns the usual
+state fields plus `filter_options` and `known_entry_exclusions`, which keeps
+server-side exclusions stable for entries outside the visible list.
+`POST /api/pick` accepts optional `excluded_types` and `excluded_entries` and
+can report the distinct `filtered_empty` and `filtered_exhausted` outcomes.
+`GET /api/state` and the one-shot CLI keep their existing behavior and have no
+filter flags.
+
 ## API contract
 
 Every failed `/api/*` request returns the same JSON envelope:
@@ -129,13 +155,14 @@ raw request input is never echoed.
 | `internal_error` | 500 | I/O, log, launch, or unexpected server failure |
 
 Domain outcomes are not errors: an invalid target path in `/api/state`,
-`invalid_path`/`empty`/`exhausted` picks, and no-op archive/clear/remove calls
-still return `200` with their normal payloads. The image endpoint keeps binary
+`invalid_path`/`empty`/`exhausted`/`filtered_empty`/`filtered_exhausted` picks,
+and no-op archive/clear/remove calls still return `200` with their normal
+payloads. The image endpoint keeps binary
 bytes and MIME types; the video endpoint keeps `200`/`206` streaming and
 answers malformed or unsatisfiable `Range` headers with the JSON envelope
 (400/416) instead of plain text.
 
-The machine-readable inventory (12 `/api` routes and all error codes) lives in
+The machine-readable inventory (13 `/api` routes and all error codes) lives in
 [`specs/001-standardize-api-responses/contracts/api-contract.json`](specs/001-standardize-api-responses/contracts/api-contract.json),
 with a human-readable audit in
 [`api-contract.md`](specs/001-standardize-api-responses/contracts/api-contract.md).

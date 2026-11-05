@@ -1112,6 +1112,120 @@ kbd {
   cursor: pointer;
 }
 
+.filter-section {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+}
+
+.filter-summary {
+  margin: 0;
+  color: var(--ink-soft);
+  font-family: var(--font-data);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.filter-group {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  margin: 0;
+}
+
+.filter-group legend {
+  padding: 0 0 8px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.filter-actions {
+  display: flex;
+  gap: 6px;
+  padding-bottom: 6px;
+}
+
+.filter-actions button {
+  padding: 3px 8px;
+  border-color: var(--rule);
+  color: var(--ink-soft);
+  font-family: var(--font-data);
+  font-size: 10.5px;
+  letter-spacing: 0.01em;
+}
+
+.filter-actions button:hover:not(:disabled) {
+  border-color: var(--ink-soft);
+  color: var(--ink);
+}
+
+.filter-list {
+  max-height: 208px;
+  padding: 0;
+  border-top: 1px solid var(--rule-soft);
+  margin: 0;
+  list-style: none;
+  overflow: auto;
+  scrollbar-color: var(--rule-strong) transparent;
+  scrollbar-width: thin;
+}
+
+.filter-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 2px;
+  border-bottom: 1px solid var(--rule-soft);
+  cursor: pointer;
+}
+
+.filter-row:hover {
+  background: var(--paper-raised);
+}
+
+.filter-name {
+  overflow: hidden;
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filter-meta {
+  color: var(--ink-soft);
+  font-family: var(--font-data);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.filter-notice {
+  margin: 8px 0 0;
+  padding: 7px 9px;
+  border-left: 2px solid var(--amber);
+  background: var(--paper-sunken);
+  color: var(--ink-soft);
+  font-family: var(--font-data);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.filter-clear {
+  align-self: flex-start;
+  border-color: rgba(217, 162, 58, 0.5);
+  color: var(--amber);
+}
+
+.filter-clear:hover:not(:disabled) {
+  border-color: var(--amber);
+  background: rgba(217, 162, 58, 0.12);
+  color: var(--amber-bright);
+}
+
 /* Status */
 
 .status {

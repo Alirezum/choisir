@@ -1,21 +1,11 @@
+import { computed } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
 
 import { api } from '../../../src/api.ts'
 import { useBootstrap } from '../../../src/state/use-bootstrap.ts'
 import { useFolderOptions } from '../../../src/state/use-folder-options.ts'
 import { useWorkspaceState } from '../../../src/state/use-workspace-state.ts'
-import type { StateResponse } from '../../../src/types.ts'
-import { flushPromises, mountHost } from '../test-helpers.ts'
-
-const stateResponse = (): StateResponse => ({
-  valid_path: true,
-  path: '/tmp/choosier',
-  log_file: '',
-  remaining: [],
-  remaining_total: 0,
-  history: [],
-  history_total: 0,
-})
+import { filteredStateResponse, flushPromises, mountHost } from '../test-helpers.ts'
 
 function setup(
   defaults: () => Promise<{ path: string; log_file: string }> = () =>
@@ -71,13 +61,15 @@ describe('useBootstrap', () => {
     vi.useFakeTimers()
     const options = useFolderOptions()
     const reportError = vi.fn()
-    vi.spyOn(api, 'state').mockResolvedValue(stateResponse())
+    vi.spyOn(api, 'stateFiltered').mockResolvedValue(filteredStateResponse())
     const state = useWorkspaceState({
       path: options.path,
       logFile: options.logFile,
-      includeHidden: options.includeHidden,
-      mode: options.mode,
-      filters: options.filters,
+      folderFlags: options.folderFlags,
+      filterExclusions: computed(() => ({
+        excluded_types: [],
+        excluded_entries: [],
+      })),
       status: { reportError },
     })
     vi.spyOn(api, 'defaults').mockResolvedValue({
@@ -93,10 +85,10 @@ describe('useBootstrap', () => {
     )
 
     await flushPromises()
-    expect(api.state).toHaveBeenCalledTimes(1)
+    expect(api.stateFiltered).toHaveBeenCalledTimes(1)
 
     await vi.advanceTimersByTimeAsync(250)
-    expect(api.state).toHaveBeenCalledTimes(2)
+    expect(api.stateFiltered).toHaveBeenCalledTimes(2)
 
     wrapper.unmount()
     vi.useRealTimers()

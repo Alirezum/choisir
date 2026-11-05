@@ -1,18 +1,134 @@
-"""Tests for choosier.tui display helpers (no widget testing)."""
+"""Tests for choosier.tui display helpers and filter widgets."""
 
 import tempfile
 import unittest
 from pathlib import Path
+from typing import cast
+from unittest.mock import patch
 
-from choosier.services import HistoryService, build_state
+from rich.text import Text
+
+from choosier.services import HistoryService, build_state, pick
 from choosier.services.state import PANEL_MAX_LINES
 
 try:
-    from choosier.tui import render_panel
+    from textual.widgets import (
+        Button,
+        Checkbox,
+        Input,
+        RadioButton,
+        RadioSet,
+        SelectionList,
+        Static,
+        TabbedContent,
+    )
+
+    from choosier.filters import FilterOptions, FilterSelection
+    from choosier.tui import (
+        FILTERED_EMPTY_TEXT,
+        FILTERED_EXHAUSTED_TEXT,
+        ChooserApp,
+        filter_notice,
+        filter_summary,
+        render_panel,
+    )
 
     HAS_TEXTUAL = True
 except ImportError:
     HAS_TEXTUAL = False
+
+
+def _plain(content: object) -> str:
+    return content.plain if isinstance(content, Text) else str(content)
+
+
+def _prompts(selection_list: object) -> list[str]:
+    return [
+        _plain(option.prompt)
+        for option in selection_list.options  # type: ignore[attr-defined]
+    ]
+
+
+@unittest.skipUnless(HAS_TEXTUAL, "ui extra (textual) not installed")
+class FilterTextTest(unittest.TestCase):
+    def _options(self, *, truncated: bool = False) -> "FilterOptions":
+        return FilterOptions(
+            types=(),
+            entries=(),
+            entries_total=5000 if truncated else 0,
+            entries_truncated=truncated,
+        )
+
+    def test_not_ready_has_no_summary(self) -> None:
+        self.assertEqual(
+            filter_summary(None, eligible_entries=0, valid_path=False),
+            "",
+        )
+
+    def test_invalid_path_message_precedes_empty_message(self) -> None:
+        self.assertEqual(
+            filter_summary(
+                self._options(),
+                eligible_entries=0,
+                valid_path=False,
+            ),
+            "Choose a valid folder to see filter options.",
+        )
+
+    def test_empty_folder_and_pluralization(self) -> None:
+        self.assertEqual(
+            filter_summary(
+                self._options(),
+                eligible_entries=0,
+                valid_path=True,
+            ),
+            "No eligible entries to filter.",
+        )
+
+    def test_no_filter_and_active_summaries(self) -> None:
+        from choosier.filters import CandidateEntry, build_filter_options, type_key_for
+
+        options = build_filter_options(
+            [
+                CandidateEntry("a.txt", False, type_key_for("a.txt", is_dir=False)),
+                CandidateEntry("sub", True, type_key_for("sub", is_dir=True)),
+            ]
+        )
+        self.assertEqual(
+            filter_summary(options, eligible_entries=2, valid_path=True),
+            "No filter: all 2 types checked; 2 of 2 entries eligible.",
+        )
+        self.assertEqual(
+            filter_summary(
+                options,
+                eligible_entries=1,
+                valid_path=True,
+                excluded_types={"file:.txt"},
+            ),
+            "Filter active: 1 of 2 types checked; 1 of 2 entries eligible.",
+        )
+
+    def test_bounded_notice(self) -> None:
+        from choosier.filters import FilterEntryOption, FilterTypeOption
+
+        options = FilterOptions(
+            types=(FilterTypeOption(key="file:.txt", label=".txt files", count=5000),),
+            entries=tuple(
+                FilterEntryOption(name=f"file{index}", type_key="file:.txt")
+                for index in range(1000)
+            ),
+            entries_total=5000,
+            entries_truncated=True,
+        )
+        self.assertEqual(filter_notice(self._options()), None)
+        notice = filter_notice(options)
+        assert notice is not None
+        self.assertIn("Showing first 1000 of 5000 entries.", notice)
+        self.assertIn(
+            "Entries outside this list are unchanged here; type filters still "
+            "apply to them.",
+            notice,
+        )
 
 
 @unittest.skipUnless(HAS_TEXTUAL, "ui extra (textual) not installed")
@@ -93,6 +209,418 @@ class TuiHistoryScenarioTest(unittest.TestCase):
         state = build_state(self.target, self.log, max_lines=None)
         self.assertEqual(state.history_total, 0)
         self.assertEqual(state.history, ())
+
+
+@unittest.skipUnless(HAS_TEXTUAL, "ui extra (textual) not installed")
+class TuiFilterScenarioTest(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.target = Path(self.tmp.name) / "target"
+        self.target.mkdir()
+        self.log = self.target / ".choosier.jsonl"
+
+    def _touch(self, *names: str) -> None:
+        for name in names:
+            if name.endswith("/"):
+                (self.target / name[:-1]).mkdir()
+            else:
+                (self.target / name).touch()
+
+    def _summary(self, app: "ChooserApp") -> str:
+        return _plain(app.query_one("#filter-summary", Static).content)
+
+    def _remaining(self, app: "ChooserApp") -> str:
+        return _plain(app.query_one("#remaining", Static).content)
+
+    async def test_types_prompts_summary_and_filtered_remaining(self) -> None:
+        self._touch("a.txt", "b.TXT", "c.jpg", "README", "sub/")
+        app = ChooserApp(str(self.target))
+        with patch("choosier.tui.build_state", wraps=build_state) as build_mock:
+            async with app.run_test() as pilot:
+                await pilot.pause()
+                type_list = app.query_one("#type-filter", SelectionList)
+                self.assertEqual(
+                    _prompts(type_list),
+                    [
+                        "Folders (1)",
+                        ".jpg files (1)",
+                        ".txt files (2)",
+                        "Files without an extension (1)",
+                    ],
+                )
+                self.assertEqual(set(type_list.selected), app._visible_type_keys())
+                self.assertEqual(
+                    self._summary(app),
+                    "No filter: all 4 types checked; 5 of 5 entries eligible.",
+                )
+
+                type_list.toggle("file:.txt")
+                await pilot.pause()
+
+                self.assertEqual(app._excluded_types, {"file:.txt"})
+                self.assertEqual(self._remaining(app), "README\nc.jpg\nsub")
+                self.assertEqual(
+                    self._summary(app),
+                    "Filter active: 3 of 4 types checked; 3 of 5 entries eligible.",
+                )
+                selections = [
+                    call.kwargs["selection"]
+                    for call in build_mock.call_args_list
+                    if "selection" in call.kwargs
+                ]
+                self.assertIn(
+                    FilterSelection(excluded_types=frozenset({"file:.txt"})),
+                    selections,
+                )
+
+                with patch("choosier.tui.pick", wraps=pick) as pick_mock:
+                    app.query_one("#dry-run", Checkbox).value = True
+                    app.do_pick()
+                    await pilot.pause()
+                    self.assertIn(
+                        FilterSelection(excluded_types=frozenset({"file:.txt"})),
+                        [pick_mock.call_args.kwargs["selection"]],
+                    )
+                self.assertIn(
+                    _plain(app.query_one("#choice", Static).content),
+                    {"README", "c.jpg", "sub"},
+                )
+
+    async def test_hidden_and_mode_changes_rebuild_type_options(self) -> None:
+        self._touch("a.txt", ".hidden.txt", "sub/")
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            type_list = app.query_one("#type-filter", SelectionList)
+            self.assertEqual(_prompts(type_list), ["Folders (1)", ".txt files (1)"])
+
+            app.query_one("#include-hidden", Checkbox).value = True
+            await pilot.pause()
+            self.assertEqual(
+                _prompts(type_list),
+                ["Folders (1)", ".txt files (2)"],
+            )
+
+            radios = app.query_one("#mode", RadioSet).query(RadioButton)
+            radios[1].value = True
+            await pilot.pause()
+            self.assertEqual(_prompts(type_list), [".txt files (2)"])
+
+            radios[2].value = True
+            await pilot.pause()
+            self.assertEqual(_prompts(type_list), ["Folders (1)"])
+
+    async def test_path_and_log_changes_reset_type_exclusions(self) -> None:
+        self._touch("a.txt", "b.jpg")
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            type_list = app.query_one("#type-filter", SelectionList)
+            type_list.toggle("file:.txt")
+            await pilot.pause()
+            self.assertEqual(app._excluded_types, {"file:.txt"})
+
+            log_input = app.query_one("#log-input", Input)
+            log_input.value = str(self.target / "custom.jsonl")
+            await pilot.pause()
+            self.assertEqual(app._excluded_types, set())
+            self.assertEqual(app._excluded_entries, set())
+            self.assertEqual(self._summary(app), "")
+
+            app._refresh_panels()
+            await pilot.pause()
+            self.assertEqual(
+                self._summary(app),
+                "No filter: all 2 types checked; 2 of 2 entries eligible.",
+            )
+            type_list.toggle("file:.txt")
+            await pilot.pause()
+
+            path_input = app.query_one("#path-input", Input)
+            path_input.value = str(self.target / "missing")
+            await pilot.pause()
+            self.assertEqual(app._excluded_types, set())
+            self.assertEqual(self._summary(app), "")
+            app._refresh_panels()
+            await pilot.pause()
+            self.assertEqual(
+                self._summary(app),
+                "Choose a valid folder to see filter options.",
+            )
+
+    async def test_options_tab_activation_rebuilds_the_lists(self) -> None:
+        self._touch("a.txt")
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            self._touch("new.md")
+            app.query_one(TabbedContent).active = "options-tab"
+            await pilot.pause()
+            self.assertIn("new.md", app._visible_entry_names())
+            type_list = app.query_one("#type-filter", SelectionList)
+            self.assertEqual(_prompts(type_list), [".md files (1)", ".txt files (1)"])
+
+    async def test_filtered_empty_and_exhausted_messages(self) -> None:
+        self._touch("a.txt")
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.query_one("#type-filter", SelectionList).toggle("file:.txt")
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            self.assertEqual(
+                _plain(app.query_one("#status", Static).content), FILTERED_EMPTY_TEXT
+            )
+            self.assertFalse(self.log.exists())
+
+        other = Path(self.tmp.name) / "exhausted"
+        other.mkdir()
+        for name in ("x.txt", "y.txt", "z.jpg"):
+            (other / name).touch()
+        app = ChooserApp(str(other))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            type_list = app.query_one("#type-filter", SelectionList)
+            type_list.toggle("file:.jpg")
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            self.assertEqual(
+                _plain(app.query_one("#status", Static).content),
+                FILTERED_EXHAUSTED_TEXT,
+            )
+            log = other / ".choosier.jsonl"
+            self.assertEqual(log.read_text(encoding="utf-8").count("\n"), 2)
+
+    async def test_entry_prompts_include_names_and_type_labels_literally(self) -> None:
+        self._touch("[draft] notes.txt", "odd.[x]", "sub/")
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            type_list = app.query_one("#type-filter", SelectionList)
+            entry_list = app.query_one("#entry-filter", SelectionList)
+            self.assertIn(".[x] files (1)", _prompts(type_list))
+            self.assertEqual(
+                _prompts(entry_list),
+                [
+                    "[draft] notes.txt   .txt files",
+                    "odd.[x]   .[x] files",
+                    "sub   Folders",
+                ],
+            )
+
+    async def test_entry_and_type_exclusions_intersect_and_restore(self) -> None:
+        self._touch("a.txt", "b.txt", "c.jpg", "sub/")
+        app = ChooserApp(str(self.target))
+        with patch("choosier.tui.build_state", wraps=build_state) as build_mock:
+            async with app.run_test() as pilot:
+                await pilot.pause()
+                entry_list = app.query_one("#entry-filter", SelectionList)
+                entry_list.toggle("b.txt")
+                await pilot.pause()
+                app.query_one("#type-filter", SelectionList).toggle("file:.jpg")
+                await pilot.pause()
+
+                self.assertEqual(app._excluded_entries, {"b.txt"})
+                self.assertEqual(app._excluded_types, {"file:.jpg"})
+                expected = FilterSelection(
+                    excluded_types=frozenset({"file:.jpg"}),
+                    excluded_entries=frozenset({"b.txt"}),
+                )
+                selections = [
+                    call.kwargs["selection"]
+                    for call in build_mock.call_args_list
+                    if "selection" in call.kwargs
+                ]
+                self.assertIn(expected, selections)
+                self.assertEqual(self._remaining(app), "a.txt\nsub")
+
+                entry_list.toggle("b.txt")
+                await pilot.pause()
+                self.assertEqual(app._excluded_entries, set())
+                self.assertEqual(self._remaining(app), "a.txt\nb.txt\nsub")
+
+                with patch("choosier.tui.pick", wraps=pick) as pick_mock:
+                    app.query_one("#dry-run", Checkbox).value = True
+                    app.do_pick()
+                    await pilot.pause()
+                    self.assertEqual(
+                        pick_mock.call_args.kwargs["selection"],
+                        FilterSelection(excluded_types=frozenset({"file:.jpg"})),
+                    )
+                    self.assertIn(
+                        _plain(app.query_one("#choice", Static).content),
+                        {"a.txt", "b.txt", "sub"},
+                    )
+
+    async def test_logged_entry_stays_out_after_rechecking(self) -> None:
+        self._touch("a.txt", "b.txt")
+        HistoryService(self.log).append("b.txt")
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            entry_list = app.query_one("#entry-filter", SelectionList)
+            entry_list.toggle("b.txt")
+            await pilot.pause()
+            entry_list.toggle("b.txt")
+            await pilot.pause()
+            self.assertEqual(app._excluded_entries, set())
+            self.assertEqual(self._remaining(app), "a.txt")
+
+    async def test_entry_actions_preserve_names_outside_the_visible_cap(self) -> None:
+        for index in range(1005):
+            (self.target / f"f{index:05d}.txt").touch()
+        outside = "f01004.txt"
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            options = app._filter_options
+            assert options is not None
+            self.assertEqual(options.entries_total, 1005)
+            self.assertEqual(len(options.entries), 1000)
+
+            app._excluded_entries.add(outside)
+            app._refresh_panels()
+            await pilot.pause()
+            self.assertIn(outside, app._known_entry_exclusions)
+            self.assertIn(outside, app._excluded_entries)
+
+            entry_list = app.query_one("#entry-filter", SelectionList)
+            entry_list.toggle("f00000.txt")
+            await pilot.pause()
+            self.assertIn(outside, app._excluded_entries)
+            self.assertIn("f00000.txt", app._excluded_entries)
+
+            app.query_one("#entries-none", Button).press()
+            await pilot.pause()
+            self.assertIn(outside, app._excluded_entries)
+            self.assertEqual(len(app._excluded_entries), 1001)
+
+            app.query_one("#entries-all", Button).press()
+            await pilot.pause()
+            self.assertEqual(app._excluded_entries, {outside})
+
+            notice = app.query_one("#filter-notice", Static)
+            self.assertTrue(notice.display)
+            self.assertIn("Showing first 1000 of 1005 entries.", _plain(notice.content))
+            self.assertIn(
+                "Entries outside this list are unchanged here; type filters still "
+                "apply to them.",
+                _plain(notice.content),
+            )
+            self.assertEqual(
+                self._summary(app),
+                "Filter active: 1 of 1 type checked; 1004 of 1005 entries eligible.",
+            )
+
+    async def test_clear_filters_resets_both_sets_and_lists(self) -> None:
+        self._touch("a.txt", "b.jpg", "sub/")
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.query_one("#type-filter", SelectionList).toggle("dir")
+            app.query_one("#entry-filter", SelectionList).toggle("b.jpg")
+            await pilot.pause()
+            self.assertTrue(app._excluded_types)
+            self.assertTrue(app._excluded_entries)
+            clear = app.query_one("#clear-filters", Button)
+            self.assertFalse(clear.disabled)
+
+            clear.press()
+            await pilot.pause()
+            self.assertEqual(app._excluded_types, set())
+            self.assertEqual(app._excluded_entries, set())
+            self.assertEqual(
+                set(app.query_one("#type-filter", SelectionList).selected),
+                app._visible_type_keys(),
+            )
+            options = app._filter_options
+            assert options is not None
+            self.assertEqual(
+                set(app.query_one("#entry-filter", SelectionList).selected),
+                {item.name for item in options.entries},
+            )
+            self.assertTrue(clear.disabled)
+            self.assertEqual(
+                self._summary(app),
+                "No filter: all 3 types checked; 3 of 3 entries eligible.",
+            )
+
+    async def test_summary_is_history_aware_and_invalid_path_is_distinct(self) -> None:
+        self._touch("a.txt", "b.txt", "sub/")
+        HistoryService(self.log).append("a.txt")
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            self.assertEqual(
+                self._summary(app),
+                "No filter: all 2 types checked; 2 of 3 entries eligible.",
+            )
+
+            app.query_one("#path-input", Input).value = str(self.target / "missing")
+            app._refresh_panels()
+            await pilot.pause()
+            self.assertEqual(
+                self._summary(app),
+                "Choose a valid folder to see filter options.",
+            )
+            self.assertEqual(
+                _plain(app.query_one("#remaining", Static).content), "(none)"
+            )
+            self.assertFalse(app.query_one("#filter-notice", Static).display)
+
+    async def test_current_choice_survives_path_and_log_changes(self) -> None:
+        self._touch("only.txt")
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            self.assertEqual(app._current_choice, self.target / "only.txt")
+
+            path_input = app.query_one("#path-input", Input)
+            path_input.value = str(self.target / "next")
+            app.query_one("#log-input", Input).value = "custom.jsonl"
+            await pilot.pause()
+            self.assertEqual(app._current_choice, self.target / "only.txt")
+
+    async def test_filter_controls_are_keyboard_focusable_and_labelled(self) -> None:
+        self._touch("a.txt", "sub/")
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            for widget_id in (
+                "#types-all",
+                "#types-none",
+                "#entries-all",
+                "#entries-none",
+                "#type-filter",
+                "#entry-filter",
+                "#clear-filters",
+            ):
+                self.assertTrue(
+                    app.query_one(widget_id).can_focus,
+                    widget_id,
+                )
+            labels = [
+                _plain(cast(Static, widget).content)
+                for widget in app.query(".filter-label")
+            ]
+            self.assertEqual(labels, ["Types", "Entries"])
+            self.assertEqual(
+                _plain(app.query_one("#types-all", Button).label),
+                "All types",
+            )
+            self.assertEqual(
+                _plain(app.query_one("#entries-none", Button).label),
+                "No entries",
+            )
 
 
 if __name__ == "__main__":

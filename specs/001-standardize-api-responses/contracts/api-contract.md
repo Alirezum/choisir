@@ -3,7 +3,7 @@
 **Feature**: `001-standardize-api-responses`
 **Date**: 2026-10-29
 **Machine-readable source**: [api-contract.json](./api-contract.json)
-**Coverage**: 12 routes under `/api`
+**Coverage**: 13 routes under `/api`
 
 This inventory is the human-readable audit of every route the FastAPI adapter
 exposes. The JSON file is the source of truth used by the contract tests; this
@@ -109,6 +109,30 @@ nullability are frozen by the contract tests.
 | `item` | string | no |
 | `display` | string | no |
 
+### FilterTypeOption
+
+| Field | Type | Nullable | Notes |
+|-------|------|----------|-------|
+| `key` | string | no | `dir`, `file:<suffix>`, or `file:` for suffixless files |
+| `label` | string | no | Stable human label |
+| `count` | integer | no | Base candidates of this type, before exclusions and history |
+
+### FilterEntryOption
+
+| Field | Type | Nullable | Notes |
+|-------|------|----------|-------|
+| `name` | string | no | Exact direct-child name |
+| `type_key` | string | no | One of the keys in `filter_options.types` |
+
+### FilterOptions
+
+| Field | Type | Nullable | Notes |
+|-------|------|----------|-------|
+| `types` | FilterTypeOption[] | no | Complete and uncapped; folders, then suffixes alphabetically, then suffixless files |
+| `entries` | FilterEntryOption[] | no | Sorted by name and capped at 1,000 |
+| `entries_total` | integer | no | Total base candidates; at least `entries.length` |
+| `entries_truncated` | boolean | no | True exactly when `entries_total > entries.length` |
+
 ### PreviewImage
 
 | Field | Type | Nullable |
@@ -149,6 +173,7 @@ standalone image.
 | GET | `/api/defaults` | Initial path and log file | 200 JSON |
 | GET | `/api/browse` | Directory listing | 200 JSON |
 | GET | `/api/state` | Remaining choices and history | 200 JSON |
+| POST | `/api/state` | Filtered choices, history, and filter options | 200 JSON |
 | POST | `/api/pick` | Pick and optionally log an entry | 200 JSON |
 | GET | `/api/preview` | Structured entry preview | 200 JSON |
 | GET | `/api/image` | Image bytes or WebP rendition | 200 binary |
@@ -238,6 +263,69 @@ filter set.
 | `method_not_allowed` | 405 | Method other than GET |
 | `internal_error` | 500 | Unexpected exception |
 
+This route is frozen for the filter feature: it accepts no exclusion fields and
+returns none of the additive filter fields. Use `POST /api/state` for filters.
+
+---
+
+## POST /api/state
+
+**Purpose**: Return filtered remaining candidates, recent history, and the
+type/entry checklists for a target.
+
+**Success**: `200 application/json`
+
+Request body:
+
+| Field | Type | Required | Default |
+|-------|------|----------|---------|
+| `path` | string | yes | — |
+| `log_file` | string \| null | no | `null` (colocated default) |
+| `include_hidden` | boolean | no | `false` |
+| `files_only` | boolean | no | `false` |
+| `dirs_only` | boolean | no | `false` |
+| `excluded_types` | string[] | no | `[]` |
+| `excluded_entries` | string[] | no | `[]` |
+
+Response body: every field of `GET /api/state`, plus:
+
+| Field | Type | Nullable | Notes |
+|-------|------|----------|-------|
+| `filter_options` | FilterOptions | no | Empty options when `valid_path` is false |
+| `known_entry_exclusions` | string[] | no | Sorted request entry exclusions that still match a base candidate, including entries outside the visible cap |
+
+`remaining` and `remaining_total` are filtered and history-subtracted;
+`remaining` keeps the 200-line response cap. `known_entry_exclusions` is the
+reconciliation input because `filter_options.entries` is capped.
+
+**Exclusion values**
+
+- Type keys are exactly `dir`, `file:`, or `file:` plus a dot-prefixed suffix.
+  The suffix is lowercased before deduplication and filtering.
+- Entry names are exact direct-child names: non-empty, not `.` or `..`, with no
+  `/` or NUL. A backslash is accepted as an opaque character.
+- Each value is at most 1,024 characters. Limits are 2,000 type keys and 20,000
+  entry names, checked before deduplication.
+- Duplicates are deduplicated. Well-formed values that match nothing are
+  ignored. Malformed values return `422 validation_error`, and the message and
+  issue location identify `excluded_types` or `excluded_entries`.
+
+**Domain outcomes (still 200)**
+
+- Target not a directory: `valid_path: false`, empty remaining/history,
+  totals zero, empty `filter_options`, and empty `known_entry_exclusions`.
+- Missing history file: empty history, total zero.
+- Exclusions matching nothing: normal response for the actual folder.
+
+**Errors**
+
+| Code | Status | Condition |
+|------|--------|-----------|
+| `validation_error` | 422 | Missing/malformed body, wrong field types, or malformed/over-limit exclusions |
+| `invalid_request` | 400 | `files_only` and `dirs_only` are both true |
+| `method_not_allowed` | 405 | Method other than GET or POST |
+| `internal_error` | 500 | Unexpected exception |
+
 ---
 
 ## POST /api/pick
@@ -245,11 +333,15 @@ filter set.
 **Purpose**: Pick one unselected entry and optionally record it in the history
 log.
 
+**Request body**: the existing fields (`path`, `log_file`, `seed`, `dry_run`,
+`include_hidden`, `files_only`, `dirs_only`) plus optional `excluded_types` and
+`excluded_entries` with the same rules as `POST /api/state`.
+
 **Success**: `200 application/json`
 
 | Field | Type | Nullable | Values |
 |-------|------|----------|--------|
-| `status` | string enum | no | `picked`, `empty`, `exhausted`, `invalid_path` |
+| `status` | string enum | no | `picked`, `empty`, `exhausted`, `invalid_path`, `filtered_empty`, `filtered_exhausted` |
 | `log_file` | string | no | — |
 | `item` | string | yes | — |
 | `logged` | boolean | no | — |
@@ -258,17 +350,27 @@ log.
 **Domain outcomes (still 200)**
 
 - Invalid target: `status: "invalid_path"`, no item, not logged.
-- No candidates: `status: "empty"`.
-- All eligible entries logged: `status: "exhausted"`.
+- No folder children: `status: "empty"`.
+- No base candidates under existing options, or all are logged and filters
+  removed nothing: `status: "exhausted"`.
+- Base candidates exist but exclusions leave none: `status: "filtered_empty"`.
+- Filtered candidates exist but all are logged: `status: "filtered_exhausted"`.
+- Non-picked outcomes never write history.
+
+Classification order is `invalid_path` → `empty` → `exhausted` →
+`filtered_empty` → `filtered_exhausted` → `exhausted` (filters removed nothing)
+→ `picked`.
 
 **Errors**
 
 | Code | Status | Condition |
 |------|--------|-----------|
-| `validation_error` | 422 | Missing/malformed body or wrong field types |
+| `validation_error` | 422 | Missing/malformed body, wrong field types, or malformed/over-limit exclusions |
 | `invalid_request` | 400 | `files_only` and `dirs_only` are both true |
 | `internal_error` | 500 | Log write failure or unexpected exception |
 | `method_not_allowed` | 405 | Method other than POST |
+
+Callers that omit the exclusion fields cannot receive the two new statuses.
 
 ---
 
@@ -474,10 +576,12 @@ leaves the log bytes unchanged.
 - Field names are snake_case and meanings are stable.
 - Optional values are present as `null`, not omitted.
 - Capped lists are paired with an uncapped count:
-  `remaining`/`remaining_total`, `history`/`history_total`, and
-  `images`/`image_total`.
-- `remaining` is sorted; `history` preserves log order; browser entries are
-  directories first, then case-insensitive name order.
+  `remaining`/`remaining_total`, `history`/`history_total`,
+  `images`/`image_total`, and `filter_options.entries`/
+  `filter_options.entries_total` (with `entries_truncated`).
+- `filter_options.types` is complete and never capped. `remaining` is sorted;
+  `history` preserves log order; browser entries are directories first, then
+  case-insensitive name order; filter entries are sorted by exact name.
 - Domain outcomes listed above remain successful responses and must not be
   converted into errors.
 - No success payload is wrapped in a new envelope.
@@ -491,7 +595,9 @@ When adding or changing a route:
 3. Update this markdown inventory.
 4. Add or update a live error case in `tests/test_api_contract.py` if the
    failure behavior changed.
-5. Run `uv run pytest tests/test_api_contract.py -v` plus the full quality
+5. Regenerate the frontend client with `npm run generate:api` from `frontend/`
+   so `src/api-contract.generated.ts` matches the JSON contract.
+6. Run `uv run pytest tests/test_api_contract.py -v` plus the full quality
    gate.
 
 The contract tests fail when a route is missing from either side, when a success

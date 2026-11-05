@@ -1,9 +1,11 @@
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
+import type { FilterOptions } from '../types.ts'
 import type { WorkspaceBinding } from '../view-models.ts'
 import { useBootstrap } from './use-bootstrap.ts'
 import { useBrowser } from './use-browser.ts'
 import { useChoice } from './use-choice.ts'
+import { useFilters } from './use-filters.ts'
 import { useFolderOptions } from './use-folder-options.ts'
 import { useHistoryActions } from './use-history-actions.ts'
 import { useHistorySelection } from './use-history-selection.ts'
@@ -12,6 +14,13 @@ import { useShortcuts } from './use-shortcuts.ts'
 import { useStatus } from './use-status.ts'
 import { useTabs } from './use-tabs.ts'
 import { useWorkspaceState } from './use-workspace-state.ts'
+
+const EMPTY_FILTER_OPTIONS: FilterOptions = {
+  types: [],
+  entries: [],
+  entries_total: 0,
+  entries_truncated: false,
+}
 
 /**
  * Composition only: instantiate the units, connect path/log reset callbacks,
@@ -22,17 +31,23 @@ export function useWorkspace(): WorkspaceBinding {
   const status = useStatus()
   const options = useFolderOptions()
   const choice = useChoice()
+  const filterState = useFilters({
+    path: options.path,
+    logFile: options.logFile,
+  })
   const pathInput = ref<HTMLInputElement | null>(null)
 
   function resetOnPathChange(): void {
     choice.invalidate()
     selection.clear()
     historyActions.cancelDelete()
+    filterState.reset()
   }
 
   function resetOnLogChange(): void {
     selection.clear()
     historyActions.cancelDelete()
+    filterState.reset()
   }
 
   function selectHistoryItem(item: string, shift: boolean): void {
@@ -43,12 +58,17 @@ export function useWorkspace(): WorkspaceBinding {
   const workspaceState = useWorkspaceState({
     path: options.path,
     logFile: options.logFile,
-    includeHidden: options.includeHidden,
-    mode: options.mode,
-    filters: options.filters,
+    folderFlags: options.folderFlags,
+    filterExclusions: filterState.exclusions,
     status,
     onPathChange: resetOnPathChange,
     onLogChange: resetOnLogChange,
+    onState: (response) => {
+      filterState.reconcile(
+        response?.filter_options ?? EMPTY_FILTER_OPTIONS,
+        response?.known_entry_exclusions ?? [],
+      )
+    },
   })
 
   const selection = useHistorySelection({
@@ -60,6 +80,7 @@ export function useWorkspace(): WorkspaceBinding {
     status,
     refresh: workspaceState.refresh,
     pathInput,
+    filterExclusions: filterState,
   })
   const historyActions = useHistoryActions({
     options,
@@ -78,6 +99,14 @@ export function useWorkspace(): WorkspaceBinding {
     },
     status,
   })
+
+  const filterPanel = computed(() =>
+    filterState.panel(
+      workspaceState.state.value?.filter_options ?? null,
+      workspaceState.state.value?.remaining_total ?? 0,
+      workspaceState.state.value?.valid_path ?? false,
+    ),
+  )
 
   useShortcuts({ pick: picker.pick, clearing: historyActions.clearing })
   useBootstrap({
@@ -102,6 +131,16 @@ export function useWorkspace(): WorkspaceBinding {
     choice: choice.choice,
     pickSerial: choice.pickSerial,
     activeTab: tabs.activeTab,
+
+    filterPanel,
+
+    toggleFilterType: filterState.toggleType,
+    toggleFilterEntry: filterState.toggleEntry,
+    selectAllFilterTypes: filterState.selectAllTypes,
+    clearFilterTypes: filterState.clearTypes,
+    selectAllFilterEntries: filterState.selectAllEntries,
+    clearFilterEntries: filterState.clearEntries,
+    clearFilters: filterState.clearFilters,
 
     clearing: historyActions.clearing,
     removingItem: historyActions.removingItem,

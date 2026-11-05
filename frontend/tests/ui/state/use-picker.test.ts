@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
 
 import { api } from '../../../src/api.ts'
@@ -33,6 +33,13 @@ function setup() {
   const setStatus = vi.fn()
   const reportError = vi.fn()
   const refresh = vi.fn(async () => {})
+  const revision = ref(0)
+  const excludedTypes = ref<string[]>([])
+  const excludedEntries = ref<string[]>([])
+  const exclusions = computed(() => ({
+    excluded_types: [...excludedTypes.value],
+    excluded_entries: [...excludedEntries.value],
+  }))
   const pathInput = ref<HTMLInputElement | null>({
     focus: vi.fn(),
   } as unknown as HTMLInputElement)
@@ -43,6 +50,7 @@ function setup() {
     status: { setStatus, reportError },
     refresh,
     pathInput,
+    filterExclusions: { exclusions, revision },
   })
 
   return {
@@ -52,6 +60,9 @@ function setup() {
     reportError,
     refresh,
     pathInput,
+    revision,
+    excludedTypes,
+    excludedEntries,
     result,
   }
 }
@@ -83,14 +94,17 @@ describe('usePicker', () => {
     expect(refresh).not.toHaveBeenCalled()
   })
 
-  it('sends nullable log/seed values with the filters and records a logged pick', async () => {
-    const { options, choice, result, setStatus, refresh } = setup()
+  it('sends nullable log/seed values with the flags and exclusions and records a logged pick', async () => {
+    const { options, choice, result, setStatus, refresh, excludedTypes, excludedEntries } =
+      setup()
     const pick = vi.spyOn(api, 'pick').mockResolvedValue(pickResponse())
     options.path.value = '/tmp/choosier/'
     options.seed.value = ' 42 '
     options.dryRun.value = false
     options.includeHidden.value = true
     options.mode.value = 'files'
+    excludedTypes.value = ['dir']
+    excludedEntries.value = ['notes.md']
 
     await result.pick()
 
@@ -102,6 +116,8 @@ describe('usePicker', () => {
       include_hidden: true,
       files_only: true,
       dirs_only: false,
+      excluded_types: ['dir'],
+      excluded_entries: ['notes.md'],
     })
     expect(choice.choice.value).toEqual({
       item: 'alpha.txt',
@@ -132,6 +148,14 @@ describe('usePicker', () => {
       'exhausted',
       'All items have been picked. Clear or archive history to start over.',
     ],
+    [
+      'filtered_empty',
+      'Filters exclude every entry. Adjust them in Options or clear all filters.',
+    ],
+    [
+      'filtered_exhausted',
+      'All entries matching the filters have been picked. Clear filters or reset history to pick more.',
+    ],
   ] as const)('reports the %s outcome exactly and refreshes', async (status, message) => {
     const { options, choice, result, setStatus, refresh } = setup()
     vi.spyOn(api, 'pick').mockResolvedValue(
@@ -144,6 +168,46 @@ describe('usePicker', () => {
     expect(setStatus).toHaveBeenCalledWith(message)
     expect(choice.choice.value).toBeNull()
     expect(choice.pickSerial.value).toBe(0)
+    expect(refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('discards a pick result when the filter revision changed', async () => {
+    const { options, choice, result, setStatus, refresh, revision } = setup()
+    let resolvePick!: (value: PickResponse) => void
+    vi.spyOn(api, 'pick').mockReturnValue(
+      new Promise<PickResponse>((resolve) => {
+        resolvePick = resolve
+      }),
+    )
+    options.path.value = '/tmp/choosier'
+
+    const pending = result.pick()
+    revision.value += 1
+    resolvePick(pickResponse())
+    await pending
+
+    expect(choice.choice.value).toBeNull()
+    expect(setStatus).not.toHaveBeenCalled()
+    expect(refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('discards a pick result when the path changed', async () => {
+    const { options, choice, result, setStatus, refresh } = setup()
+    let resolvePick!: (value: PickResponse) => void
+    vi.spyOn(api, 'pick').mockReturnValue(
+      new Promise<PickResponse>((resolve) => {
+        resolvePick = resolve
+      }),
+    )
+    options.path.value = '/tmp/choosier'
+
+    const pending = result.pick()
+    options.path.value = '/tmp/other'
+    resolvePick(pickResponse())
+    await pending
+
+    expect(choice.choice.value).toBeNull()
+    expect(setStatus).not.toHaveBeenCalled()
     expect(refresh).toHaveBeenCalledTimes(1)
   })
 

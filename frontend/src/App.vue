@@ -27,6 +27,8 @@ const {
   pickSerial,
   activeTab,
 
+  filterPanel,
+
   clearing,
   removingItem,
   removingHistory,
@@ -60,6 +62,14 @@ const {
   onTabKey,
   navigateBrowser,
   useBrowserFolder,
+
+  toggleFilterType,
+  toggleFilterEntry,
+  selectAllFilterTypes,
+  clearFilterTypes,
+  selectAllFilterEntries,
+  clearFilterEntries,
+  clearFilters,
 } = useWorkspace()
 
 // The template's `ref="pathInput"` writes into this binding; the picker unit
@@ -182,6 +192,14 @@ void pathInput
               v-model:dry="dryRun"
               v-model:hidden="includeHidden"
               v-model:mode="mode"
+              :filter-panel="filterPanel"
+              @toggle-type="toggleFilterType"
+              @toggle-entry="toggleFilterEntry"
+              @select-all-types="selectAllFilterTypes"
+              @clear-types="clearFilterTypes"
+              @select-all-entries="selectAllFilterEntries"
+              @clear-entries="clearFilterEntries"
+              @clear-filters="clearFilters"
             />
           </div>
         </section>

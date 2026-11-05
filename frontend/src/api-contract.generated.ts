@@ -22,6 +22,10 @@ export const routes = {
     method: 'GET',
     path: '/api/state',
   },
+  'POST /api/state': {
+    method: 'POST',
+    path: '/api/state',
+  },
   'POST /api/pick': {
     method: 'POST',
     path: '/api/pick',
@@ -122,6 +126,24 @@ export interface PreviewModel {
   video: PreviewVideo | null
 }
 
+export interface FilterTypeOption {
+  key: string
+  label: string
+  count: number
+}
+
+export interface FilterEntryOption {
+  name: string
+  type_key: string
+}
+
+export interface FilterOptions {
+  types: FilterTypeOption[]
+  entries: FilterEntryOption[]
+  entries_total: number
+  entries_truncated: boolean
+}
+
 export interface DefaultsResponse {
   path: string
   log_file: string
@@ -143,8 +165,20 @@ export interface StateResponse {
   history_total: number
 }
 
+export interface FilteredStateResponse {
+  valid_path: boolean
+  path: string
+  log_file: string
+  remaining: string[]
+  remaining_total: number
+  history: HistoryEntry[]
+  history_total: number
+  filter_options: FilterOptions
+  known_entry_exclusions: string[]
+}
+
 export interface PickResponse {
-  status: 'picked' | 'empty' | 'exhausted' | 'invalid_path'
+  status: 'picked' | 'empty' | 'exhausted' | 'invalid_path' | 'filtered_empty' | 'filtered_exhausted'
   log_file: string
   item: string | null
   logged: boolean

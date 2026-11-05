@@ -17,7 +17,7 @@ describe('useFolderOptions', () => {
   it('maps hidden and mode state to the API filter flags', () => {
     const options = useFolderOptions()
 
-    expect(options.filters.value).toEqual({
+    expect(options.folderFlags.value).toEqual({
       include_hidden: false,
       files_only: false,
       dirs_only: false,
@@ -26,7 +26,7 @@ describe('useFolderOptions', () => {
     options.includeHidden.value = true
     options.mode.value = 'files'
 
-    expect(options.filters.value).toEqual({
+    expect(options.folderFlags.value).toEqual({
       include_hidden: true,
       files_only: true,
       dirs_only: false,
@@ -34,7 +34,7 @@ describe('useFolderOptions', () => {
 
     options.mode.value = 'dirs'
 
-    expect(options.filters.value).toEqual({
+    expect(options.folderFlags.value).toEqual({
       include_hidden: true,
       files_only: false,
       dirs_only: true,
@@ -42,7 +42,7 @@ describe('useFolderOptions', () => {
 
     options.mode.value = 'all'
 
-    expect(options.filters.value).toEqual({
+    expect(options.folderFlags.value).toEqual({
       include_hidden: true,
       files_only: false,
       dirs_only: false,

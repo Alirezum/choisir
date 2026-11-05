@@ -12,7 +12,14 @@ MAIN = ROOT / "main.py"
 WEB = PACKAGE / "web.py"
 ADAPTERS = (WEB, PACKAGE / "cli.py", PACKAGE / "tui.py")
 
-ALLOWED_CHOOSIER_SUBMODULES = {"chooser", "preview", "launcher", "storage", "services"}
+ALLOWED_CHOOSIER_SUBMODULES = {
+    "chooser",
+    "filters",
+    "preview",
+    "launcher",
+    "storage",
+    "services",
+}
 FORBIDDEN_CHOOSIER_SUBMODULES = {"web", "tui", "web_media", "cli"}
 FORBIDDEN_TOP_LEVEL_MODULES = {
     "fastapi",
@@ -35,6 +42,7 @@ FORBIDDEN_ADAPTER_REFERENCES = (
 ROUTE_DELEGATIONS = {
     "browse": ("services.browse_directory",),
     "state": ("services.build_state",),
+    "state_filtered": ("services.build_state",),
     "pick": ("services.pick",),
     "preview": ("preview_entry",),
     "image": ("web_media.read_image", "web_media.make_thumbnail"),

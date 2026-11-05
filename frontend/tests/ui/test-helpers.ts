@@ -7,6 +7,9 @@ import type {
   BrowseResponse,
   ClearResponse,
   DefaultsResponse,
+  FilteredStateRequest,
+  FilteredStateResponse,
+  FilterOptions,
   OpenResponse,
   PickRequest,
   PickResponse,
@@ -60,6 +63,9 @@ export interface ApiMock {
   defaults: Mock<() => Promise<DefaultsResponse>>
   browse: Mock<(path: string) => Promise<BrowseResponse>>
   state: Mock<(params: StateQuery) => Promise<StateResponse>>
+  stateFiltered: Mock<
+    (body: FilteredStateRequest) => Promise<FilteredStateResponse>
+  >
   pick: Mock<(body: PickRequest) => Promise<PickResponse>>
   preview: Mock<(path: string) => Promise<PreviewModel>>
   imageUrl: Mock<
@@ -85,6 +91,33 @@ export interface ApiMock {
   >
 }
 
+export function emptyFilterOptions(): FilterOptions {
+  return {
+    types: [],
+    entries: [],
+    entries_total: 0,
+    entries_truncated: false,
+  }
+}
+
+/** A filtered state fixture; pass `filter_options` to exercise the panel. */
+export function filteredStateResponse(
+  overrides: Partial<FilteredStateResponse> = {},
+): FilteredStateResponse {
+  return {
+    valid_path: true,
+    path: '/tmp/choosier',
+    log_file: '/tmp/choosier/.choosier.jsonl',
+    remaining: [],
+    remaining_total: 0,
+    history: [],
+    history_total: 0,
+    filter_options: emptyFilterOptions(),
+    known_entry_exclusions: [],
+    ...overrides,
+  }
+}
+
 /**
  * Deterministic fakes for the shared API client. Tests usually install these
  * with vi.spyOn(api, 'state').mockImplementation(mock.state), etc.
@@ -94,6 +127,7 @@ export function createApiMock(): ApiMock {
     defaults: vi.fn(),
     browse: vi.fn(),
     state: vi.fn(),
+    stateFiltered: vi.fn(),
     pick: vi.fn(),
     preview: vi.fn(),
     imageUrl: vi.fn(

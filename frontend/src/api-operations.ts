@@ -9,6 +9,7 @@ export const operations = {
   defaults: 'GET /api/defaults',
   browse: 'GET /api/browse',
   state: 'GET /api/state',
+  stateFiltered: 'POST /api/state',
   pick: 'POST /api/pick',
   preview: 'GET /api/preview',
   imageUrl: 'GET /api/image',

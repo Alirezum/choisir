@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- TUI and web UI: the Options tab now offers exact file-type and per-entry
+  filters. Types group folders, each lowercased final suffix, and suffixless
+  files; entries list up to 1,000 visible names. Type and entry exclusions
+  intersect, start fully checked, reset when the folder or log file changes,
+  and show a checked/eligible summary with a Clear filters action. The entry
+  list reports when it is bounded, and filtered-empty and filtered-exhausted
+  picks get distinct messages. No user file or history entry is touched by a
+  filter action, and the CLI keeps no filter flags.
+- Web API: added the additive `POST /api/state` route with `filter_options` and
+  `known_entry_exclusions`, and optional `excluded_types`/`excluded_entries`
+  on `POST /api/pick`, including the `filtered_empty` and `filtered_exhausted`
+  statuses. `GET /api/state` and all other routes keep their shapes.
 - Web UI: refactored the frontend into modular state units, presentation-only
   views, and shared panel/empty-state blocks while preserving all behavior,
   visuals, text, timing, keyboard interaction, accessibility, and API/history

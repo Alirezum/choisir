@@ -3,8 +3,15 @@
   "apiPrefix": "/api",
   "description": "Complete success and error contract for the choosier local HTTP API.",
   "envelope": {
-    "topLevelFields": ["error", "detail"],
-    "errorFields": ["code", "message", "details"],
+    "topLevelFields": [
+      "error",
+      "detail"
+    ],
+    "errorFields": [
+      "code",
+      "message",
+      "details"
+    ],
     "invariants": [
       "detail is always a non-empty string",
       "detail equals error.message",
@@ -78,33 +85,69 @@
     "BrowserEntry": {
       "type": "object",
       "fields": {
-        "name": {"type": "string", "nullable": false},
-        "is_dir": {"type": "boolean", "nullable": false}
+        "name": {
+          "type": "string",
+          "nullable": false
+        },
+        "is_dir": {
+          "type": "boolean",
+          "nullable": false
+        }
       }
     },
     "HistoryEntry": {
       "type": "object",
       "fields": {
-        "timestamp": {"type": "string", "nullable": true},
-        "item": {"type": "string", "nullable": false},
-        "display": {"type": "string", "nullable": false}
+        "timestamp": {
+          "type": "string",
+          "nullable": true
+        },
+        "item": {
+          "type": "string",
+          "nullable": false
+        },
+        "display": {
+          "type": "string",
+          "nullable": false
+        }
       }
     },
     "PreviewImage": {
       "type": "object",
       "fields": {
-        "index": {"type": "integer", "nullable": true},
-        "name": {"type": "string", "nullable": false},
-        "media_type": {"type": "string", "nullable": false},
-        "size": {"type": "integer", "nullable": false}
+        "index": {
+          "type": "integer",
+          "nullable": true
+        },
+        "name": {
+          "type": "string",
+          "nullable": false
+        },
+        "media_type": {
+          "type": "string",
+          "nullable": false
+        },
+        "size": {
+          "type": "integer",
+          "nullable": false
+        }
       }
     },
     "PreviewVideo": {
       "type": "object",
       "fields": {
-        "name": {"type": "string", "nullable": false},
-        "media_type": {"type": "string", "nullable": false},
-        "size": {"type": "integer", "nullable": false}
+        "name": {
+          "type": "string",
+          "nullable": false
+        },
+        "media_type": {
+          "type": "string",
+          "nullable": false
+        },
+        "size": {
+          "type": "integer",
+          "nullable": false
+        }
       }
     },
     "PreviewModel": {
@@ -125,16 +168,91 @@
             "video"
           ]
         },
-        "text": {"type": "string", "nullable": false},
-        "truncated": {"type": "boolean", "nullable": false},
-        "entry_count": {"type": "integer", "nullable": true},
-        "size": {"type": "integer", "nullable": true},
+        "text": {
+          "type": "string",
+          "nullable": false
+        },
+        "truncated": {
+          "type": "boolean",
+          "nullable": false
+        },
+        "entry_count": {
+          "type": "integer",
+          "nullable": true
+        },
+        "size": {
+          "type": "integer",
+          "nullable": true
+        },
         "images": {
           "type": "array",
-          "items": {"ref": "PreviewImage"}
+          "items": {
+            "ref": "PreviewImage"
+          }
         },
-        "image_total": {"type": "integer", "nullable": false},
-        "video": {"ref": "PreviewVideo", "nullable": true}
+        "image_total": {
+          "type": "integer",
+          "nullable": false
+        },
+        "video": {
+          "ref": "PreviewVideo",
+          "nullable": true
+        }
+      }
+    },
+    "FilterTypeOption": {
+      "type": "object",
+      "fields": {
+        "key": {
+          "type": "string",
+          "nullable": false
+        },
+        "label": {
+          "type": "string",
+          "nullable": false
+        },
+        "count": {
+          "type": "integer",
+          "nullable": false
+        }
+      }
+    },
+    "FilterEntryOption": {
+      "type": "object",
+      "fields": {
+        "name": {
+          "type": "string",
+          "nullable": false
+        },
+        "type_key": {
+          "type": "string",
+          "nullable": false
+        }
+      }
+    },
+    "FilterOptions": {
+      "type": "object",
+      "fields": {
+        "types": {
+          "type": "array",
+          "items": {
+            "ref": "FilterTypeOption"
+          }
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "ref": "FilterEntryOption"
+          }
+        },
+        "entries_total": {
+          "type": "integer",
+          "nullable": false
+        },
+        "entries_truncated": {
+          "type": "boolean",
+          "nullable": false
+        }
       }
     }
   },
@@ -144,14 +262,22 @@
       "path": "/api/defaults",
       "purpose": "Return the initial path and log file supplied when the server started.",
       "success": {
-        "statuses": [200],
+        "statuses": [
+          200
+        ],
         "contentType": "application/json",
         "body": "json",
         "schema": {
           "type": "object",
           "fields": {
-            "path": {"type": "string", "nullable": false},
-            "log_file": {"type": "string", "nullable": false}
+            "path": {
+              "type": "string",
+              "nullable": false
+            },
+            "log_file": {
+              "type": "string",
+              "nullable": false
+            }
           }
         }
       },
@@ -173,17 +299,27 @@
       "path": "/api/browse",
       "purpose": "List one directory's children with directories first.",
       "success": {
-        "statuses": [200],
+        "statuses": [
+          200
+        ],
         "contentType": "application/json",
         "body": "json",
         "schema": {
           "type": "object",
           "fields": {
-            "path": {"type": "string", "nullable": false},
-            "parent": {"type": "string", "nullable": true},
+            "path": {
+              "type": "string",
+              "nullable": false
+            },
+            "parent": {
+              "type": "string",
+              "nullable": true
+            },
             "entries": {
               "type": "array",
-              "items": {"ref": "BrowserEntry"}
+              "items": {
+                "ref": "BrowserEntry"
+              }
             }
           }
         }
@@ -221,25 +357,47 @@
       "path": "/api/state",
       "purpose": "Return remaining candidates and recent history for a target and filter set.",
       "success": {
-        "statuses": [200],
+        "statuses": [
+          200
+        ],
         "contentType": "application/json",
         "body": "json",
         "schema": {
           "type": "object",
           "fields": {
-            "valid_path": {"type": "boolean", "nullable": false},
-            "path": {"type": "string", "nullable": false},
-            "log_file": {"type": "string", "nullable": false},
+            "valid_path": {
+              "type": "boolean",
+              "nullable": false
+            },
+            "path": {
+              "type": "string",
+              "nullable": false
+            },
+            "log_file": {
+              "type": "string",
+              "nullable": false
+            },
             "remaining": {
               "type": "array",
-              "items": {"type": "string", "nullable": false}
+              "items": {
+                "type": "string",
+                "nullable": false
+              }
             },
-            "remaining_total": {"type": "integer", "nullable": false},
+            "remaining_total": {
+              "type": "integer",
+              "nullable": false
+            },
             "history": {
               "type": "array",
-              "items": {"ref": "HistoryEntry"}
+              "items": {
+                "ref": "HistoryEntry"
+              }
             },
-            "history_total": {"type": "integer", "nullable": false}
+            "history_total": {
+              "type": "integer",
+              "nullable": false
+            }
           }
         }
       },
@@ -268,10 +426,94 @@
     },
     {
       "method": "POST",
-      "path": "/api/pick",
-      "purpose": "Pick one unselected entry and optionally record it in the history log.",
+      "path": "/api/state",
+      "purpose": "Return remaining candidates, recent history, and filter options for a target with type and entry exclusions.",
       "success": {
-        "statuses": [200],
+        "statuses": [
+          200
+        ],
+        "contentType": "application/json",
+        "body": "json",
+        "schema": {
+          "type": "object",
+          "fields": {
+            "valid_path": {
+              "type": "boolean",
+              "nullable": false
+            },
+            "path": {
+              "type": "string",
+              "nullable": false
+            },
+            "log_file": {
+              "type": "string",
+              "nullable": false
+            },
+            "remaining": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "nullable": false
+              }
+            },
+            "remaining_total": {
+              "type": "integer",
+              "nullable": false
+            },
+            "history": {
+              "type": "array",
+              "items": {
+                "ref": "HistoryEntry"
+              }
+            },
+            "history_total": {
+              "type": "integer",
+              "nullable": false
+            },
+            "filter_options": {
+              "ref": "FilterOptions"
+            },
+            "known_entry_exclusions": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "nullable": false
+              }
+            }
+          }
+        }
+      },
+      "errors": [
+        {
+          "code": "validation_error",
+          "status": 422,
+          "when": "The JSON body is missing, malformed, has wrong field types, or contains malformed or over-limit exclusions."
+        },
+        {
+          "code": "invalid_request",
+          "status": 400,
+          "when": "files_only and dirs_only are both true."
+        },
+        {
+          "code": "method_not_allowed",
+          "status": 405,
+          "when": "A method other than GET or POST is used."
+        },
+        {
+          "code": "internal_error",
+          "status": 500,
+          "when": "An unexpected exception escapes the route."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/pick",
+      "purpose": "Pick one unselected entry and optionally record it in the history log, honoring type and entry exclusions.",
+      "success": {
+        "statuses": [
+          200
+        ],
         "contentType": "application/json",
         "body": "json",
         "schema": {
@@ -280,12 +522,31 @@
             "status": {
               "type": "string",
               "nullable": false,
-              "enum": ["picked", "empty", "exhausted", "invalid_path"]
+              "enum": [
+                "picked",
+                "empty",
+                "exhausted",
+                "invalid_path",
+                "filtered_empty",
+                "filtered_exhausted"
+              ]
             },
-            "log_file": {"type": "string", "nullable": false},
-            "item": {"type": "string", "nullable": true},
-            "logged": {"type": "boolean", "nullable": false},
-            "preview": {"ref": "PreviewModel", "nullable": true}
+            "log_file": {
+              "type": "string",
+              "nullable": false
+            },
+            "item": {
+              "type": "string",
+              "nullable": true
+            },
+            "logged": {
+              "type": "boolean",
+              "nullable": false
+            },
+            "preview": {
+              "ref": "PreviewModel",
+              "nullable": true
+            }
           }
         }
       },
@@ -293,7 +554,7 @@
         {
           "code": "validation_error",
           "status": 422,
-          "when": "The JSON body is missing, malformed, or has wrong field types."
+          "when": "The JSON body is missing, malformed, has wrong field types, or contains malformed or over-limit exclusions."
         },
         {
           "code": "invalid_request",
@@ -317,10 +578,14 @@
       "path": "/api/preview",
       "purpose": "Return a structured, bounded preview for an entry path.",
       "success": {
-        "statuses": [200],
+        "statuses": [
+          200
+        ],
         "contentType": "application/json",
         "body": "json",
-        "schema": {"ref": "PreviewModel"}
+        "schema": {
+          "ref": "PreviewModel"
+        }
       },
       "errors": [
         {
@@ -345,7 +610,9 @@
       "path": "/api/image",
       "purpose": "Serve original image bytes or a WebP rendition, including archive members by index.",
       "success": {
-        "statuses": [200],
+        "statuses": [
+          200
+        ],
         "contentType": "image/*",
         "body": "binary",
         "headers": {
@@ -402,8 +669,14 @@
       "path": "/api/video",
       "purpose": "Stream a standalone video with byte-range support.",
       "success": {
-        "statuses": [200, 206],
-        "contentType": ["video/*", "multipart/byteranges"],
+        "statuses": [
+          200,
+          206
+        ],
+        "contentType": [
+          "video/*",
+          "multipart/byteranges"
+        ],
         "body": "binary",
         "headers": {
           "Accept-Ranges": "bytes",
@@ -455,13 +728,18 @@
       "path": "/api/open",
       "purpose": "Open an entry with the operating system's default program.",
       "success": {
-        "statuses": [200],
+        "statuses": [
+          200
+        ],
         "contentType": "application/json",
         "body": "json",
         "schema": {
           "type": "object",
           "fields": {
-            "opened": {"type": "string", "nullable": false}
+            "opened": {
+              "type": "string",
+              "nullable": false
+            }
           }
         }
       },
@@ -493,14 +771,22 @@
       "path": "/api/history/archive",
       "purpose": "Rotate the history log to a timestamped backup.",
       "success": {
-        "statuses": [200],
+        "statuses": [
+          200
+        ],
         "contentType": "application/json",
         "body": "json",
         "schema": {
           "type": "object",
           "fields": {
-            "log_file": {"type": "string", "nullable": false},
-            "backup": {"type": "string", "nullable": true}
+            "log_file": {
+              "type": "string",
+              "nullable": false
+            },
+            "backup": {
+              "type": "string",
+              "nullable": true
+            }
           }
         }
       },
@@ -527,14 +813,22 @@
       "path": "/api/history",
       "purpose": "Delete the history log.",
       "success": {
-        "statuses": [200],
+        "statuses": [
+          200
+        ],
         "contentType": "application/json",
         "body": "json",
         "schema": {
           "type": "object",
           "fields": {
-            "log_file": {"type": "string", "nullable": false},
-            "removed": {"type": "boolean", "nullable": false}
+            "log_file": {
+              "type": "string",
+              "nullable": false
+            },
+            "removed": {
+              "type": "boolean",
+              "nullable": false
+            }
           }
         }
       },
@@ -561,15 +855,26 @@
       "path": "/api/history/item",
       "purpose": "Remove every history entry for one item.",
       "success": {
-        "statuses": [200],
+        "statuses": [
+          200
+        ],
         "contentType": "application/json",
         "body": "json",
         "schema": {
           "type": "object",
           "fields": {
-            "log_file": {"type": "string", "nullable": false},
-            "item": {"type": "string", "nullable": false},
-            "removed": {"type": "integer", "nullable": false}
+            "log_file": {
+              "type": "string",
+              "nullable": false
+            },
+            "item": {
+              "type": "string",
+              "nullable": false
+            },
+            "removed": {
+              "type": "integer",
+              "nullable": false
+            }
           }
         }
       },
@@ -596,18 +901,29 @@
       "path": "/api/history/remove",
       "purpose": "Remove every history entry for a batch of items in one rewrite.",
       "success": {
-        "statuses": [200],
+        "statuses": [
+          200
+        ],
         "contentType": "application/json",
         "body": "json",
         "schema": {
           "type": "object",
           "fields": {
-            "log_file": {"type": "string", "nullable": false},
+            "log_file": {
+              "type": "string",
+              "nullable": false
+            },
             "items": {
               "type": "array",
-              "items": {"type": "string", "nullable": false}
+              "items": {
+                "type": "string",
+                "nullable": false
+              }
             },
-            "removed": {"type": "integer", "nullable": false}
+            "removed": {
+              "type": "integer",
+              "nullable": false
+            }
           }
         }
       },

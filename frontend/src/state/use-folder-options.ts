@@ -1,6 +1,7 @@
 import { computed, ref, type ComputedRef, type Ref } from 'vue'
 
-import type { FilterSelection, Mode } from '../view-models.ts'
+import type { FolderFlags } from '../types.ts'
+import type { Mode } from '../view-models.ts'
 
 export interface FolderOptionsBinding {
   path: Ref<string>
@@ -9,7 +10,7 @@ export interface FolderOptionsBinding {
   dryRun: Ref<boolean>
   includeHidden: Ref<boolean>
   mode: Ref<Mode>
-  filters: ComputedRef<FilterSelection>
+  folderFlags: ComputedRef<FolderFlags>
   entryPath: (item: string) => string
 }
 
@@ -25,7 +26,7 @@ export function useFolderOptions(): FolderOptionsBinding {
   const includeHidden = ref(false)
   const mode = ref<Mode>('all')
 
-  const filters = computed<FilterSelection>(() => ({
+  const folderFlags = computed<FolderFlags>(() => ({
     include_hidden: includeHidden.value,
     files_only: mode.value === 'files',
     dirs_only: mode.value === 'dirs',
@@ -43,7 +44,7 @@ export function useFolderOptions(): FolderOptionsBinding {
     dryRun,
     includeHidden,
     mode,
-    filters,
+    folderFlags,
     entryPath,
   }
 }

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+from choosier.filters import FilterOptions
 from choosier.preview import Preview
 from choosier.storage import LogEntry
 
@@ -45,9 +46,18 @@ class StateSnapshot:
     remaining_total: int
     history: tuple[LogEntry, ...]
     history_total: int
+    filter_options: FilterOptions = FilterOptions()
+    known_entry_exclusions: tuple[str, ...] = ()
 
 
-PickStatus = Literal["picked", "empty", "exhausted", "invalid_path"]
+PickStatus = Literal[
+    "picked",
+    "empty",
+    "exhausted",
+    "invalid_path",
+    "filtered_empty",
+    "filtered_exhausted",
+]
 
 
 @dataclass(frozen=True)

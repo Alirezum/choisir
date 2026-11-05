@@ -11,6 +11,8 @@ import type {
   BrowseResponse,
   ClearResponse,
   DefaultsResponse,
+  FilteredStateRequest,
+  FilteredStateResponse,
   OpenResponse,
   PickRequest,
   PickResponse,
@@ -67,6 +69,9 @@ export const api = {
     request<StateResponse>(requestUrl('state', { ...params }), {
       method: requestMethod('state'),
     }),
+
+  stateFiltered: (body: FilteredStateRequest) =>
+    postJson<FilteredStateResponse>('stateFiltered', body),
 
   pick: (body: PickRequest) => postJson<PickResponse>('pick', body),
 

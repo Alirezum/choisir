@@ -5,11 +5,15 @@ import type { ComputedRef, Ref } from 'vue'
 import type {
   BrowseResponse,
   BrowserEntry,
+  FilteredStateResponse,
+  FilterTypeOption,
+  FolderFlags,
   HistoryEntry,
   PreviewImage,
   PreviewModel,
-  StateResponse,
 } from './types.ts'
+
+export type { FolderFlags }
 
 export type TabId = 'remaining' | 'history' | 'browse' | 'options'
 export type Mode = 'all' | 'files' | 'dirs'
@@ -25,10 +29,25 @@ export interface Choice {
   preview: PreviewModel | null
 }
 
-export interface FilterSelection {
-  include_hidden: boolean
-  files_only: boolean
-  dirs_only: boolean
+export interface FilterEntryRow {
+  name: string
+  typeKey: string
+  typeLabel: string
+}
+
+export interface FilterPanelModel {
+  ready: boolean
+  validPath: boolean
+  empty: boolean
+  eligibleEntries: number
+  types: FilterTypeOption[]
+  entries: FilterEntryRow[]
+  checkedTypeKeys: ReadonlySet<string>
+  checkedEntryNames: ReadonlySet<string>
+  active: boolean
+  summary: string
+  entriesTotal: number
+  entriesTruncated: boolean
 }
 
 /** A preview image plus the client-built URLs each presentation needs. */
@@ -142,10 +161,12 @@ export interface WorkspaceBinding {
   mode: Ref<Mode>
 
   status: Ref<string>
-  state: Ref<StateResponse | null>
+  state: Ref<FilteredStateResponse | null>
   choice: Ref<Choice | null>
   pickSerial: Ref<number>
   activeTab: Ref<TabId>
+
+  filterPanel: ComputedRef<FilterPanelModel>
 
   clearing: Ref<boolean>
   removingItem: Ref<string | null>
@@ -183,4 +204,12 @@ export interface WorkspaceBinding {
   onTabKey: (event: KeyboardEvent, id: TabId) => void
   navigateBrowser: (target: BrowserEntry | string) => void
   useBrowserFolder: () => void
+
+  toggleFilterType: (key: string) => void
+  toggleFilterEntry: (name: string) => void
+  selectAllFilterTypes: () => void
+  clearFilterTypes: () => void
+  selectAllFilterEntries: () => void
+  clearFilterEntries: () => void
+  clearFilters: () => void
 }

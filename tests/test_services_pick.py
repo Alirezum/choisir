@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from choosier.filters import FilterSelection
 from choosier.services import FailureKind, ServiceError, pick
 
 
@@ -151,6 +152,125 @@ class PickTest(unittest.TestCase):
         )
         self.assertEqual(files.item, "file.txt")
         self.assertEqual(dirs.item, "sub")
+
+
+class FilteredPickTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.target = Path(self.tmp.name) / "target"
+        self.target.mkdir()
+        self.log = self.target / ".choosier.jsonl"
+        for name in ("a.jpg", "B.JPG", "notes.txt", "README"):
+            (self.target / name).touch()
+        (self.target / "sub").mkdir()
+
+    def test_filtered_empty_has_no_side_effects(self) -> None:
+        selection = FilterSelection(
+            excluded_types=frozenset({"file:.txt", "file:", "dir"}),
+            excluded_entries=frozenset({"a.jpg", "B.JPG"}),
+        )
+        outcome = pick(self.target, self.log, seed=1, selection=selection)
+        self.assertEqual(outcome.status, "filtered_empty")
+        self.assertIsNone(outcome.item)
+        self.assertFalse(outcome.logged)
+        self.assertFalse(self.log.exists())
+
+    def test_filtered_exhausted_keeps_other_entries_untouched(self) -> None:
+        selection = FilterSelection(
+            excluded_types=frozenset({"file:.txt", "file:", "dir"}),
+        )
+        first = pick(self.target, self.log, seed=1, selection=selection)
+        self.assertEqual(first.status, "picked")
+        self.assertIn(first.item, {"a.jpg", "B.JPG"})
+        second = pick(self.target, self.log, seed=2, selection=selection)
+        self.assertEqual(second.status, "picked")
+        self.assertIsNotNone(first.item)
+        self.assertIsNotNone(second.item)
+        self.assertNotEqual(first.item, second.item)
+        third = pick(self.target, self.log, seed=3, selection=selection)
+        self.assertEqual(third.status, "filtered_exhausted")
+        self.assertIsNone(third.item)
+        self.assertFalse(third.logged)
+        self.assertEqual(
+            self.log.read_text(encoding="utf-8").count("\n"),
+            2,
+        )
+
+    def test_exhausted_when_filters_remove_nothing(self) -> None:
+        self.log.write_text(
+            "".join(
+                f'{{"ts": "t", "item": "{name}"}}\n'
+                for name in ("a.jpg", "B.JPG", "notes.txt", "README", "sub")
+            ),
+            encoding="utf-8",
+        )
+        outcome = pick(self.target, self.log, seed=1)
+        self.assertEqual(outcome.status, "exhausted")
+        self.assertFalse(outcome.logged)
+
+    def test_hidden_only_folder_stays_exhausted(self) -> None:
+        hidden_target = Path(self.tmp.name) / "hidden"
+        hidden_target.mkdir()
+        (hidden_target / ".hidden").touch()
+        outcome = pick(
+            hidden_target,
+            hidden_target / ".choosier.jsonl",
+            seed=1,
+            selection=FilterSelection(excluded_types=frozenset({"dir"})),
+        )
+        self.assertEqual(outcome.status, "exhausted")
+
+    def test_invalid_path_precedes_filtered_outcomes(self) -> None:
+        outcome = pick(
+            self.target / "missing",
+            self.log,
+            seed=1,
+            selection=FilterSelection(excluded_types=frozenset({"dir"})),
+        )
+        self.assertEqual(outcome.status, "invalid_path")
+        self.assertFalse(self.log.exists())
+
+    def test_dry_run_filtered_pick_does_not_log(self) -> None:
+        selection = FilterSelection(excluded_entries=frozenset({"notes.txt"}))
+        outcome = pick(self.target, self.log, seed=1, dry_run=True, selection=selection)
+        self.assertEqual(outcome.status, "picked")
+        self.assertIn(outcome.item, {"a.jpg", "B.JPG", "README", "sub"})
+        self.assertFalse(outcome.logged)
+        self.assertFalse(self.log.exists())
+
+    def test_type_and_entry_exclusions_intersect(self) -> None:
+        selection = FilterSelection(
+            excluded_types=frozenset({"file:.txt", "file:.jpg", "dir"}),
+            excluded_entries=frozenset({"README"}),
+        )
+        outcome = pick(self.target, self.log, seed=1, selection=selection)
+        self.assertEqual(outcome.status, "filtered_empty")
+
+        only_jpg = FilterSelection(
+            excluded_types=frozenset({"file:.txt", "file:", "dir"}),
+            excluded_entries=frozenset({"B.JPG"}),
+        )
+        picked = pick(self.target, self.log, seed=1, selection=only_jpg)
+        self.assertEqual(picked.status, "picked")
+        self.assertEqual(picked.item, "a.jpg")
+
+    def test_sc004_one_hundred_seeded_entry_picks(self) -> None:
+        selection = FilterSelection(
+            excluded_entries=frozenset({"notes.txt", "README", "sub"}),
+        )
+        allowed = {"a.jpg", "B.JPG"}
+        for seed in range(100):
+            outcome = pick(
+                self.target,
+                self.log,
+                seed=seed,
+                dry_run=True,
+                selection=selection,
+            )
+            self.assertEqual(outcome.status, "picked")
+            self.assertIn(outcome.item, allowed)
+        self.assertFalse(self.log.exists())
 
 
 if __name__ == "__main__":

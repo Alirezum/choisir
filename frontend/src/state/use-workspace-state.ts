@@ -1,24 +1,27 @@
 import { onUnmounted, ref, watch, type ComputedRef, type Ref } from 'vue'
 
 import { api } from '../api.ts'
-import type { StateResponse } from '../types.ts'
-import type { FilterSelection, Mode } from '../view-models.ts'
+import type {
+  FilteredStateResponse,
+  FilterExclusions,
+  FolderFlags,
+} from '../types.ts'
 
 export interface WorkspaceStateDeps {
   path: Ref<string>
   logFile: Ref<string>
-  includeHidden: Ref<boolean>
-  mode: Ref<Mode>
-  filters: ComputedRef<FilterSelection>
+  folderFlags: ComputedRef<FolderFlags>
+  filterExclusions: ComputedRef<FilterExclusions>
   status: {
     reportError: (error: unknown) => void
   }
   onPathChange?: () => void
   onLogChange?: () => void
+  onState?: (response: FilteredStateResponse | null) => void
 }
 
 export interface WorkspaceStateBinding {
-  state: Ref<StateResponse | null>
+  state: Ref<FilteredStateResponse | null>
   refresh: () => Promise<void>
   scheduleRefresh: () => void
 }
@@ -33,21 +36,30 @@ const REFRESH_DELAY = 250
 export function useWorkspaceState(
   deps: WorkspaceStateDeps,
 ): WorkspaceStateBinding {
-  const state = ref<StateResponse | null>(null)
+  const state = ref<FilteredStateResponse | null>(null)
   let refreshTimer: number | undefined
+  let requestNumber = 0
 
   async function refresh(): Promise<void> {
     if (deps.path.value.trim() === '') {
+      requestNumber += 1
       state.value = null
+      deps.onState?.(null)
       return
     }
+    const current = ++requestNumber
     try {
-      state.value = await api.state({
+      const response = await api.stateFiltered({
         path: deps.path.value,
         log_file: deps.logFile.value,
-        ...deps.filters.value,
+        ...deps.folderFlags.value,
+        ...deps.filterExclusions.value,
       })
+      if (current !== requestNumber) return
+      state.value = response
+      deps.onState?.(response)
     } catch (error) {
+      if (current !== requestNumber) return
       deps.status.reportError(error)
     }
   }
@@ -58,7 +70,7 @@ export function useWorkspaceState(
   }
 
   watch(
-    [deps.path, deps.logFile, deps.includeHidden, deps.mode],
+    [deps.path, deps.logFile, deps.folderFlags, deps.filterExclusions],
     scheduleRefresh,
   )
   watch(deps.path, () => deps.onPathChange?.())
