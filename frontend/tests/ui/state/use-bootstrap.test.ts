@@ -8,24 +8,30 @@ import { useWorkspaceState } from '../../../src/state/use-workspace-state.ts'
 import { filteredStateResponse, flushPromises, mountHost } from '../test-helpers.ts'
 
 function setup(
-  defaults: () => Promise<{ path: string; log_file: string }> = () =>
+  defaults: () => Promise<{
+    path: string
+    log_file: string
+    path_warning: string | null
+  }> = () =>
     Promise.resolve({
       path: '/tmp/choosier',
       log_file: '/tmp/choosier/custom.jsonl',
+      path_warning: null,
     }),
 ) {
   const defaultsMock = vi.spyOn(api, 'defaults').mockImplementation(defaults)
   const options = useFolderOptions()
   const refresh = vi.fn(async () => {})
+  const setStatus = vi.fn()
   const reportError = vi.fn()
   const { result, wrapper } = mountHost(() =>
     useBootstrap({
       options,
       refresh,
-      status: { reportError },
+      status: { setStatus, reportError },
     }),
   )
-  return { defaultsMock, options, refresh, reportError, result, wrapper }
+  return { defaultsMock, options, refresh, setStatus, reportError, result, wrapper }
 }
 
 describe('useBootstrap', () => {
@@ -57,6 +63,45 @@ describe('useBootstrap', () => {
     wrapper.unmount()
   })
 
+  it('applies the startup path warning without masking a later refresh failure', async () => {
+    const calls: string[] = []
+    const defaults = vi.spyOn(api, 'defaults').mockResolvedValue({
+      path: '/tmp/choosier',
+      log_file: '',
+      path_warning: 'Skipped 1 unavailable remembered folder.',
+    })
+    const options = useFolderOptions()
+    const setStatus = vi.fn((message: string) => {
+      calls.push(`status:${message}`)
+    })
+    const reportError = vi.fn(() => {
+      calls.push('error')
+    })
+    const refresh = vi.fn(async () => {
+      reportError(new Error('refresh failed'))
+    })
+    const { wrapper } = mountHost(() =>
+      useBootstrap({
+        options,
+        refresh,
+        status: { setStatus, reportError },
+      }),
+    )
+
+    await flushPromises()
+
+    expect(defaults).toHaveBeenCalledTimes(1)
+    expect(setStatus).toHaveBeenCalledWith(
+      'Skipped 1 unavailable remembered folder.',
+    )
+    expect(reportError).toHaveBeenCalledTimes(1)
+    expect(calls).toEqual([
+      'status:Skipped 1 unavailable remembered folder.',
+      'error',
+    ])
+    wrapper.unmount()
+  })
+
   it('preserves the watcher-triggered debounced refresh after defaults load', async () => {
     vi.useFakeTimers()
     const options = useFolderOptions()
@@ -75,6 +120,7 @@ describe('useBootstrap', () => {
     vi.spyOn(api, 'defaults').mockResolvedValue({
       path: '/tmp/choosier',
       log_file: '/tmp/choosier/custom.jsonl',
+      path_warning: null,
     })
     const { wrapper } = mountHost(() =>
       useBootstrap({

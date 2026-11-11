@@ -26,6 +26,7 @@ from textual.widgets.selection_list import Selection
 
 from choosier.chooser import parse_seed, resolve_log_path
 from choosier.filters import FilterOptions, FilterSelection
+from choosier.path_memory import PathMemory
 from choosier.preview import preview_entry
 from choosier.services import (
     FailureKind,
@@ -291,7 +292,18 @@ class ChooserApp(App[None]):
     def on_mount(self) -> None:
         self.query_one("#open", Button).disabled = True
         self.query_one("#pick", Button).focus()
+        self._apply_startup_memory()
         self._refresh_panels()
+
+    def _apply_startup_memory(self) -> None:
+        """Fill an empty launch path from the first valid remembered folder."""
+        if self._initial_path:
+            return
+        resolution = PathMemory().startup(Path(""))
+        if resolution.source == "recent":
+            self.query_one("#path-input", Input).value = str(resolution.path)
+        if resolution.warning:
+            self._set_status(resolution.warning)
 
     def action_pick(self) -> None:
         """Pick action, also bound to ctrl+n (ctrl+p is the palette)."""
@@ -729,10 +741,14 @@ class ChooserApp(App[None]):
 
     def _finish_pick(self, target: Path, item: str, message: str) -> None:
         """Display a successful pick, update preview, and refresh panels."""
+        memory_notice = PathMemory().record(target).notice
         self._show_choice(item)
         self._current_choice = target / item
         self._update_preview()
-        self._set_status(message)
+        if memory_notice is None:
+            self._set_status(message)
+        else:
+            self._set_status(f"{message} {memory_notice}")
         self._refresh_panels()
 
 

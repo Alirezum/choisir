@@ -147,6 +147,7 @@ export interface FilterOptions {
 export interface DefaultsResponse {
   path: string
   log_file: string
+  path_warning: string | null
 }
 
 export interface BrowseResponse {
@@ -183,6 +184,7 @@ export interface PickResponse {
   item: string | null
   logged: boolean
   preview: PreviewModel | null
+  path_memory_notice: string | null
 }
 
 export interface OpenResponse {

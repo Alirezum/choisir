@@ -102,7 +102,7 @@ class ApiSuccessCompatibilityTest(unittest.TestCase):
         self._assert_json_success(defaults, "GET", "/api/defaults")
         self.assertEqual(
             set(defaults.json()),
-            {"path", "log_file"},
+            {"path", "log_file", "path_warning"},
         )
 
         browse = self.client.get("/api/browse", params=self._params())

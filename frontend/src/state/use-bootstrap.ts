@@ -7,7 +7,7 @@ import type { StatusBinding } from './use-status.ts'
 export interface BootstrapDeps {
   options: Pick<FolderOptionsBinding, 'path' | 'logFile'>
   refresh: () => Promise<void>
-  status: Pick<StatusBinding, 'reportError'>
+  status: Pick<StatusBinding, 'reportError' | 'setStatus'>
 }
 
 export interface BootstrapBinding {
@@ -25,6 +25,9 @@ export function useBootstrap(deps: BootstrapDeps): BootstrapBinding {
       const defaults = await api.defaults()
       deps.options.path.value = defaults.path
       deps.options.logFile.value = defaults.log_file
+      if (defaults.path_warning) {
+        deps.status.setStatus(defaults.path_warning)
+      }
     } catch (error) {
       deps.status.reportError(error)
     }

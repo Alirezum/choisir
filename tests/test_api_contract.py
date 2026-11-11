@@ -109,6 +109,35 @@ class ApiContractTest(unittest.TestCase):
             ],
         )
 
+    def test_additive_path_memory_fields_match_openapi(self) -> None:
+        defaults_route = contract_route(self.contract, "GET", "/api/defaults")
+        self.assertEqual(
+            set(defaults_route["success"]["schema"]["fields"]),
+            {"path", "log_file", "path_warning"},
+        )
+        pick_route = contract_route(self.contract, "POST", "/api/pick")
+        self.assertIn(
+            "path_memory_notice",
+            pick_route["success"]["schema"]["fields"],
+        )
+
+        components = self.openapi["components"]["schemas"]
+        self.assertEqual(
+            set(components["DefaultsResponse"]["properties"]),
+            {"path", "log_file", "path_warning"},
+        )
+        self.assertEqual(
+            set(components["PickResponse"]["properties"]),
+            {
+                "status",
+                "log_file",
+                "item",
+                "logged",
+                "preview",
+                "path_memory_notice",
+            },
+        )
+
     def test_get_state_shape_stays_frozen(self) -> None:
         route = contract_route(self.contract, "GET", "/api/state")
         fields = route["success"]["schema"]["fields"]

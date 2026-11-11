@@ -2,6 +2,7 @@
 
 import importlib.util
 import io
+import os
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -119,11 +120,11 @@ class CliTest(unittest.TestCase):
         self.assertFalse(self.log.exists())
 
     @unittest.skipUnless(HAS_WEB, "web extra (fastapi) not installed")
-    def test_web_without_path_defaults_to_cwd(self) -> None:
+    def test_web_without_path_forwards_an_empty_initial_path(self) -> None:
         with patch("choosier.web.run", return_value=0) as run_web:
             code = main(["--web"])
         self.assertEqual(code, 0)
-        self.assertEqual(run_web.call_args.kwargs["initial_path"], str(Path.cwd()))
+        self.assertEqual(run_web.call_args.kwargs["initial_path"], "")
 
     @unittest.skipUnless(HAS_WEB, "web extra (fastapi) not installed")
     def test_web_passes_path_and_port_through(self) -> None:
@@ -133,6 +134,24 @@ class CliTest(unittest.TestCase):
         kwargs = run_web.call_args.kwargs
         self.assertEqual(kwargs["initial_path"], str(self.target))
         self.assertEqual(kwargs["port"], 9999)
+
+    def test_one_shot_cli_never_touches_path_memory(self) -> None:
+        memory_file = Path(os.environ["CHOOSIER_PATH_MEMORY_FILE"])
+        self._run(str(self.target), "--seed", "1")
+        self.assertFalse(memory_file.exists())
+
+        memory_file.parent.mkdir(parents=True, exist_ok=True)
+        memory_file.write_text(
+            '{"version": 1, "recent": []}\n',
+            encoding="utf-8",
+        )
+        before = memory_file.read_bytes()
+        self._run(str(self.target), "--seed", "2")
+        self._run(str(self.target), "--list")
+        self._run(str(self.target), "--dry-run", "--seed", "1")
+        self._run(str(self.target), "--reset")
+        self.assertEqual(memory_file.read_bytes(), before)
+        self.assertFalse(Path(f"{memory_file}.lock").exists())
 
 
 if __name__ == "__main__":

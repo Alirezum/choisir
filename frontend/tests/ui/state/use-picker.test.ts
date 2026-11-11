@@ -24,6 +24,7 @@ const pickResponse = (overrides: Partial<PickResponse> = {}): PickResponse => ({
   item: 'alpha.txt',
   logged: true,
   preview,
+  path_memory_notice: null,
   ...overrides,
 })
 
@@ -169,6 +170,30 @@ describe('usePicker', () => {
     expect(choice.choice.value).toBeNull()
     expect(choice.pickSerial.value).toBe(0)
     expect(refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('appends the path-memory notice to the success status', async () => {
+    const { options, result, setStatus } = setup()
+    vi.spyOn(api, 'pick').mockResolvedValue(
+      pickResponse({ path_memory_notice: 'Could not remember this folder.' }),
+    )
+    options.path.value = '/tmp/choosier'
+
+    await result.pick()
+
+    expect(setStatus).toHaveBeenCalledWith(
+      'Picked alpha.txt. Could not remember this folder.',
+    )
+  })
+
+  it('leaves the success status unchanged when the notice is null', async () => {
+    const { options, result, setStatus } = setup()
+    vi.spyOn(api, 'pick').mockResolvedValue(pickResponse())
+    options.path.value = '/tmp/choosier'
+
+    await result.pick()
+
+    expect(setStatus).toHaveBeenCalledWith('Picked alpha.txt.')
   })
 
   it('discards a pick result when the filter revision changed', async () => {

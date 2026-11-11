@@ -260,7 +260,7 @@
     {
       "method": "GET",
       "path": "/api/defaults",
-      "purpose": "Return the initial path and log file supplied when the server started.",
+      "purpose": "Return the startup path and log file, including any remembered-folder warning.",
       "success": {
         "statuses": [
           200
@@ -277,6 +277,10 @@
             "log_file": {
               "type": "string",
               "nullable": false
+            },
+            "path_warning": {
+              "type": "string",
+              "nullable": true
             }
           }
         }
@@ -509,7 +513,7 @@
     {
       "method": "POST",
       "path": "/api/pick",
-      "purpose": "Pick one unselected entry and optionally record it in the history log, honoring type and entry exclusions.",
+      "purpose": "Pick one unselected entry, optionally record it in the history log, honor type and entry exclusions, and remember the target folder.",
       "success": {
         "statuses": [
           200
@@ -545,6 +549,10 @@
             },
             "preview": {
               "ref": "PreviewModel",
+              "nullable": true
+            },
+            "path_memory_notice": {
+              "type": "string",
               "nullable": true
             }
           }

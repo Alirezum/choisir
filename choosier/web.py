@@ -29,6 +29,7 @@ from choosier.filters import (
     FilterValidationError,
     normalize_exclusions,
 )
+from choosier.path_memory import PathMemory
 from choosier.preview import (
     Preview,
     PreviewKind,
@@ -167,6 +168,7 @@ class PreviewModel(BaseModel):
 class DefaultsResponse(BaseModel):
     path: str
     log_file: str
+    path_warning: str | None
 
 
 class BrowserEntry(BaseModel):
@@ -288,6 +290,7 @@ class PickResponse(BaseModel):
     item: str | None = None
     logged: bool = False
     preview: PreviewModel | None = None
+    path_memory_notice: str | None
 
 
 class OpenRequest(BaseModel):
@@ -395,6 +398,13 @@ def _history_models(snapshot: services.StateSnapshot) -> list[HistoryEntryModel]
 def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
     """Build the web app; initial values seed the defaults endpoint."""
     app = FastAPI(title="choosier")
+    memory = PathMemory()
+    startup_path = initial_path
+    path_warning: str | None = None
+    if not initial_path:
+        resolution = memory.startup(Path.cwd())
+        startup_path = str(resolution.path)
+        path_warning = resolution.warning
 
     @app.exception_handler(ApiError)
     async def api_error_handler(
@@ -486,7 +496,11 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
 
     @app.get("/api/defaults")
     def defaults() -> DefaultsResponse:
-        return DefaultsResponse(path=initial_path, log_file=log_file or "")
+        return DefaultsResponse(
+            path=startup_path,
+            log_file=log_file or "",
+            path_warning=path_warning,
+        )
 
     @app.get("/api/browse")
     def browse(path: str) -> BrowseResponse:
@@ -564,12 +578,16 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
             selection=request.filter_selection,
             include_preview=True,
         )
+        memory_notice: str | None = None
+        if outcome.status == "picked":
+            memory_notice = memory.record(request.path).notice
         return PickResponse(
             status=outcome.status,
             log_file=str(outcome.log_file),
             item=outcome.item,
             logged=outcome.logged,
             preview=_preview_model(outcome.preview) if outcome.preview else None,
+            path_memory_notice=memory_notice,
         )
 
     @app.get("/api/preview")

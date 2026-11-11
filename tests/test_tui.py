@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from rich.text import Text
 
+from choosier.path_memory import MutationResult, PathMemory
 from choosier.services import HistoryService, build_state, pick
 from choosier.services.state import PANEL_MAX_LINES
 
@@ -621,6 +622,164 @@ class TuiFilterScenarioTest(unittest.IsolatedAsyncioTestCase):
                 _plain(app.query_one("#entries-none", Button).label),
                 "No entries",
             )
+
+
+@unittest.skipUnless(HAS_TEXTUAL, "ui extra (textual) not installed")
+class TuiPathMemoryScenarioTest(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.target = self.root / "target"
+        self.target.mkdir()
+        (self.target / "a.txt").touch()
+        self.memory = PathMemory()
+
+    def _folder(self, name: str, *files: str) -> Path:
+        folder = self.root / name
+        folder.mkdir()
+        for file_name in files:
+            (folder / file_name).touch()
+        return folder
+
+    def _input(self, app: "ChooserApp") -> str:
+        return app.query_one("#path-input", Input).value
+
+    def _status(self, app: "ChooserApp") -> str:
+        return _plain(app.query_one("#status", Static).content)
+
+    def _remaining(self, app: "ChooserApp") -> str:
+        return _plain(app.query_one("#remaining", Static).content)
+
+    async def test_empty_launch_restores_the_remembered_folder(self) -> None:
+        self.memory.record(self.target)
+        app = ChooserApp("")
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            self.assertEqual(self._input(app), str(self.target.resolve()))
+            self.assertIn("a.txt", self._remaining(app))
+            self.assertIsNone(app._current_choice)
+            self.assertEqual(app._excluded_types, set())
+            self.assertEqual(app._excluded_entries, set())
+
+    async def test_explicit_path_wins_even_when_invalid(self) -> None:
+        self.memory.record(self.target)
+        missing = str(self.root / "missing")
+        app = ChooserApp(missing)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            self.assertEqual(self._input(app), missing)
+            app.do_pick()
+            await pilot.pause()
+            self.assertEqual(self._status(app), "Invalid Path.")
+            self.assertEqual(
+                self.memory.snapshot().recent,
+                (str(self.target.resolve()),),
+            )
+
+    async def test_stale_recent_falls_back_and_is_pruned(self) -> None:
+        stale = self._folder("stale")
+        self.memory.record(self.target)
+        self.memory.record(stale)
+        stale.rmdir()
+        app = ChooserApp("")
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            self.assertEqual(self._input(app), str(self.target.resolve()))
+            self.assertIn("unavailable", self._status(app))
+            self.assertEqual(
+                self.memory.snapshot().recent,
+                (str(self.target.resolve()),),
+            )
+
+    async def test_first_run_stays_empty(self) -> None:
+        app = ChooserApp("")
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            self.assertEqual(self._input(app), "")
+            self.assertEqual(self._status(app), "")
+            self.assertFalse(self.memory.file.exists())
+
+    async def test_successful_and_dry_run_picks_record(self) -> None:
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            self.assertIn("Logged in", self._status(app))
+            self.assertEqual(
+                self.memory.snapshot().recent,
+                (str(self.target.resolve()),),
+            )
+
+        other = self._folder("other", "b.txt")
+        app = ChooserApp(str(other))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.query_one("#dry-run", Checkbox).value = True
+            app.do_pick()
+            await pilot.pause()
+            self.assertIn("Dry run", self._status(app))
+            self.assertEqual(
+                self.memory.snapshot().recent[0],
+                str(other.resolve()),
+            )
+            self.assertFalse((other / ".choosier.jsonl").exists())
+
+    async def test_empty_exhausted_and_invalid_picks_do_not_record(self) -> None:
+        empty = self._folder("empty")
+        app = ChooserApp(str(empty))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            self.assertEqual(self._status(app), "Path Empty.")
+            self.assertEqual(self.memory.snapshot().recent, ())
+
+        exhausted = self._folder("exhausted", "only.txt")
+        HistoryService(exhausted / ".choosier.jsonl").append("only.txt")
+        app = ChooserApp(str(exhausted))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            self.assertIn("All choices have been selected", self._status(app))
+            self.assertEqual(self.memory.snapshot().recent, ())
+
+        app = ChooserApp(str(self.root / "missing"))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            self.assertEqual(self._status(app), "Invalid Path.")
+            self.assertEqual(self.memory.snapshot().recent, ())
+
+    async def test_record_notice_is_shown_without_losing_the_pick(self) -> None:
+        notice = MutationResult(False, False, "Could not remember this folder.")
+        app = ChooserApp(str(self.target))
+        with patch("choosier.tui.PathMemory.record", return_value=notice):
+            async with app.run_test() as pilot:
+                await pilot.pause()
+                app.do_pick()
+                await pilot.pause()
+                status = self._status(app)
+                self.assertIn("Logged in", status)
+                self.assertIn("Could not remember this folder.", status)
+                self.assertIsNotNone(app._current_choice)
+
+    async def test_restore_does_not_restore_session_state(self) -> None:
+        HistoryService(self.target / ".choosier.jsonl").append("a.txt")
+        self.memory.record(self.target)
+        app = ChooserApp("")
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            self.assertEqual(self._input(app), str(self.target.resolve()))
+            self.assertIsNone(app._current_choice)
+            self.assertEqual(app._excluded_types, set())
+            self.assertEqual(app._excluded_entries, set())
+            self.assertNotIn("a.txt", self._remaining(app))
+            history = _plain(app.query_one("#history", Static).content)
+            self.assertIn("a.txt", history)
 
 
 if __name__ == "__main__":

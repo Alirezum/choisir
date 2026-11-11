@@ -17,6 +17,11 @@ try:
 except ImportError:
     HAS_WEB = False
 
+from choosier.path_memory import (
+    READ_WARNING,
+    RECORD_WARNING,
+    PathMemory,
+)
 from choosier.storage import log_selection
 
 PNG = b"\x89PNG\r\n\x1a\npngdata"
@@ -67,7 +72,11 @@ class WebApiTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            {"path": "/somewhere", "log_file": "/tmp/history.jsonl"},
+            {
+                "path": "/somewhere",
+                "log_file": "/tmp/history.jsonl",
+                "path_warning": None,
+            },
         )
 
     def test_state_lists_remaining_sorted(self) -> None:
@@ -668,6 +677,137 @@ class FilteredWebApiTest(unittest.TestCase):
         self.assertEqual(body["item"], "a.txt")
         self.assertFalse(body["logged"])
         self.assertFalse(self.log.exists())
+
+
+@unittest.skipUnless(HAS_WEB, "web extra (fastapi) not installed")
+class WebPathMemoryTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.target = self._folder("target", "a.txt", "b.jpg")
+        self.memory = PathMemory()
+
+    def _folder(self, name: str, *files: str) -> Path:
+        folder = self.root / name
+        folder.mkdir()
+        for file_name in files:
+            (folder / file_name).touch()
+        return folder
+
+    def test_defaults_restore_the_most_recent_folder(self) -> None:
+        self.memory.record(self.target)
+        body = TestClient(create_app()).get("/api/defaults").json()
+        self.assertEqual(body["path"], str(self.target.resolve()))
+        self.assertIsNone(body["path_warning"])
+
+    def test_defaults_fall_back_to_cwd_without_memory(self) -> None:
+        body = TestClient(create_app()).get("/api/defaults").json()
+        self.assertEqual(body["path"], str(Path.cwd()))
+        self.assertIsNone(body["path_warning"])
+
+    def test_explicit_path_wins_even_when_invalid(self) -> None:
+        self.memory.record(self.target)
+        missing = str(self.root / "missing")
+        body = TestClient(create_app(missing)).get("/api/defaults").json()
+        self.assertEqual(body["path"], missing)
+        self.assertIsNone(body["path_warning"])
+
+    def test_defaults_report_pruning_and_corruption(self) -> None:
+        stale = self._folder("stale")
+        self.memory.record(self.target)
+        self.memory.record(stale)
+        stale.rmdir()
+        body = TestClient(create_app()).get("/api/defaults").json()
+        self.assertEqual(body["path"], str(self.target.resolve()))
+        self.assertIn("unavailable", body["path_warning"])
+        self.assertNotIn(str(stale.resolve()), self.memory.snapshot().recent)
+
+        self.memory.file.write_text("{broken", encoding="utf-8")
+        body = TestClient(create_app()).get("/api/defaults").json()
+        self.assertEqual(body["path"], str(Path.cwd()))
+        self.assertEqual(body["path_warning"], READ_WARNING)
+
+    def test_pick_records_the_target_and_dry_run_records_too(self) -> None:
+        client = TestClient(create_app(str(self.target)))
+        body = client.post(
+            "/api/pick", json={"path": str(self.target), "seed": 1}
+        ).json()
+        self.assertEqual(body["status"], "picked")
+        self.assertIsNone(body["path_memory_notice"])
+        self.assertEqual(
+            self.memory.snapshot().recent,
+            (str(self.target.resolve()),),
+        )
+
+        other = self._folder("other", "c.txt")
+        body = client.post(
+            "/api/pick",
+            json={"path": str(other), "seed": 1, "dry_run": True},
+        ).json()
+        self.assertEqual(body["status"], "picked")
+        self.assertIsNone(body["path_memory_notice"])
+        self.assertEqual(self.memory.snapshot().recent[0], str(other.resolve()))
+
+    def test_non_picked_outcomes_do_not_record(self) -> None:
+        empty = self._folder("empty")
+        client = TestClient(create_app(str(self.target)))
+        self.assertEqual(
+            client.post("/api/pick", json={"path": str(empty), "seed": 1}).json()[
+                "status"
+            ],
+            "empty",
+        )
+        self.assertEqual(
+            client.post("/api/pick", json={"path": str(self.root / "missing")}).json()[
+                "status"
+            ],
+            "invalid_path",
+        )
+        self.assertEqual(self.memory.snapshot().recent, ())
+
+    def test_memory_failure_is_a_notice_not_a_pick_failure(self) -> None:
+        self.memory.file.mkdir(parents=True)
+        client = TestClient(create_app(str(self.target)))
+        body = client.post(
+            "/api/pick", json={"path": str(self.target), "seed": 1}
+        ).json()
+        self.assertEqual(body["status"], "picked")
+        self.assertEqual(body["path_memory_notice"], RECORD_WARNING)
+        self.assertTrue((self.target / ".choosier.jsonl").exists())
+
+    def test_recording_preserves_history_filters_and_preview(self) -> None:
+        log = self.target / ".choosier.jsonl"
+        log_selection("a.txt", log)
+        before = log.read_bytes()
+        client = TestClient(create_app(str(self.target)))
+        body = client.post(
+            "/api/pick",
+            json={
+                "path": str(self.target),
+                "seed": 1,
+                "dry_run": True,
+                "excluded_types": ["file:.txt"],
+            },
+        ).json()
+        self.assertEqual(body["status"], "picked")
+        self.assertEqual(body["item"], "b.jpg")
+        self.assertIsNotNone(body["preview"])
+        self.assertIsNone(body["path_memory_notice"])
+        self.assertEqual(log.read_bytes(), before)
+        self.assertEqual(
+            self.memory.snapshot().recent,
+            (str(self.target.resolve()),),
+        )
+        state = client.post(
+            "/api/state",
+            json={
+                "path": str(self.target),
+                "excluded_types": ["file:.txt"],
+            },
+        ).json()
+        self.assertIn("b.jpg", state["remaining"])
+        self.assertNotIn("a.txt", state["remaining"])
 
 
 @unittest.skipUnless(HAS_WEB, "web extra (fastapi) not installed")

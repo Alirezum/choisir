@@ -43,7 +43,7 @@ const textPreview = (text: string): PreviewModel => ({
 })
 
 function setup(
-  defaults = { path: '', log_file: '' },
+  defaults = { path: '', log_file: '', path_warning: null as string | null },
   state = stateResponse(),
 ) {
   vi.spyOn(api, 'defaults').mockResolvedValue(defaults)
@@ -100,6 +100,7 @@ describe('useWorkspace', () => {
     const { workspace, wrapper } = setup({
       path: '/tmp/choosier',
       log_file: '/tmp/choosier/custom.jsonl',
+      path_warning: null,
     })
 
     await flushPromises()
@@ -493,6 +494,7 @@ describe('useWorkspace', () => {
     const { workspace, wrapper } = setup({
       path: '/tmp/choosier',
       log_file: '',
+      path_warning: null,
     })
     await flushPromises()
 
@@ -534,6 +536,7 @@ describe('useWorkspace', () => {
     const { workspace, wrapper } = setup({
       path: '/tmp/choosier',
       log_file: '/tmp/choosier/.choosier.jsonl',
+      path_warning: null,
     })
     await flushPromises()
 
