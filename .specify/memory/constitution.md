@@ -24,13 +24,21 @@ sensitive or private.
 
 ### III. User Data Is Inviolable
 The tool MUST NOT modify, move, rename, or delete user-selected files or
-directories. Persistent state MUST be limited to the history log and its
-archives. History writes MUST be atomic. Clearing or batch-deleting history
-MUST be confirmed; single-item removal MUST require an explicit row action.
-Archives MUST preserve the prior log. Failures MUST leave the target and
-existing history intact.
+directories. Persistent state MUST be limited to the history log, its
+archives, and the user-scoped path-memory record. History writes MUST be
+atomic. Clearing or batch-deleting history MUST be confirmed; single-item
+removal MUST require an explicit row action. Archives MUST preserve the prior
+log. Failures MUST leave the target and existing history intact.
+
+The path-memory record MAY contain only local target-folder paths and their
+ordering. It MUST NOT contain file names, history entries, filter selections,
+choices, previews, or telemetry; it MUST be written atomically, MUST remain
+local-only, and MUST be clearable by the user. It MUST NOT modify, move,
+rename, or delete target content.
 
 Rationale: a chooser must never risk the content it is choosing among.
+Path memory is a narrow convenience for resuming a folder; bounding it to
+paths keeps the exception small and auditable.
 
 ### IV. Shared Core, Thin Interfaces
 The core MUST remain UI-agnostic and standard-library-only. CLI, TUI, and
@@ -74,6 +82,8 @@ visual language already established.
   and `web` are optional extras.
 - History is JSON Lines, readable in its legacy timestamp-and-item format,
   and rotates to timestamped backups.
+- Path memory is a separate, versioned JSON record in an OS-appropriate user
+  config directory; it stores only folder paths and their order.
 - The web server binds to `127.0.0.1` only; it is a local UI, not a shared
   service.
 - Preview work MUST be bounded by explicit limits, MUST stream large
@@ -122,4 +132,4 @@ committing the amended constitution.
   - Allowed types: `feat`, `fix`, `refactor`, `test`, `chore`, `docs`, `style`.
 - **Validation:** Never commit code that fails existing test suites or linters.
 
-**Version**: 1.2.0 | **Ratified**: 2026-10-29 | **Last Amended**: 2026-11-05
+**Version**: 1.3.0 | **Ratified**: 2026-10-29 | **Last Amended**: 2026-11-11
