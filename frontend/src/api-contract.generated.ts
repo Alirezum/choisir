@@ -18,6 +18,14 @@ export const routes = {
     method: 'GET',
     path: '/api/paths',
   },
+  'DELETE /api/paths': {
+    method: 'DELETE',
+    path: '/api/paths',
+  },
+  'DELETE /api/paths/item': {
+    method: 'DELETE',
+    path: '/api/paths/item',
+  },
   'GET /api/browse': {
     method: 'GET',
     path: '/api/browse',
@@ -157,6 +165,15 @@ export interface DefaultsResponse {
 export interface PathMemoryResponse {
   recent: string[]
   warning: string | null
+}
+
+export interface ClearPathMemoryResponse {
+  cleared: boolean
+}
+
+export interface RemovePathMemoryResponse {
+  path: string
+  removed: boolean
 }
 
 export interface BrowseResponse {

@@ -9,6 +9,7 @@ import { errorFromResponse, errorFromTransport, parseSuccessJson } from './api-e
 import type {
   ArchiveResponse,
   BrowseResponse,
+  ClearPathMemoryResponse,
   ClearResponse,
   DefaultsResponse,
   FilteredStateRequest,
@@ -20,6 +21,7 @@ import type {
   PreviewModel,
   RemoveHistoryItemResponse,
   RemoveHistoryItemsResponse,
+  RemovePathMemoryResponse,
   StateQuery,
   StateResponse,
 } from './types.ts'
@@ -64,6 +66,16 @@ export const api = {
   paths: () =>
     request<PathMemoryResponse>(requestUrl('paths', {}), {
       method: requestMethod('paths'),
+    }),
+
+  clearPaths: () =>
+    request<ClearPathMemoryResponse>(requestUrl('clearPaths', {}), {
+      method: requestMethod('clearPaths'),
+    }),
+
+  removePath: (path: string) =>
+    request<RemovePathMemoryResponse>(requestUrl('removePath', { path }), {
+      method: requestMethod('removePath'),
     }),
 
   browse: (path: string) =>

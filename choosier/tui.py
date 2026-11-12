@@ -281,6 +281,16 @@ class ChooserApp(App[None]):
                                 id="recent-use",
                                 disabled=True,
                             )
+                            yield Button(
+                                "Remove",
+                                id="recent-remove",
+                                disabled=True,
+                            )
+                            yield Button(
+                                "Clear recent",
+                                id="recent-clear",
+                                disabled=True,
+                            )
                         yield Static("", id="recent-warning")
                         yield Input(
                             value=self._initial_log,
@@ -534,6 +544,10 @@ class ChooserApp(App[None]):
             self._clear_filters_all()
         elif event.button.id == "recent-use":
             self._use_recent_path()
+        elif event.button.id == "recent-remove":
+            self._remove_recent_path()
+        elif event.button.id == "recent-clear":
+            self._clear_recent_paths()
 
     def _refresh_recent_paths(self) -> None:
         """Rebuild the recent-folder list without touching the active path."""
@@ -543,26 +557,65 @@ class ChooserApp(App[None]):
         recent_list.add_options(snapshot.recent)
         recent_list.disabled = not snapshot.recent
         self.query_one("#recent-empty", Static).display = not snapshot.recent
-        self.query_one("#recent-use", Button).disabled = not snapshot.recent
+        empty = not snapshot.recent
+        self.query_one("#recent-use", Button).disabled = empty
+        self.query_one("#recent-remove", Button).disabled = empty
+        self.query_one("#recent-clear", Button).disabled = empty
         warning_widget = self.query_one("#recent-warning", Static)
         warning_widget.display = snapshot.warning is not None
         if snapshot.warning is not None:
             warning_widget.update(escape(snapshot.warning))
 
-    def _use_recent_path(self) -> None:
-        """Activate the highlighted remembered folder in the path input."""
+    def _highlighted_recent_path(self) -> str | None:
+        """Return the highlighted remembered folder, if any."""
         recent_list = self.query_one("#recent-paths", OptionList)
         if recent_list.option_count == 0:
-            self._set_status("No remembered folders yet.")
-            return
+            return None
         index = recent_list.highlighted
         if index is None:
             index = 0
         prompt = recent_list.get_option_at_index(index).prompt
-        path = prompt.plain if isinstance(prompt, Text) else str(prompt)
+        return prompt.plain if isinstance(prompt, Text) else str(prompt)
+
+    def _use_recent_path(self) -> None:
+        """Activate the highlighted remembered folder in the path input."""
+        path = self._highlighted_recent_path()
+        if path is None:
+            self._set_status("No remembered folders yet.")
+            return
         self.query_one("#path-input", Input).value = path
         self._set_status(f"Using {path}.")
         self._refresh_panels()
+        self._refresh_recent_paths()
+
+    def _remove_recent_path(self) -> None:
+        """Forget the highlighted remembered folder, leaving the input alone."""
+        path = self._highlighted_recent_path()
+        if path is None:
+            self._set_status("No remembered folders yet.")
+            return
+        result = PathMemory().remove(path)
+        if not result.ok:
+            self._set_status(result.notice or "Could not update remembered folders.")
+            return
+        self._set_status(
+            f"Removed {path} from remembered folders."
+            if result.changed
+            else f"{path} is not a remembered folder."
+        )
+        self._refresh_recent_paths()
+
+    def _clear_recent_paths(self) -> None:
+        """Forget all remembered folders, leaving the input alone."""
+        result = PathMemory().clear()
+        if not result.ok:
+            self._set_status(result.notice or "Could not update remembered folders.")
+            return
+        self._set_status(
+            "Cleared all remembered folders."
+            if result.changed
+            else "No remembered folders to clear."
+        )
         self._refresh_recent_paths()
 
     def _visible_type_keys(self) -> set[str]:

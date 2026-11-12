@@ -1,5 +1,6 @@
 """Tests for choosier.tui display helpers and filter widgets."""
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -866,6 +867,147 @@ class TuiPathMemoryScenarioTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(
                 self._recent_paths(app),
                 [str(other.resolve()), str(self.target.resolve())],
+            )
+
+    async def test_remove_preserves_order_and_leaves_session_state_untouched(
+        self,
+    ) -> None:
+        active = self._folder("active", "a.txt", "b.txt")
+        first = self._folder("first", "c.txt")
+        second = self._folder("second", "d.txt")
+        HistoryService(active / ".choosier.jsonl").append("a.txt")
+        self.memory.record(first)
+        self.memory.record(second)
+        app = ChooserApp(str(active))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            history_before = _plain(app.query_one("#history", Static).content)
+            remaining_before = self._remaining(app)
+            choice_before = app._current_choice
+            types_before = set(app._excluded_types)
+            entries_before = set(app._excluded_entries)
+            input_before = self._input(app)
+            self.assertEqual(
+                self._recent_paths(app),
+                [str(active.resolve()), str(second.resolve()), str(first.resolve())],
+            )
+
+            app.query_one("#recent-paths", OptionList).highlighted = 1
+            app.query_one("#recent-remove", Button).press()
+            await pilot.pause()
+
+            self.assertEqual(
+                self._recent_paths(app),
+                [str(active.resolve()), str(first.resolve())],
+            )
+            self.assertEqual(self._input(app), input_before)
+            self.assertEqual(app._current_choice, choice_before)
+            self.assertEqual(
+                _plain(app.query_one("#history", Static).content),
+                history_before,
+            )
+            self.assertEqual(self._remaining(app), remaining_before)
+            self.assertEqual(app._excluded_types, types_before)
+            self.assertEqual(app._excluded_entries, entries_before)
+            self.assertIn(
+                f"Removed {second.resolve()} from remembered folders.",
+                self._status(app),
+            )
+            self.assertEqual(
+                self.memory.snapshot().recent,
+                (str(active.resolve()), str(first.resolve())),
+            )
+
+    async def test_clear_empties_the_list_and_keeps_the_active_input(self) -> None:
+        other = self._folder("other", "b.txt")
+        self.memory.record(self.target)
+        self.memory.record(other)
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            choice_before = app._current_choice
+            history_before = _plain(app.query_one("#history", Static).content)
+
+            app.query_one("#recent-clear", Button).press()
+            await pilot.pause()
+
+            self.assertEqual(self._recent_paths(app), [])
+            self.assertEqual(self._input(app), str(self.target.resolve()))
+            self.assertEqual(app._current_choice, choice_before)
+            self.assertEqual(
+                _plain(app.query_one("#history", Static).content),
+                history_before,
+            )
+            self.assertEqual(
+                self._status(app),
+                "Cleared all remembered folders.",
+            )
+            self.assertTrue(app.query_one("#recent-paths", OptionList).disabled)
+            self.assertTrue(app.query_one("#recent-use", Button).disabled)
+            self.assertTrue(app.query_one("#recent-remove", Button).disabled)
+            self.assertTrue(app.query_one("#recent-clear", Button).disabled)
+            self.assertTrue(app.query_one("#recent-empty", Static).display)
+            self.assertEqual(self.memory.snapshot().recent, ())
+
+    async def test_remove_and_clear_persist_across_restarts(self) -> None:
+        first = self._folder("first", "a.txt")
+        second = self._folder("second", "b.txt")
+        self.memory.record(first)
+        self.memory.record(second)
+        app = ChooserApp("")
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            self.assertEqual(self._input(app), str(second.resolve()))
+            app.query_one("#recent-remove", Button).press()
+            await pilot.pause()
+            self.assertEqual(self._recent_paths(app), [str(first.resolve())])
+
+        restarted = ChooserApp("")
+        async with restarted.run_test() as pilot:
+            await pilot.pause()
+            self.assertEqual(self._input(restarted), str(first.resolve()))
+            self.assertEqual(
+                self._recent_paths(restarted),
+                [str(first.resolve())],
+            )
+            restarted.query_one("#recent-clear", Button).press()
+            await pilot.pause()
+            self.assertEqual(self._recent_paths(restarted), [])
+
+        first_run = ChooserApp("")
+        async with first_run.run_test() as pilot:
+            await pilot.pause()
+            self.assertEqual(self._input(first_run), "")
+            self.assertEqual(self._status(first_run), "")
+            self.assertEqual(self._recent_paths(first_run), [])
+            self.assertEqual(self.memory.snapshot().recent, ())
+            self.assertEqual(
+                json.loads(self.memory.file.read_text(encoding="utf-8")),
+                {"version": 1, "recent": []},
+            )
+
+    async def test_remove_absent_folder_reports_without_breaking_the_session(
+        self,
+    ) -> None:
+        self.memory.record(self.target)
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            with patch(
+                "choosier.tui.PathMemory.remove",
+                return_value=MutationResult(True, False, None),
+            ):
+                app.query_one("#recent-remove", Button).press()
+                await pilot.pause()
+            self.assertIn("is not a remembered folder.", self._status(app))
+            self.assertEqual(self._input(app), str(self.target.resolve()))
+            self.assertEqual(
+                self._recent_paths(app),
+                [str(self.target.resolve())],
             )
 
     async def test_restore_does_not_restore_session_state(self) -> None:

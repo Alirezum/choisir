@@ -51,7 +51,11 @@ const mountPanel = (
     hidden: boolean
     mode: 'all' | 'files' | 'dirs'
   } = { log: '', seed: '', dry: false, hidden: false, mode: 'all' },
-  recent: { recentPaths?: string[]; pathMemoryWarning?: string | null } = {},
+  recent: {
+    recentPaths?: string[]
+    pathMemoryWarning?: string | null
+    pathMemoryNotice?: string
+  } = {},
 ) => mount(OptionsPanel, { props: { ...props, filterPanel: panel, ...recent } })
 
 const button = (wrapper: ReturnType<typeof mountPanel>, label: string) =>
@@ -158,6 +162,73 @@ describe('OptionsPanel', () => {
 
     expect(warning.attributes('role')).toBe('status')
     expect(warning.text()).toBe('Skipped 1 unavailable remembered folder.')
+  })
+
+  it('removes a remembered folder from its row button', async () => {
+    const wrapper = mountPanel(notReadyPanel(), undefined, {
+      recentPaths: ['/home/ana/projects/alpha', '/tmp/choosier/beta'],
+    })
+    const removeButtons = wrapper.findAll('.recent-remove')
+
+    expect(removeButtons).toHaveLength(2)
+    expect(removeButtons[0]?.attributes('aria-label')).toBe(
+      'Remove /home/ana/projects/alpha from remembered folders',
+    )
+    expect(removeButtons[1]?.attributes('aria-label')).toBe(
+      'Remove /tmp/choosier/beta from remembered folders',
+    )
+
+    await removeButtons[1]?.trigger('click')
+
+    expect(wrapper.emitted('removeRecentPath')).toEqual([['/tmp/choosier/beta']])
+    expect(wrapper.emitted('useRecentPath')).toBeUndefined()
+  })
+
+  it('clears every remembered folder with one button', async () => {
+    const wrapper = mountPanel(notReadyPanel(), undefined, {
+      recentPaths: ['/tmp/choosier'],
+    })
+    const clear = wrapper.find('.recent-clear')
+
+    expect(clear.text()).toBe('Clear recent folders')
+    expect(clear.attributes('disabled')).toBeUndefined()
+
+    await clear.trigger('click')
+
+    expect(wrapper.emitted('clearRecentPaths')).toEqual([[]])
+  })
+
+  it('disables clear-all when nothing is remembered', () => {
+    const wrapper = mountPanel()
+
+    expect(wrapper.find('.recent-clear').attributes('disabled')).toBeDefined()
+  })
+
+  it('keeps row and action controls keyboard operable', () => {
+    const wrapper = mountPanel(notReadyPanel(), undefined, {
+      recentPaths: ['/home/ana/projects/alpha'],
+    })
+
+    for (const selector of ['.recent-row', '.recent-remove', '.recent-clear']) {
+      const control = wrapper.find(selector)
+      expect(control.element.tagName).toBe('BUTTON')
+      expect(control.attributes('type')).toBe('button')
+      expect(control.attributes('disabled')).toBeUndefined()
+    }
+  })
+
+  it('announces action feedback through a polite live region', () => {
+    const wrapper = mountPanel(notReadyPanel(), undefined, {
+      recentPaths: ['/tmp/choosier'],
+      pathMemoryNotice: 'Removed /tmp/choosier from remembered folders.',
+    })
+    const notice = wrapper.find('.recent-notice')
+
+    expect(notice.attributes('role')).toBe('status')
+    expect(notice.attributes('aria-live')).toBe('polite')
+    expect(notice.text()).toBe(
+      'Removed /tmp/choosier from remembered folders.',
+    )
   })
 
   it('renders the mode radios with all three mutually exclusive choices', () => {

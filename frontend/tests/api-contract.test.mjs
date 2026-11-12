@@ -59,7 +59,7 @@ const routeFor = (operation) => routes[operations[operation]]
 
 test('the generated surfaces mirror the frozen backend contract', () => {
   const contractRouteKeys = contract.routes.map((route) => `${route.method} ${route.path}`)
-  assert.equal(contractRouteKeys.length, 14)
+  assert.equal(contractRouteKeys.length, 16)
   assert.deepEqual(Object.keys(routes), contractRouteKeys)
   assert.deepEqual([...errorCodes], Object.keys(contract.errorCodes))
 })
@@ -67,6 +67,8 @@ test('the generated surfaces mirror the frozen backend contract', () => {
 const operationNames = [
   'defaults',
   'paths',
+  'clearPaths',
+  'removePath',
   'browse',
   'state',
   'stateFiltered',
@@ -82,13 +84,13 @@ const operationNames = [
 ]
 
 test('every generated route maps to exactly one operation and back', () => {
-  assert.equal(Object.keys(operations).length, 14)
+  assert.equal(Object.keys(operations).length, 16)
   assert.deepEqual(Object.keys(operations), operationNames)
-  assert.equal(new Set(Object.values(operations)).size, 14)
+  assert.equal(new Set(Object.values(operations)).size, 16)
   assert.deepEqual(Object.values(operations), Object.keys(routes))
 })
 
-test('the facade exposes exactly the fourteen operations', () => {
+test('the facade exposes exactly the sixteen operations', () => {
   assert.deepEqual(Object.keys(api), operationNames)
 })
 
@@ -109,6 +111,27 @@ test('paths requests GET /api/paths', async () => {
   assert.equal(call.method, routeFor('paths').method)
   assert.equal(call.path, routeFor('paths').path)
   assert.equal(call.params.size, 0)
+  assert.equal(call.body, undefined)
+})
+
+test('clearPaths requests DELETE /api/paths', async () => {
+  const result = await withStubbedFetch(() => api.clearPaths())
+  assert.deepEqual(result, { ok: true })
+  const call = expectSingleCall()
+  assert.equal(call.method, routeFor('clearPaths').method)
+  assert.equal(call.method, 'DELETE')
+  assert.equal(call.path, routeFor('clearPaths').path)
+  assert.equal(call.params.size, 0)
+  assert.equal(call.body, undefined)
+})
+
+test('removePath encodes the path query', async () => {
+  await withStubbedFetch(() => api.removePath('a b/c?&=ü'))
+  const call = expectSingleCall()
+  assert.equal(call.method, routeFor('removePath').method)
+  assert.equal(call.method, 'DELETE')
+  assert.equal(call.path, routeFor('removePath').path)
+  assert.equal(call.params.get('path'), 'a b/c?&=ü')
   assert.equal(call.body, undefined)
 })
 

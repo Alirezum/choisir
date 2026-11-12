@@ -132,19 +132,19 @@ byte-for-byte unchanged.
 
 ### Implementation for User Story 3
 
-- [ ] T032 [US3] In one atomic change, add `DELETE /api/paths` and `DELETE /api/paths/item?path=` plus `ClearPathMemoryResponse` and `RemovePathMemoryResponse` to `choosier/web.py`, add both routes and schemas to `specs/001-standardize-api-responses/contracts/api-contract.json`, update the route-count assertion in `tests/test_api_contract.py` to 16, add both response type names in `frontend/scripts/generate-api-contract.mjs`, and regenerate `frontend/src/api-contract.generated.ts`; require a non-empty absolute `path` for the item route (`400 invalid_request` otherwise, `422 validation_error` when missing), return `{cleared}`/`{path, removed}`, and never change the running session's active path.
-- [ ] T033 [US3] Add `clearPaths` and `removePath` operation names in `frontend/src/api-operations.ts` and facade methods in `frontend/src/api.ts`.
-- [ ] T034 [US3] Add `remove(path)` and `clear()` actions to `frontend/src/state/use-path-memory.ts` that call the new endpoints, refresh the list, report warnings/errors through the status binding, and never mutate `options.path`.
-- [ ] T035 [US3] Add per-row remove buttons and a clear-all button to the recent section in `frontend/src/views/OptionsPanel.vue`, wire the new events in `frontend/src/App.vue`, and keep keyboard/focus behavior, accessible names containing the full path, and the established visual language.
-- [ ] T036 [US3] Add `Remove` and `Clear recent` controls to the TUI Options tab in `choosier/tui.py`, acting on the highlighted recent row, refreshing the list and status line, and leaving `#path-input` unchanged.
+- [x] T032 [US3] In one atomic change, add `DELETE /api/paths` and `DELETE /api/paths/item?path=` plus `ClearPathMemoryResponse` and `RemovePathMemoryResponse` to `choosier/web.py`, add both routes and schemas to `specs/001-standardize-api-responses/contracts/api-contract.json`, update the route-count assertion in `tests/test_api_contract.py` to 16, add both response type names in `frontend/scripts/generate-api-contract.mjs`, and regenerate `frontend/src/api-contract.generated.ts`; require a non-empty absolute `path` for the item route (`400 invalid_request` otherwise, `422 validation_error` when missing), return `{cleared}`/`{path, removed}`, and never change the running session's active path.
+- [x] T033 [US3] Add `clearPaths` and `removePath` operation names in `frontend/src/api-operations.ts` and facade methods in `frontend/src/api.ts`.
+- [x] T034 [US3] Add `remove(path)` and `clear()` actions to `frontend/src/state/use-path-memory.ts` that call the new endpoints, refresh the list, report warnings/errors through the status binding, and never mutate `options.path`.
+- [x] T035 [US3] Add per-row remove buttons and a clear-all button to the recent section in `frontend/src/views/OptionsPanel.vue`, wire the new events in `frontend/src/App.vue`, and keep keyboard/focus behavior, accessible names containing the full path, and the established visual language.
+- [x] T036 [US3] Add `Remove` and `Clear recent` controls to the TUI Options tab in `choosier/tui.py`, acting on the highlighted recent row, refreshing the list and status line, and leaving `#path-input` unchanged.
 
 ### Tests for User Story 3
 
-- [ ] T037 [P] [US3] Add web tests in `tests/test_web.py`: remove present/absent, clear populated/empty, `422` for a missing `path`, `400` for a relative/empty `path`, persistence across app instances, two app instances sharing one memory file with the latest successful pick first, and no changes to history, filters, choice, previews, or other response state.
-- [ ] T038 [P] [US3] Add TUI tests in `tests/test_tui.py`: remove one preserves the others' order, clear empties the list, persistence across restarts, the active path input, filters, choice, and history are unchanged, and status feedback is non-blocking.
-- [ ] T039 [P] [US3] Extend `frontend/tests/ui/state/use-path-memory.test.ts` for remove/clear success, absent-entry no-op, refresh, error notices, and `options.path` remaining unchanged.
-- [ ] T040 [P] [US3] Extend `frontend/tests/ui/views/OptionsPanel.test.ts` for row remove, clear-all, accessible labels, focus behavior, and action feedback.
-- [ ] T041 [P] [US3] Add persistence and side-effect regression tests in `tests/test_path_memory.py`: remove the most recent entry and verify the next launch uses the next recent; clear and verify first-run behavior; confirm the record contains only `version` and `recent` and no history/file/filter data.
+- [x] T037 [P] [US3] Add web tests in `tests/test_web.py`: remove present/absent, clear populated/empty, `422` for a missing `path`, `400` for a relative/empty `path`, persistence across app instances, two app instances sharing one memory file with the latest successful pick first, and no changes to history, filters, choice, previews, or other response state.
+- [x] T038 [P] [US3] Add TUI tests in `tests/test_tui.py`: remove one preserves the others' order, clear empties the list, persistence across restarts, the active path input, filters, choice, and history are unchanged, and status feedback is non-blocking.
+- [x] T039 [P] [US3] Extend `frontend/tests/ui/state/use-path-memory.test.ts` for remove/clear success, absent-entry no-op, refresh, error notices, and `options.path` remaining unchanged.
+- [x] T040 [P] [US3] Extend `frontend/tests/ui/views/OptionsPanel.test.ts` for row remove, clear-all, accessible labels, focus behavior, and action feedback.
+- [x] T041 [P] [US3] Add persistence and side-effect regression tests in `tests/test_path_memory.py`: remove the most recent entry and verify the next launch uses the next recent; clear and verify first-run behavior; confirm the record contains only `version` and `recent` and no history/file/filter data.
 
 **Checkpoint**: All three user stories are independently complete and verified.
 

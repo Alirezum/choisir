@@ -8,6 +8,8 @@ import type { RouteKey } from './api-contract.generated.ts'
 export const operations = {
   defaults: 'GET /api/defaults',
   paths: 'GET /api/paths',
+  clearPaths: 'DELETE /api/paths',
+  removePath: 'DELETE /api/paths/item',
   browse: 'GET /api/browse',
   state: 'GET /api/state',
   stateFiltered: 'POST /api/state',

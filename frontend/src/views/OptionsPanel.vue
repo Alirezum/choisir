@@ -7,10 +7,12 @@ withDefaults(
     filterPanel: FilterPanelModel
     recentPaths?: string[]
     pathMemoryWarning?: string | null
+    pathMemoryNotice?: string
   }>(),
   {
     recentPaths: () => [],
     pathMemoryWarning: null,
+    pathMemoryNotice: '',
   },
 )
 
@@ -23,6 +25,8 @@ const emit = defineEmits<{
   clearEntries: []
   clearFilters: []
   useRecentPath: [path: string]
+  removeRecentPath: [path: string]
+  clearRecentPaths: []
 }>()
 
 const logFile = defineModel<string>('log', { required: true })
@@ -37,12 +41,26 @@ const mode = defineModel<'all' | 'files' | 'dirs'>('mode', { required: true })
     <template #header>Changes apply to the next pick.</template>
     <div class="options-body">
       <section class="recent-section" aria-labelledby="recent-heading">
-        <h2 id="recent-heading" class="recent-heading">Recent folders</h2>
+        <div class="recent-header">
+          <h2 id="recent-heading" class="recent-heading">Recent folders</h2>
+          <button
+            type="button"
+            class="recent-clear"
+            :disabled="recentPaths.length === 0"
+            @click="emit('clearRecentPaths')"
+          >
+            Clear recent folders
+          </button>
+        </div>
         <p v-if="recentPaths.length === 0" class="recent-empty">
           No remembered folders yet. Successful picks add their folder here.
         </p>
         <ul v-else class="recent-list">
-          <li v-for="recentPath in recentPaths" :key="recentPath">
+          <li
+            v-for="recentPath in recentPaths"
+            :key="recentPath"
+            class="recent-item"
+          >
             <button
               type="button"
               class="recent-row"
@@ -51,8 +69,24 @@ const mode = defineModel<'all' | 'files' | 'dirs'>('mode', { required: true })
             >
               <span class="recent-path">{{ recentPath }}</span>
             </button>
+            <button
+              type="button"
+              class="recent-remove"
+              :aria-label="`Remove ${recentPath} from remembered folders`"
+              @click="emit('removeRecentPath', recentPath)"
+            >
+              Remove
+            </button>
           </li>
         </ul>
+        <p
+          v-if="pathMemoryNotice"
+          class="recent-notice"
+          role="status"
+          aria-live="polite"
+        >
+          {{ pathMemoryNotice }}
+        </p>
         <p v-if="pathMemoryWarning" class="recent-warning" role="status">
           {{ pathMemoryWarning }}
         </p>

@@ -4,6 +4,7 @@ export type {
   ArchiveResponse,
   BrowseResponse,
   BrowserEntry,
+  ClearPathMemoryResponse,
   ClearResponse,
   DefaultsResponse,
   FilterEntryOption,
@@ -19,6 +20,7 @@ export type {
   PreviewVideo,
   RemoveHistoryItemResponse,
   RemoveHistoryItemsResponse,
+  RemovePathMemoryResponse,
   StateResponse,
 } from './api-contract.generated.ts'
 

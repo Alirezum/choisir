@@ -30,7 +30,10 @@ const {
   filterPanel,
   recentPaths,
   pathMemoryWarning,
+  pathMemoryNotice,
   activateRecentPath,
+  removeRecentPath,
+  clearRecentPaths,
 
   clearing,
   removingItem,
@@ -198,7 +201,10 @@ void pathInput
               :filter-panel="filterPanel"
               :recent-paths="recentPaths"
               :path-memory-warning="pathMemoryWarning"
+              :path-memory-notice="pathMemoryNotice"
               @use-recent-path="activateRecentPath"
+              @remove-recent-path="removeRecentPath"
+              @clear-recent-paths="clearRecentPaths"
               @toggle-type="toggleFilterType"
               @toggle-entry="toggleFilterEntry"
               @select-all-types="selectAllFilterTypes"

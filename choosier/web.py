@@ -176,6 +176,15 @@ class PathMemoryResponse(BaseModel):
     warning: str | None
 
 
+class ClearPathMemoryResponse(BaseModel):
+    cleared: bool
+
+
+class RemovePathMemoryResponse(BaseModel):
+    path: str
+    removed: bool
+
+
 class BrowserEntry(BaseModel):
     name: str
     is_dir: bool
@@ -514,6 +523,38 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
             recent=list(snapshot.recent),
             warning=snapshot.warning,
         )
+
+    @app.delete("/api/paths")
+    def clear_paths() -> ClearPathMemoryResponse:
+        result = memory.clear()
+        if not result.ok:
+            raise ApiError(
+                "internal_error",
+                result.notice or "Could not update remembered folders.",
+            )
+        return ClearPathMemoryResponse(cleared=result.changed)
+
+    @app.delete("/api/paths/item")
+    def remove_path(path: str) -> RemovePathMemoryResponse:
+        if not path.strip():
+            raise ApiError("invalid_request", "Path must not be empty.")
+        try:
+            candidate = Path(path).expanduser()
+            if not candidate.is_absolute():
+                raise ApiError(
+                    "invalid_request",
+                    "Path must be an absolute path.",
+                )
+            canonical = candidate.resolve()
+        except (OSError, ValueError):
+            raise ApiError("invalid_request", "Path could not be resolved.") from None
+        result = memory.remove(canonical)
+        if not result.ok:
+            raise ApiError(
+                "internal_error",
+                result.notice or "Could not update remembered folders.",
+            )
+        return RemovePathMemoryResponse(path=str(canonical), removed=result.changed)
 
     @app.get("/api/browse")
     def browse(path: str) -> BrowseResponse:

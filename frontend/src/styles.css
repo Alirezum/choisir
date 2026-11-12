@@ -1120,11 +1120,32 @@ kbd {
   border-top: 1px solid var(--rule);
 }
 
+.recent-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .recent-heading {
   margin: 0;
   color: var(--ink);
   font-size: 12px;
   font-weight: 500;
+}
+
+.recent-clear {
+  padding: 3px 8px;
+  border-color: rgba(217, 162, 58, 0.5);
+  color: var(--amber);
+  font-family: var(--font-data);
+  font-size: 10.5px;
+}
+
+.recent-clear:hover:not(:disabled) {
+  border-color: var(--amber);
+  background: rgba(217, 162, 58, 0.12);
+  color: var(--amber-bright);
 }
 
 .recent-empty {
@@ -1146,14 +1167,20 @@ kbd {
   scrollbar-width: thin;
 }
 
+.recent-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid var(--rule-soft);
+}
+
 .recent-row {
   display: flex;
-  width: 100%;
+  min-width: 0;
+  flex: 1;
   align-items: center;
-  gap: 8px;
   padding: 6px 2px;
   border: 0;
-  border-bottom: 1px solid var(--rule-soft);
   border-radius: 0;
   background: transparent;
   color: var(--ink);
@@ -1166,9 +1193,35 @@ kbd {
   background: var(--paper-raised);
 }
 
-.recent-row:focus-visible {
+.recent-row:focus-visible,
+.recent-remove:focus-visible,
+.recent-clear:focus-visible {
   outline: 2px solid var(--amber);
   outline-offset: -2px;
+}
+
+.recent-remove {
+  flex: none;
+  padding: 2px 6px;
+  border-color: transparent;
+  color: var(--ink-soft);
+  font-family: var(--font-data);
+  font-size: 10px;
+  opacity: 0.65;
+  transition:
+    opacity 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.recent-item:hover .recent-remove,
+.recent-remove:focus-visible {
+  opacity: 1;
+}
+
+.recent-remove:hover:not(:disabled) {
+  border-color: rgba(224, 112, 92, 0.45);
+  color: var(--red);
 }
 
 .recent-path {
@@ -1176,6 +1229,14 @@ kbd {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.recent-notice {
+  margin: 0;
+  color: var(--ink-soft);
+  font-family: var(--font-data);
+  font-size: 10.5px;
+  line-height: 1.45;
 }
 
 .recent-warning {

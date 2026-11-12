@@ -801,6 +801,206 @@ class WebPathMemoryTest(unittest.TestCase):
         self.assertEqual(body["error"]["code"], "method_not_allowed")
         self.assertEqual(body["detail"], body["error"]["message"])
 
+    def test_remove_forgets_one_folder_and_reports_presence(self) -> None:
+        first = self._folder("first")
+        second = self._folder("second")
+        self.memory.record(first)
+        self.memory.record(second)
+        client = TestClient(create_app())
+
+        response = client.delete("/api/paths/item", params={"path": str(first)})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {"path": str(first.resolve()), "removed": True},
+        )
+        self.assertEqual(
+            self.memory.snapshot().recent,
+            (str(second.resolve()),),
+        )
+
+        again = client.delete("/api/paths/item", params={"path": str(first)})
+
+        self.assertEqual(again.status_code, 200)
+        self.assertEqual(
+            again.json(),
+            {"path": str(first.resolve()), "removed": False},
+        )
+        self.assertEqual(
+            self.memory.snapshot().recent,
+            (str(second.resolve()),),
+        )
+
+    def test_clear_forgets_every_folder_and_reports_presence(self) -> None:
+        self.memory.record(self.target)
+        self.memory.record(self._folder("other"))
+        client = TestClient(create_app())
+
+        response = client.delete("/api/paths")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"cleared": True})
+        self.assertEqual(self.memory.snapshot().recent, ())
+        self.assertEqual(
+            self.memory.file.read_text(encoding="utf-8").strip(),
+            '{\n  "version": 1,\n  "recent": []\n}',
+        )
+
+        again = client.delete("/api/paths")
+
+        self.assertEqual(again.status_code, 200)
+        self.assertEqual(again.json(), {"cleared": False})
+
+    def test_remove_validates_the_path_query(self) -> None:
+        client = TestClient(create_app())
+
+        for value in ("", "relative/path"):
+            with self.subTest(path=value):
+                response = client.delete(
+                    "/api/paths/item",
+                    params={"path": value},
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.json()["error"]["code"], "invalid_request")
+
+        missing = client.delete("/api/paths/item")
+
+        self.assertEqual(missing.status_code, 422)
+        self.assertEqual(missing.json()["error"]["code"], "validation_error")
+
+    def test_memory_actions_persist_across_app_instances(self) -> None:
+        first = self._folder("first", "a.txt")
+        second = self._folder("second", "b.txt")
+        client = TestClient(create_app(str(first)))
+        self.assertEqual(
+            client.post("/api/pick", json={"path": str(first), "seed": 1}).json()[
+                "status"
+            ],
+            "picked",
+        )
+        self.assertEqual(
+            client.post("/api/pick", json={"path": str(second), "seed": 1}).json()[
+                "status"
+            ],
+            "picked",
+        )
+
+        fresh = TestClient(create_app())
+
+        self.assertEqual(
+            fresh.get("/api/paths").json()["recent"],
+            [str(second.resolve()), str(first.resolve())],
+        )
+        self.assertEqual(
+            fresh.get("/api/defaults").json()["path"],
+            str(second.resolve()),
+        )
+
+        fresh.delete("/api/paths/item", params={"path": str(second)})
+        restarted = TestClient(create_app())
+
+        self.assertEqual(
+            restarted.get("/api/paths").json()["recent"],
+            [str(first.resolve())],
+        )
+        self.assertEqual(
+            restarted.get("/api/defaults").json()["path"],
+            str(first.resolve()),
+        )
+
+        restarted.delete("/api/paths")
+        cleared = TestClient(create_app())
+
+        self.assertEqual(cleared.get("/api/paths").json()["recent"], [])
+        self.assertEqual(
+            cleared.get("/api/defaults").json()["path"],
+            str(Path.cwd()),
+        )
+
+    def test_two_running_apps_share_the_latest_successful_pick(self) -> None:
+        first = self._folder("first", "a.txt", "b.txt")
+        second = self._folder("second", "b.txt")
+        alpha = TestClient(create_app(str(first)))
+        beta = TestClient(create_app(str(second)))
+
+        alpha.post("/api/pick", json={"path": str(first), "seed": 1})
+        beta.post("/api/pick", json={"path": str(second), "seed": 1})
+
+        self.assertEqual(
+            alpha.get("/api/paths").json()["recent"],
+            [str(second.resolve()), str(first.resolve())],
+        )
+
+        beta.post("/api/pick", json={"path": str(first), "seed": 1})
+
+        self.assertEqual(
+            alpha.get("/api/paths").json()["recent"],
+            [str(first.resolve()), str(second.resolve())],
+        )
+
+    def test_remove_and_clear_leave_session_state_untouched(self) -> None:
+        other = self._folder("other", "c.txt")
+        log = self.target / ".choosier.jsonl"
+        log_selection("a.txt", log)
+        log_before = log.read_bytes()
+        tree_before = sorted(entry.name for entry in self.target.iterdir())
+        self.memory.record(self.target)
+        self.memory.record(other)
+        client = TestClient(create_app(str(self.target)))
+        state_before = client.post(
+            "/api/state",
+            json={"path": str(self.target), "excluded_types": ["file:.jpg"]},
+        ).json()
+        preview_before = client.get(
+            "/api/preview", params={"path": str(self.target / "a.txt")}
+        ).json()
+        defaults_before = client.get("/api/defaults").json()
+        pick_before = client.post(
+            "/api/pick",
+            json={"path": str(self.target), "seed": 1, "dry_run": True},
+        ).json()
+
+        self.assertEqual(
+            client.delete(
+                "/api/paths/item", params={"path": str(self.target)}
+            ).status_code,
+            200,
+        )
+        self.assertEqual(client.delete("/api/paths").status_code, 200)
+        self.assertEqual(self.memory.snapshot().recent, ())
+
+        self.assertEqual(client.get("/api/defaults").json(), defaults_before)
+        self.assertEqual(
+            client.post(
+                "/api/state",
+                json={"path": str(self.target), "excluded_types": ["file:.jpg"]},
+            ).json(),
+            state_before,
+        )
+        self.assertEqual(
+            client.get(
+                "/api/preview", params={"path": str(self.target / "a.txt")}
+            ).json(),
+            preview_before,
+        )
+        self.assertEqual(
+            client.post(
+                "/api/pick",
+                json={"path": str(self.target), "seed": 1, "dry_run": True},
+            ).json(),
+            pick_before,
+        )
+        self.assertEqual(log.read_bytes(), log_before)
+        self.assertEqual(
+            sorted(entry.name for entry in self.target.iterdir()),
+            tree_before,
+        )
+        self.assertEqual(
+            self.memory.snapshot().recent,
+            (str(self.target.resolve()),),
+        )
+
     def test_pick_records_the_target_and_dry_run_records_too(self) -> None:
         client = TestClient(create_app(str(self.target)))
         body = client.post(

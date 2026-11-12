@@ -143,6 +143,33 @@ describe('useWorkspace', () => {
     wrapper.unmount()
   })
 
+  it('removes and clears remembered folders without changing the active path', async () => {
+    const { workspace, wrapper } = setup(undefined, undefined, {
+      recent: ['/tmp/choosier/alpha', '/tmp/choosier/beta'],
+      warning: null,
+    })
+    await flushPromises()
+    workspace.path.value = '/tmp/choosier/active'
+    vi.spyOn(api, 'removePath').mockResolvedValue({
+      path: '/tmp/choosier/alpha',
+      removed: true,
+    })
+    vi.spyOn(api, 'clearPaths').mockResolvedValue({ cleared: true })
+    vi.mocked(api.paths).mockResolvedValue({ recent: [], warning: null })
+
+    await workspace.removeRecentPath('/tmp/choosier/alpha')
+
+    expect(workspace.path.value).toBe('/tmp/choosier/active')
+    expect(workspace.historyChecked.value).toEqual([])
+    expect(workspace.pendingHistoryDelete.value).toBeNull()
+
+    await workspace.clearRecentPaths()
+
+    expect(workspace.path.value).toBe('/tmp/choosier/active')
+    expect(workspace.recentPaths.value).toEqual([])
+    wrapper.unmount()
+  })
+
   it('path changes invalidate the choice and clear selection and pending delete', async () => {
     const { workspace, wrapper } = setup()
     await flushPromises()

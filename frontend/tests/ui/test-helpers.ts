@@ -5,6 +5,7 @@ import { vi, type Mock } from 'vitest'
 import type {
   ArchiveResponse,
   BrowseResponse,
+  ClearPathMemoryResponse,
   ClearResponse,
   DefaultsResponse,
   FilteredStateRequest,
@@ -17,6 +18,7 @@ import type {
   PreviewModel,
   RemoveHistoryItemResponse,
   RemoveHistoryItemsResponse,
+  RemovePathMemoryResponse,
   StateQuery,
   StateResponse,
 } from '../../src/types.ts'
@@ -63,8 +65,8 @@ export function mountHost<T>(compose: () => T): HostedComposition<T> {
 export interface ApiMock {
   defaults: Mock<() => Promise<DefaultsResponse>>
   paths: Mock<() => Promise<PathMemoryResponse>>
-  clearPaths: Mock<() => Promise<{ cleared: boolean }>>
-  removePath: Mock<(path: string) => Promise<{ path: string; removed: boolean }>>
+  clearPaths: Mock<() => Promise<ClearPathMemoryResponse>>
+  removePath: Mock<(path: string) => Promise<RemovePathMemoryResponse>>
   browse: Mock<(path: string) => Promise<BrowseResponse>>
   state: Mock<(params: StateQuery) => Promise<StateResponse>>
   stateFiltered: Mock<

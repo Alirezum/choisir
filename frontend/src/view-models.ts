@@ -170,7 +170,10 @@ export interface WorkspaceBinding {
 
   recentPaths: Ref<string[]>
   pathMemoryWarning: Ref<string | null>
+  pathMemoryNotice: Ref<string>
   activateRecentPath: (path: string) => void
+  removeRecentPath: (path: string) => Promise<void>
+  clearRecentPaths: () => Promise<void>
 
   clearing: Ref<boolean>
   removingItem: Ref<string | null>

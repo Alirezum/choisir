@@ -339,6 +339,59 @@ class PathMemoryTest(unittest.TestCase):
         self.assertFalse(self.memory.remove(first).changed)
         self.assertEqual(self.memory.snapshot().recent, (str(second.resolve()),))
 
+    def test_removing_the_most_recent_uses_the_next_one_at_launch(self) -> None:
+        first = self._folder("first")
+        second = self._folder("second")
+        self.memory.record(first)
+        self.memory.record(second)
+        fallback = self._folder("fallback")
+        self.assertEqual(self.memory.startup(fallback).path, second.resolve())
+
+        self.memory.remove(second)
+
+        resolution = self.memory.startup(fallback)
+        self.assertEqual(resolution.path, first.resolve())
+        self.assertEqual(resolution.source, "recent")
+        self.assertIsNone(resolution.warning)
+        self.assertEqual(self.memory.snapshot().recent, (str(first.resolve()),))
+
+    def test_clear_restores_first_run_startup_behavior(self) -> None:
+        self.memory.record(self._folder("first"))
+        self.assertTrue(self.memory.clear().ok)
+        fallback = self._folder("fallback")
+
+        resolution = self.memory.startup(fallback)
+
+        self.assertEqual(resolution.path, fallback)
+        self.assertEqual(resolution.source, "default")
+        self.assertIsNone(resolution.warning)
+        self.assertEqual(self.memory.snapshot(), MemorySnapshot((), None))
+        self.assertEqual(
+            json.loads(self.memory_file.read_text(encoding="utf-8")),
+            {"version": 1, "recent": []},
+        )
+
+    def test_record_contains_only_version_and_folder_paths(self) -> None:
+        folder = self._folder("private")
+        file_name = "secret-report.txt"
+        (folder / file_name).write_text("contents", encoding="utf-8")
+        log = self._folder("history")
+        (log / ".choosier.jsonl").write_text(
+            '{"timestamp": "2026-11-12T00:00:00", "item": "secret-report.txt"}\n',
+            encoding="utf-8",
+        )
+        self.assertTrue(self.memory.record(folder).ok)
+
+        stored = json.loads(self.memory_file.read_text(encoding="utf-8"))
+
+        self.assertEqual(set(stored), {"version", "recent"})
+        self.assertEqual(stored["version"], 1)
+        self.assertEqual(stored["recent"], [str(folder.resolve())])
+        text = self.memory_file.read_text(encoding="utf-8")
+        self.assertNotIn(file_name, text)
+        self.assertNotIn(".choosier.jsonl", text)
+        self.assertNotIn("timestamp", text)
+
     # --- failure behavior ----------------------------------------------
 
     def test_record_rejects_missing_and_non_directory_targets(self) -> None:

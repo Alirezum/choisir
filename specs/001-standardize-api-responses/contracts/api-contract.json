@@ -339,6 +339,86 @@
       ]
     },
     {
+      "method": "DELETE",
+      "path": "/api/paths",
+      "purpose": "Clear all remembered folders without changing the running session.",
+      "success": {
+        "statuses": [
+          200
+        ],
+        "contentType": "application/json",
+        "body": "json",
+        "schema": {
+          "type": "object",
+          "fields": {
+            "cleared": {
+              "type": "boolean",
+              "nullable": false
+            }
+          }
+        }
+      },
+      "errors": [
+        {
+          "code": "method_not_allowed",
+          "status": 405,
+          "when": "A method other than DELETE is used."
+        },
+        {
+          "code": "internal_error",
+          "status": 500,
+          "when": "The remembered folders could not be updated."
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/paths/item",
+      "purpose": "Remove one remembered folder without changing the running session.",
+      "success": {
+        "statuses": [
+          200
+        ],
+        "contentType": "application/json",
+        "body": "json",
+        "schema": {
+          "type": "object",
+          "fields": {
+            "path": {
+              "type": "string",
+              "nullable": false
+            },
+            "removed": {
+              "type": "boolean",
+              "nullable": false
+            }
+          }
+        }
+      },
+      "errors": [
+        {
+          "code": "invalid_request",
+          "status": 400,
+          "when": "The path query parameter is empty, relative, or cannot be resolved."
+        },
+        {
+          "code": "validation_error",
+          "status": 422,
+          "when": "The required path query parameter is missing."
+        },
+        {
+          "code": "method_not_allowed",
+          "status": 405,
+          "when": "A method other than DELETE is used."
+        },
+        {
+          "code": "internal_error",
+          "status": 500,
+          "when": "The remembered folders could not be updated."
+        }
+      ]
+    },
+    {
       "method": "GET",
       "path": "/api/browse",
       "purpose": "List one directory's children with directories first.",

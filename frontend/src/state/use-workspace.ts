@@ -144,7 +144,10 @@ export function useWorkspace(): WorkspaceBinding {
 
     recentPaths: pathMemory.recent,
     pathMemoryWarning: pathMemory.warning,
+    pathMemoryNotice: pathMemory.notice,
     activateRecentPath,
+    removeRecentPath: pathMemory.remove,
+    clearRecentPaths: pathMemory.clear,
 
     toggleFilterType: filterState.toggleType,
     toggleFilterEntry: filterState.toggleEntry,
