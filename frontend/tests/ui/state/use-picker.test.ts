@@ -155,6 +155,21 @@ describe('usePicker', () => {
     expect(refreshPathMemory).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps the picked status when the recent-list refresh reports an error', async () => {
+    const { options, result, setStatus, reportError, refreshPathMemory } =
+      setup()
+    vi.spyOn(api, 'pick').mockResolvedValue(pickResponse())
+    refreshPathMemory.mockImplementation(async () => {
+      reportError(new Error('paths failed'))
+    })
+    options.path.value = '/tmp/choosier'
+
+    await result.pick()
+
+    expect(reportError).toHaveBeenCalledTimes(1)
+    expect(setStatus).toHaveBeenLastCalledWith('Picked alpha.txt.')
+  })
+
   it.each([
     ['invalid_path', "That folder doesn't exist."],
     ['empty', 'That folder has nothing to pick.'],

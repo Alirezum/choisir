@@ -90,12 +90,12 @@ export function usePicker(deps: PickerDeps): PickerBinding {
         const pickedStatus = result.logged
           ? `Picked ${item}.`
           : `Picked ${item}. Dry run, so it wasn't logged.`
+        await deps.refreshPathMemory()
         status.setStatus(
           result.path_memory_notice
             ? `${pickedStatus} ${result.path_memory_notice}`
             : pickedStatus,
         )
-        await deps.refreshPathMemory()
       }
     } catch (error) {
       status.reportError(error)
