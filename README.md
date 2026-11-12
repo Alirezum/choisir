@@ -46,7 +46,8 @@ preview (text head, directory entry count, or binary/empty notice). The
 you trust, since opening a file runs its associated application.
 `Archive history` files the current log away as a timestamped backup;
 `Clear history` deletes it (with confirmation). The Options tab also holds
-the session-only type and entry filters described below.
+the remembered-folder list and the session-only type and entry filters
+described below.
 
 ## Web UI
 
@@ -60,9 +61,10 @@ pip install "choosier[web]"
 choosier --web [PATH] [--port 8765]
 ```
 
-The server binds to `127.0.0.1` only. Without `PATH` it starts in the
-current directory, and the path box stays editable in the browser (type
-a path or browse and press *Use this folder*). The current choice lands
+The server binds to `127.0.0.1` only. Without `PATH` it starts in the last
+successfully used folder, falling back to the current directory on a first
+run, and the path box stays editable in the browser (type a path or browse
+and press *Use this folder*). The current choice lands
 on a dark split-flap board, with *Pick* and *Open* controls attached to
 it. Remaining, History, Browse, and Options share one workspace below the
 preview; the tabs support arrow-key navigation, and `Ctrl+N` picks again.
@@ -94,8 +96,8 @@ starts there instead of the current directory. When no remembered folder is
 usable, behavior matches a first run. An explicit path always wins, even when
 that path is invalid.
 
-A successful pick, including a dry run, records its folder. Browsing alone
-does not. Up to ten unique folders are kept, newest first; picking a folder
+A successful pick in either interactive UI, including a dry run, records its
+folder. Browsing alone does not. Up to ten unique folders are kept, newest first; picking a folder
 again moves it to the top. Unavailable folders are pruned when the list is
 read, so a dead row is never shown, and the next valid recent folder is used
 at launch.
