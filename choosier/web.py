@@ -546,7 +546,7 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
                     "Path must be an absolute path.",
                 )
             canonical = candidate.resolve()
-        except (OSError, ValueError):
+        except (OSError, RuntimeError, ValueError):
             raise ApiError("invalid_request", "Path could not be resolved.") from None
         result = memory.remove(canonical)
         if not result.ok:
