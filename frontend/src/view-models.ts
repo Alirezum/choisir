@@ -168,6 +168,10 @@ export interface WorkspaceBinding {
 
   filterPanel: ComputedRef<FilterPanelModel>
 
+  recentPaths: Ref<string[]>
+  pathMemoryWarning: Ref<string | null>
+  activateRecentPath: (path: string) => void
+
   clearing: Ref<boolean>
   removingItem: Ref<string | null>
   removingHistory: Ref<boolean>

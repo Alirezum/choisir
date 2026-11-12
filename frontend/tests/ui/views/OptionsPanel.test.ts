@@ -51,7 +51,8 @@ const mountPanel = (
     hidden: boolean
     mode: 'all' | 'files' | 'dirs'
   } = { log: '', seed: '', dry: false, hidden: false, mode: 'all' },
-) => mount(OptionsPanel, { props: { ...props, filterPanel: panel } })
+  recent: { recentPaths?: string[]; pathMemoryWarning?: string | null } = {},
+) => mount(OptionsPanel, { props: { ...props, filterPanel: panel, ...recent } })
 
 const button = (wrapper: ReturnType<typeof mountPanel>, label: string) =>
   wrapper.findAll('button').find((item) => item.text() === label)
@@ -102,6 +103,61 @@ describe('OptionsPanel', () => {
 
     expect(wrapper.emitted('update:dry')).toEqual([[true]])
     expect(wrapper.emitted('update:hidden')).toEqual([[true]])
+  })
+
+  it('lists remembered folders with their full paths and emits the chosen one', async () => {
+    const paths = ['/home/ana/projects/alpha', '/tmp/choosier/beta']
+    const wrapper = mountPanel(notReadyPanel(), undefined, {
+      recentPaths: paths,
+    })
+    const rows = wrapper.findAll('.recent-row')
+
+    expect(rows.map((row) => row.text())).toEqual(paths)
+    expect(rows.map((row) => row.attributes('title'))).toEqual(paths)
+    expect(rows.map((row) => row.attributes('type'))).toEqual([
+      'button',
+      'button',
+    ])
+
+    await rows[1]?.trigger('click')
+
+    expect(wrapper.emitted('useRecentPath')).toEqual([['/tmp/choosier/beta']])
+  })
+
+  it('keeps recent folders keyboard operable through native buttons', () => {
+    const wrapper = mountPanel(notReadyPanel(), undefined, {
+      recentPaths: ['/home/ana/projects/alpha'],
+    })
+    const row = wrapper.find('.recent-row')
+
+    expect(row.element.tagName).toBe('BUTTON')
+    expect(row.attributes('disabled')).toBeUndefined()
+    expect(row.text()).toContain('/home/ana/projects/alpha')
+  })
+
+  it('shows the empty state until a folder is remembered', () => {
+    const empty = mountPanel(notReadyPanel())
+    expect(empty.find('.recent-list').exists()).toBe(false)
+    expect(empty.find('.recent-empty').text()).toContain(
+      'No remembered folders yet.',
+    )
+
+    const populated = mountPanel(notReadyPanel(), undefined, {
+      recentPaths: ['/tmp/choosier'],
+    })
+    expect(populated.find('.recent-empty').exists()).toBe(false)
+    expect(populated.findAll('.recent-row')).toHaveLength(1)
+  })
+
+  it('shows the path-memory warning as a status message', () => {
+    const wrapper = mountPanel(notReadyPanel(), undefined, {
+      recentPaths: ['/tmp/choosier'],
+      pathMemoryWarning: 'Skipped 1 unavailable remembered folder.',
+    })
+    const warning = wrapper.find('.recent-warning')
+
+    expect(warning.attributes('role')).toBe('status')
+    expect(warning.text()).toBe('Skipped 1 unavailable remembered folder.')
   })
 
   it('renders the mode radios with all three mutually exclusive choices', () => {

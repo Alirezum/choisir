@@ -728,6 +728,79 @@ class WebPathMemoryTest(unittest.TestCase):
         self.assertEqual(body["path"], str(Path.cwd()))
         self.assertEqual(body["path_warning"], READ_WARNING)
 
+    def test_paths_reports_newest_first_and_moves_reuse_to_the_top(self) -> None:
+        first = self._folder("first")
+        second = self._folder("second")
+        self.memory.record(first)
+        self.memory.record(second)
+
+        body = TestClient(create_app()).get("/api/paths").json()
+        self.assertEqual(
+            body,
+            {
+                "recent": [str(second.resolve()), str(first.resolve())],
+                "warning": None,
+            },
+        )
+
+        self.memory.record(first)
+        body = TestClient(create_app()).get("/api/paths").json()
+        self.assertEqual(
+            body["recent"],
+            [str(first.resolve()), str(second.resolve())],
+        )
+
+    def test_paths_caps_the_list_at_ten(self) -> None:
+        folders = [self._folder(f"recent{index:02d}") for index in range(12)]
+        for folder in folders:
+            self.memory.record(folder)
+
+        body = TestClient(create_app()).get("/api/paths").json()
+
+        self.assertEqual(
+            body["recent"],
+            [str(folder.resolve()) for folder in reversed(folders)][:10],
+        )
+
+    def test_paths_prunes_stale_entries_and_reports_a_warning(self) -> None:
+        stale = self._folder("stale")
+        self.memory.record(self.target)
+        self.memory.record(stale)
+        client = TestClient(create_app())
+        stale.rmdir()
+
+        body = client.get("/api/paths").json()
+
+        self.assertEqual(body["recent"], [str(self.target.resolve())])
+        self.assertIn("unavailable", body["warning"])
+        self.assertEqual(
+            self.memory.snapshot().recent,
+            (str(self.target.resolve()),),
+        )
+
+    def test_paths_is_empty_without_a_record(self) -> None:
+        body = TestClient(create_app()).get("/api/paths").json()
+
+        self.assertEqual(body, {"recent": [], "warning": None})
+        self.assertFalse(self.memory.file.exists())
+
+    def test_paths_warns_on_a_corrupt_record(self) -> None:
+        self.memory.file.parent.mkdir(parents=True, exist_ok=True)
+        self.memory.file.write_text("{broken", encoding="utf-8")
+
+        body = TestClient(create_app()).get("/api/paths").json()
+
+        self.assertEqual(body["recent"], [])
+        self.assertEqual(body["warning"], READ_WARNING)
+
+    def test_paths_rejects_other_methods(self) -> None:
+        response = TestClient(create_app()).post("/api/paths")
+
+        self.assertEqual(response.status_code, 405)
+        body = response.json()
+        self.assertEqual(body["error"]["code"], "method_not_allowed")
+        self.assertEqual(body["detail"], body["error"]["message"])
+
     def test_pick_records_the_target_and_dry_run_records_too(self) -> None:
         client = TestClient(create_app(str(self.target)))
         body = client.post(

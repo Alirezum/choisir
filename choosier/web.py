@@ -171,6 +171,11 @@ class DefaultsResponse(BaseModel):
     path_warning: str | None
 
 
+class PathMemoryResponse(BaseModel):
+    recent: list[str]
+    warning: str | None
+
+
 class BrowserEntry(BaseModel):
     name: str
     is_dir: bool
@@ -500,6 +505,14 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
             path=startup_path,
             log_file=log_file or "",
             path_warning=path_warning,
+        )
+
+    @app.get("/api/paths")
+    def paths() -> PathMemoryResponse:
+        snapshot = memory.snapshot()
+        return PathMemoryResponse(
+            recent=list(snapshot.recent),
+            warning=snapshot.warning,
         )
 
     @app.get("/api/browse")

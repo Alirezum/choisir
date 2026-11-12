@@ -22,21 +22,32 @@ function setup(
   const defaultsMock = vi.spyOn(api, 'defaults').mockImplementation(defaults)
   const options = useFolderOptions()
   const refresh = vi.fn(async () => {})
+  const refreshPathMemory = vi.fn(async () => {})
   const setStatus = vi.fn()
   const reportError = vi.fn()
   const { result, wrapper } = mountHost(() =>
     useBootstrap({
       options,
       refresh,
+      refreshPathMemory,
       status: { setStatus, reportError },
     }),
   )
-  return { defaultsMock, options, refresh, setStatus, reportError, result, wrapper }
+  return {
+    defaultsMock,
+    options,
+    refresh,
+    refreshPathMemory,
+    setStatus,
+    reportError,
+    result,
+    wrapper,
+  }
 }
 
 describe('useBootstrap', () => {
   it('loads defaults into the folder options and runs the immediate refresh on mount', async () => {
-    const { options, refresh, reportError, wrapper } = setup()
+    const { options, refresh, refreshPathMemory, reportError, wrapper } = setup()
 
     await flushPromises()
 
@@ -44,6 +55,7 @@ describe('useBootstrap', () => {
     expect(options.path.value).toBe('/tmp/choosier')
     expect(options.logFile.value).toBe('/tmp/choosier/custom.jsonl')
     expect(refresh).toHaveBeenCalledTimes(1)
+    expect(refreshPathMemory).toHaveBeenCalledTimes(1)
     expect(reportError).not.toHaveBeenCalled()
     wrapper.unmount()
   })
@@ -84,6 +96,7 @@ describe('useBootstrap', () => {
       useBootstrap({
         options,
         refresh,
+        refreshPathMemory: vi.fn(async () => {}),
         status: { setStatus, reportError },
       }),
     )
@@ -126,6 +139,7 @@ describe('useBootstrap', () => {
       useBootstrap({
         options,
         refresh: state.refresh,
+        refreshPathMemory: vi.fn(async () => {}),
         status: { reportError },
       }),
     )

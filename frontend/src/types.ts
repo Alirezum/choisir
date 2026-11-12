@@ -12,6 +12,7 @@ export type {
   FilteredStateResponse,
   HistoryEntry,
   OpenResponse,
+  PathMemoryResponse,
   PickResponse,
   PreviewImage,
   PreviewModel,

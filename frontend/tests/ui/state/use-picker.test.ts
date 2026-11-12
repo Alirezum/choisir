@@ -34,6 +34,7 @@ function setup() {
   const setStatus = vi.fn()
   const reportError = vi.fn()
   const refresh = vi.fn(async () => {})
+  const refreshPathMemory = vi.fn(async () => {})
   const revision = ref(0)
   const excludedTypes = ref<string[]>([])
   const excludedEntries = ref<string[]>([])
@@ -50,6 +51,7 @@ function setup() {
     choice,
     status: { setStatus, reportError },
     refresh,
+    refreshPathMemory,
     pathInput,
     filterExclusions: { exclusions, revision },
   })
@@ -60,6 +62,7 @@ function setup() {
     setStatus,
     reportError,
     refresh,
+    refreshPathMemory,
     pathInput,
     revision,
     excludedTypes,
@@ -96,8 +99,16 @@ describe('usePicker', () => {
   })
 
   it('sends nullable log/seed values with the flags and exclusions and records a logged pick', async () => {
-    const { options, choice, result, setStatus, refresh, excludedTypes, excludedEntries } =
-      setup()
+    const {
+      options,
+      choice,
+      result,
+      setStatus,
+      refresh,
+      refreshPathMemory,
+      excludedTypes,
+      excludedEntries,
+    } = setup()
     const pick = vi.spyOn(api, 'pick').mockResolvedValue(pickResponse())
     options.path.value = '/tmp/choosier/'
     options.seed.value = ' 42 '
@@ -128,10 +139,11 @@ describe('usePicker', () => {
     expect(choice.pickSerial.value).toBe(1)
     expect(setStatus).toHaveBeenCalledWith('Picked alpha.txt.')
     expect(refresh).toHaveBeenCalledTimes(1)
+    expect(refreshPathMemory).toHaveBeenCalledTimes(1)
   })
 
-  it('uses the dry-run message when the pick was not logged', async () => {
-    const { options, result, setStatus } = setup()
+  it('uses the dry-run message when the pick was not logged and refreshes the recent list', async () => {
+    const { options, result, setStatus, refreshPathMemory } = setup()
     vi.spyOn(api, 'pick').mockResolvedValue(pickResponse({ logged: false }))
     options.path.value = '/tmp/choosier'
 
@@ -140,6 +152,7 @@ describe('usePicker', () => {
     expect(setStatus).toHaveBeenCalledWith(
       "Picked alpha.txt. Dry run, so it wasn't logged.",
     )
+    expect(refreshPathMemory).toHaveBeenCalledTimes(1)
   })
 
   it.each([
@@ -158,7 +171,8 @@ describe('usePicker', () => {
       'All entries matching the filters have been picked. Clear filters or reset history to pick more.',
     ],
   ] as const)('reports the %s outcome exactly and refreshes', async (status, message) => {
-    const { options, choice, result, setStatus, refresh } = setup()
+    const { options, choice, result, setStatus, refresh, refreshPathMemory } =
+      setup()
     vi.spyOn(api, 'pick').mockResolvedValue(
       pickResponse({ status, item: null, preview: null }),
     )
@@ -170,6 +184,7 @@ describe('usePicker', () => {
     expect(choice.choice.value).toBeNull()
     expect(choice.pickSerial.value).toBe(0)
     expect(refresh).toHaveBeenCalledTimes(1)
+    expect(refreshPathMemory).not.toHaveBeenCalled()
   })
 
   it('appends the path-memory notice to the success status', async () => {

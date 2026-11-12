@@ -14,6 +14,7 @@ import type {
   FilteredStateRequest,
   FilteredStateResponse,
   OpenResponse,
+  PathMemoryResponse,
   PickRequest,
   PickResponse,
   PreviewModel,
@@ -58,6 +59,11 @@ export const api = {
   defaults: () =>
     request<DefaultsResponse>(requestUrl('defaults', {}), {
       method: requestMethod('defaults'),
+    }),
+
+  paths: () =>
+    request<PathMemoryResponse>(requestUrl('paths', {}), {
+      method: requestMethod('paths'),
     }),
 
   browse: (path: string) =>

@@ -17,6 +17,7 @@ try:
         Button,
         Checkbox,
         Input,
+        OptionList,
         RadioButton,
         RadioSet,
         SelectionList,
@@ -651,6 +652,10 @@ class TuiPathMemoryScenarioTest(unittest.IsolatedAsyncioTestCase):
     def _remaining(self, app: "ChooserApp") -> str:
         return _plain(app.query_one("#remaining", Static).content)
 
+    def _recent_paths(self, app: "ChooserApp") -> list[str]:
+        recent_list = app.query_one("#recent-paths", OptionList)
+        return [_plain(option.prompt) for option in recent_list.options]
+
     async def test_empty_launch_restores_the_remembered_folder(self) -> None:
         self.memory.record(self.target)
         app = ChooserApp("")
@@ -766,6 +771,102 @@ class TuiPathMemoryScenarioTest(unittest.IsolatedAsyncioTestCase):
                 self.assertIn("Logged in", status)
                 self.assertIn("Could not remember this folder.", status)
                 self.assertIsNotNone(app._current_choice)
+
+    async def test_recent_list_shows_valid_paths_newest_first(self) -> None:
+        first = self._folder("first", "a.txt")
+        second = self._folder("second", "b.txt")
+        self.memory.record(first)
+        self.memory.record(second)
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            self.assertEqual(
+                self._recent_paths(app),
+                [str(second.resolve()), str(first.resolve())],
+            )
+            self.assertTrue(app.query_one("#recent-paths", OptionList).can_focus)
+            self.assertFalse(app.query_one("#recent-use", Button).disabled)
+
+    async def test_recent_list_omits_stale_entries(self) -> None:
+        stale = self._folder("stale")
+        self.memory.record(self.target)
+        self.memory.record(stale)
+        stale.rmdir()
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            self.assertEqual(
+                self._recent_paths(app),
+                [str(self.target.resolve())],
+            )
+            self.assertIn(
+                "unavailable",
+                _plain(app.query_one("#recent-warning", Static).content),
+            )
+            self.assertEqual(
+                self.memory.snapshot().recent,
+                (str(self.target.resolve()),),
+            )
+
+    async def test_use_sets_the_path_input_and_refreshes_panels(self) -> None:
+        other = self._folder("other", "b.txt")
+        self.memory.record(self.target)
+        self.memory.record(other)
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.query_one("#recent-paths", OptionList).highlighted = 1
+            app.query_one("#recent-use", Button).press()
+            await pilot.pause()
+            self.assertEqual(self._input(app), str(self.target.resolve()))
+            self.assertIn("a.txt", self._remaining(app))
+            self.assertIn(
+                f"Using {self.target.resolve()}",
+                self._status(app),
+            )
+
+    async def test_recent_controls_are_keyboard_reachable(self) -> None:
+        other = self._folder("other", "b.txt")
+        self.memory.record(other)
+        self.memory.record(self.target)
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.query_one("#tabs", TabbedContent).active = "options-tab"
+            await pilot.pause()
+            recent_list = app.query_one("#recent-paths", OptionList)
+            self.assertTrue(recent_list.can_focus)
+            recent_list.focus()
+            await pilot.pause()
+            self.assertIs(app.focused, recent_list)
+            await pilot.press("down")
+            await pilot.press("down")
+            await pilot.pause()
+            self.assertEqual(recent_list.highlighted, 1)
+
+            use_button = app.query_one("#recent-use", Button)
+            self.assertTrue(use_button.can_focus)
+            use_button.focus()
+            await pilot.pause()
+            self.assertIs(app.focused, use_button)
+
+    async def test_recent_list_refreshes_after_a_successful_pick(self) -> None:
+        other = self._folder("other", "b.txt")
+        self.memory.record(self.target)
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            self.assertEqual(
+                self._recent_paths(app),
+                [str(self.target.resolve())],
+            )
+            app.query_one("#path-input", Input).value = str(other)
+            app.do_pick()
+            await pilot.pause()
+            self.assertEqual(
+                self._recent_paths(app),
+                [str(other.resolve()), str(self.target.resolve())],
+            )
 
     async def test_restore_does_not_restore_session_state(self) -> None:
         HistoryService(self.target / ".choosier.jsonl").append("a.txt")

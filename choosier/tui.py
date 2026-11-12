@@ -15,6 +15,7 @@ from textual.widgets import (
     Footer,
     Header,
     Input,
+    OptionList,
     RadioButton,
     RadioSet,
     SelectionList,
@@ -177,7 +178,8 @@ class ChooserApp(App[None]):
     #options-body {
         height: 1fr;
     }
-    .filter-label {
+    .filter-label,
+    .recent-label {
         margin-top: 1;
         color: #dde4e2;
         text-style: bold;
@@ -196,12 +198,24 @@ class ChooserApp(App[None]):
         height: 10;
         border: solid #2a343a;
     }
-    #filter-notice {
+    #filter-notice,
+    #recent-warning {
         height: auto;
         margin-top: 1;
         padding: 0 1;
         background: #0a0f12;
         color: #d9a23a;
+    }
+    #recent-paths {
+        height: 8;
+        border: solid #2a343a;
+    }
+    #recent-empty {
+        height: auto;
+        color: #98a4a7;
+    }
+    #recent-actions {
+        height: 3;
     }
     #clear-filters {
         margin-top: 1;
@@ -255,6 +269,19 @@ class ChooserApp(App[None]):
                     yield Button("Clear history", id="clear", variant="error")
                 with TabPane("Options", id="options-tab"):
                     with VerticalScroll(id="options-body"):
+                        yield Static("Recent folders", classes="recent-label")
+                        yield Static(
+                            "No remembered folders yet.",
+                            id="recent-empty",
+                        )
+                        yield OptionList(id="recent-paths")
+                        with Horizontal(id="recent-actions"):
+                            yield Button(
+                                "Use",
+                                id="recent-use",
+                                disabled=True,
+                            )
+                        yield Static("", id="recent-warning")
                         yield Input(
                             value=self._initial_log,
                             placeholder=(
@@ -293,6 +320,7 @@ class ChooserApp(App[None]):
         self.query_one("#open", Button).disabled = True
         self.query_one("#pick", Button).focus()
         self._apply_startup_memory()
+        self._refresh_recent_paths()
         self._refresh_panels()
 
     def _apply_startup_memory(self) -> None:
@@ -504,6 +532,38 @@ class ChooserApp(App[None]):
             self._clear_all_entries()
         elif event.button.id == "clear-filters":
             self._clear_filters_all()
+        elif event.button.id == "recent-use":
+            self._use_recent_path()
+
+    def _refresh_recent_paths(self) -> None:
+        """Rebuild the recent-folder list without touching the active path."""
+        snapshot = PathMemory().snapshot()
+        recent_list = self.query_one("#recent-paths", OptionList)
+        recent_list.clear_options()
+        recent_list.add_options(snapshot.recent)
+        recent_list.disabled = not snapshot.recent
+        self.query_one("#recent-empty", Static).display = not snapshot.recent
+        self.query_one("#recent-use", Button).disabled = not snapshot.recent
+        warning_widget = self.query_one("#recent-warning", Static)
+        warning_widget.display = snapshot.warning is not None
+        if snapshot.warning is not None:
+            warning_widget.update(escape(snapshot.warning))
+
+    def _use_recent_path(self) -> None:
+        """Activate the highlighted remembered folder in the path input."""
+        recent_list = self.query_one("#recent-paths", OptionList)
+        if recent_list.option_count == 0:
+            self._set_status("No remembered folders yet.")
+            return
+        index = recent_list.highlighted
+        if index is None:
+            index = 0
+        prompt = recent_list.get_option_at_index(index).prompt
+        path = prompt.plain if isinstance(prompt, Text) else str(prompt)
+        self.query_one("#path-input", Input).value = path
+        self._set_status(f"Using {path}.")
+        self._refresh_panels()
+        self._refresh_recent_paths()
 
     def _visible_type_keys(self) -> set[str]:
         options = self._filter_options
@@ -750,6 +810,7 @@ class ChooserApp(App[None]):
         else:
             self._set_status(f"{message} {memory_notice}")
         self._refresh_panels()
+        self._refresh_recent_paths()
 
 
 def run(initial_path: str = "", log_file: str | None = None) -> int:

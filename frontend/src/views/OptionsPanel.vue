@@ -2,7 +2,17 @@
 import PanelShell from '../components/PanelShell.vue'
 import type { FilterPanelModel } from '../view-models.ts'
 
-defineProps<{ filterPanel: FilterPanelModel }>()
+withDefaults(
+  defineProps<{
+    filterPanel: FilterPanelModel
+    recentPaths?: string[]
+    pathMemoryWarning?: string | null
+  }>(),
+  {
+    recentPaths: () => [],
+    pathMemoryWarning: null,
+  },
+)
 
 const emit = defineEmits<{
   toggleType: [key: string]
@@ -12,6 +22,7 @@ const emit = defineEmits<{
   selectAllEntries: []
   clearEntries: []
   clearFilters: []
+  useRecentPath: [path: string]
 }>()
 
 const logFile = defineModel<string>('log', { required: true })
@@ -25,6 +36,28 @@ const mode = defineModel<'all' | 'files' | 'dirs'>('mode', { required: true })
   <PanelShell class="options-panel">
     <template #header>Changes apply to the next pick.</template>
     <div class="options-body">
+      <section class="recent-section" aria-labelledby="recent-heading">
+        <h2 id="recent-heading" class="recent-heading">Recent folders</h2>
+        <p v-if="recentPaths.length === 0" class="recent-empty">
+          No remembered folders yet. Successful picks add their folder here.
+        </p>
+        <ul v-else class="recent-list">
+          <li v-for="recentPath in recentPaths" :key="recentPath">
+            <button
+              type="button"
+              class="recent-row"
+              :title="recentPath"
+              @click="emit('useRecentPath', recentPath)"
+            >
+              <span class="recent-path">{{ recentPath }}</span>
+            </button>
+          </li>
+        </ul>
+        <p v-if="pathMemoryWarning" class="recent-warning" role="status">
+          {{ pathMemoryWarning }}
+        </p>
+      </section>
+
       <label class="field">
         <span>Log file</span>
         <input

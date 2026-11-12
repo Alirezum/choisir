@@ -300,6 +300,46 @@
     },
     {
       "method": "GET",
+      "path": "/api/paths",
+      "purpose": "Return remembered folders, newest first, after pruning unavailable entries.",
+      "success": {
+        "statuses": [
+          200
+        ],
+        "contentType": "application/json",
+        "body": "json",
+        "schema": {
+          "type": "object",
+          "fields": {
+            "recent": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "nullable": false
+              }
+            },
+            "warning": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        }
+      },
+      "errors": [
+        {
+          "code": "method_not_allowed",
+          "status": 405,
+          "when": "A method other than GET is used."
+        },
+        {
+          "code": "internal_error",
+          "status": 500,
+          "when": "An unexpected exception escapes the route."
+        }
+      ]
+    },
+    {
+      "method": "GET",
       "path": "/api/browse",
       "purpose": "List one directory's children with directories first.",
       "success": {

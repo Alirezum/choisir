@@ -9,6 +9,7 @@ import { useFilters } from './use-filters.ts'
 import { useFolderOptions } from './use-folder-options.ts'
 import { useHistoryActions } from './use-history-actions.ts'
 import { useHistorySelection } from './use-history-selection.ts'
+import { usePathMemory } from './use-path-memory.ts'
 import { usePicker } from './use-picker.ts'
 import { useShortcuts } from './use-shortcuts.ts'
 import { useStatus } from './use-status.ts'
@@ -30,6 +31,7 @@ const EMPTY_FILTER_OPTIONS: FilterOptions = {
 export function useWorkspace(): WorkspaceBinding {
   const status = useStatus()
   const options = useFolderOptions()
+  const pathMemory = usePathMemory({ status })
   const choice = useChoice()
   const filterState = useFilters({
     path: options.path,
@@ -79,6 +81,7 @@ export function useWorkspace(): WorkspaceBinding {
     choice,
     status,
     refresh: workspaceState.refresh,
+    refreshPathMemory: pathMemory.refresh,
     pathInput,
     filterExclusions: filterState,
   })
@@ -112,8 +115,13 @@ export function useWorkspace(): WorkspaceBinding {
   useBootstrap({
     options,
     refresh: workspaceState.refresh,
+    refreshPathMemory: pathMemory.refresh,
     status,
   })
+
+  function activateRecentPath(target: string): void {
+    options.path.value = target
+  }
 
   return {
     pathInput,
@@ -133,6 +141,10 @@ export function useWorkspace(): WorkspaceBinding {
     activeTab: tabs.activeTab,
 
     filterPanel,
+
+    recentPaths: pathMemory.recent,
+    pathMemoryWarning: pathMemory.warning,
+    activateRecentPath,
 
     toggleFilterType: filterState.toggleType,
     toggleFilterEntry: filterState.toggleEntry,

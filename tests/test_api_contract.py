@@ -64,7 +64,7 @@ class ApiContractTest(unittest.TestCase):
                 assert_success_schema(self.contract, route, self.openapi)
 
     def test_additive_filter_contract_matches_openapi(self) -> None:
-        self.assertEqual(len(self.contract["routes"]), 13)
+        self.assertEqual(len(self.contract["routes"]), 14)
         post_state = contract_route(self.contract, "POST", "/api/state")
         self.assertEqual(post_state["success"]["statuses"], [200])
         fields = post_state["success"]["schema"]["fields"]

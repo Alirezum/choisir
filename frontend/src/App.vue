@@ -28,6 +28,9 @@ const {
   activeTab,
 
   filterPanel,
+  recentPaths,
+  pathMemoryWarning,
+  activateRecentPath,
 
   clearing,
   removingItem,
@@ -193,6 +196,9 @@ void pathInput
               v-model:hidden="includeHidden"
               v-model:mode="mode"
               :filter-panel="filterPanel"
+              :recent-paths="recentPaths"
+              :path-memory-warning="pathMemoryWarning"
+              @use-recent-path="activateRecentPath"
               @toggle-type="toggleFilterType"
               @toggle-entry="toggleFilterEntry"
               @select-all-types="selectAllFilterTypes"

@@ -14,6 +14,10 @@ export const routes = {
     method: 'GET',
     path: '/api/defaults',
   },
+  'GET /api/paths': {
+    method: 'GET',
+    path: '/api/paths',
+  },
   'GET /api/browse': {
     method: 'GET',
     path: '/api/browse',
@@ -148,6 +152,11 @@ export interface DefaultsResponse {
   path: string
   log_file: string
   path_warning: string | null
+}
+
+export interface PathMemoryResponse {
+  recent: string[]
+  warning: string | null
 }
 
 export interface BrowseResponse {

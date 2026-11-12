@@ -45,8 +45,13 @@ const textPreview = (text: string): PreviewModel => ({
 function setup(
   defaults = { path: '', log_file: '', path_warning: null as string | null },
   state = stateResponse(),
+  paths: { recent: string[]; warning: string | null } = {
+    recent: [],
+    warning: null,
+  },
 ) {
   vi.spyOn(api, 'defaults').mockResolvedValue(defaults)
+  vi.spyOn(api, 'paths').mockResolvedValue(paths)
   vi.spyOn(api, 'stateFiltered').mockResolvedValue(state)
   vi.spyOn(api, 'browse').mockResolvedValue({
     path: defaults.path,
@@ -82,6 +87,8 @@ describe('useWorkspace', () => {
     expect(workspace.dryRun.value).toBe(false)
     expect(workspace.includeHidden.value).toBe(false)
     expect(workspace.mode.value).toBe('all')
+    expect(workspace.recentPaths.value).toEqual([])
+    expect(workspace.pathMemoryWarning.value).toBeNull()
     expect(workspace.state.value).toBeNull()
     expect(workspace.choice.value).toBeNull()
     expect(workspace.pickSerial.value).toBe(0)
@@ -110,6 +117,29 @@ describe('useWorkspace', () => {
     expect(workspace.state.value?.remaining_total).toBe(1)
     expect(workspace.tabCounts.value.remaining).toBe(1)
 
+    wrapper.unmount()
+  })
+
+  it('loads recent folders and activates one without touching filters or history', async () => {
+    const { workspace, wrapper } = setup(undefined, undefined, {
+      recent: ['/tmp/choosier/alpha', '/tmp/choosier/beta'],
+      warning: 'Skipped 1 unavailable remembered folder.',
+    })
+    await flushPromises()
+
+    expect(workspace.recentPaths.value).toEqual([
+      '/tmp/choosier/alpha',
+      '/tmp/choosier/beta',
+    ])
+    expect(workspace.pathMemoryWarning.value).toBe(
+      'Skipped 1 unavailable remembered folder.',
+    )
+
+    workspace.activateRecentPath('/tmp/choosier/beta')
+
+    expect(workspace.path.value).toBe('/tmp/choosier/beta')
+    expect(workspace.historyChecked.value).toEqual([])
+    expect(workspace.pendingHistoryDelete.value).toBeNull()
     wrapper.unmount()
   })
 

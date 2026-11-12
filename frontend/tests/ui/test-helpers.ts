@@ -11,6 +11,7 @@ import type {
   FilteredStateResponse,
   FilterOptions,
   OpenResponse,
+  PathMemoryResponse,
   PickRequest,
   PickResponse,
   PreviewModel,
@@ -61,6 +62,9 @@ export function mountHost<T>(compose: () => T): HostedComposition<T> {
 
 export interface ApiMock {
   defaults: Mock<() => Promise<DefaultsResponse>>
+  paths: Mock<() => Promise<PathMemoryResponse>>
+  clearPaths: Mock<() => Promise<{ cleared: boolean }>>
+  removePath: Mock<(path: string) => Promise<{ path: string; removed: boolean }>>
   browse: Mock<(path: string) => Promise<BrowseResponse>>
   state: Mock<(params: StateQuery) => Promise<StateResponse>>
   stateFiltered: Mock<
@@ -125,6 +129,9 @@ export function filteredStateResponse(
 export function createApiMock(): ApiMock {
   return {
     defaults: vi.fn(),
+    paths: vi.fn(),
+    clearPaths: vi.fn(),
+    removePath: vi.fn(),
     browse: vi.fn(),
     state: vi.fn(),
     stateFiltered: vi.fn(),

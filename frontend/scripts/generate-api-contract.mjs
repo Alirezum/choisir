@@ -17,6 +17,7 @@ const METHODS = new Set(['GET', 'POST', 'DELETE'])
 
 const RESPONSE_TYPE_NAMES = {
   'GET /api/defaults': 'DefaultsResponse',
+  'GET /api/paths': 'PathMemoryResponse',
   'GET /api/browse': 'BrowseResponse',
   'GET /api/state': 'StateResponse',
   'POST /api/state': 'FilteredStateResponse',

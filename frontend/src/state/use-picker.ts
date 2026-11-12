@@ -11,6 +11,7 @@ export interface PickerDeps {
   choice: Pick<ChoiceBinding, 'choice' | 'setPicked'>
   status: Pick<StatusBinding, 'setStatus' | 'reportError'>
   refresh: () => Promise<void>
+  refreshPathMemory: () => Promise<void>
   pathInput: Ref<HTMLInputElement | null>
   filterExclusions: Pick<FilterBinding, 'exclusions' | 'revision'>
 }
@@ -94,6 +95,7 @@ export function usePicker(deps: PickerDeps): PickerBinding {
             ? `${pickedStatus} ${result.path_memory_notice}`
             : pickedStatus,
         )
+        await deps.refreshPathMemory()
       }
     } catch (error) {
       status.reportError(error)

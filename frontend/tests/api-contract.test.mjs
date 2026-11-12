@@ -59,13 +59,14 @@ const routeFor = (operation) => routes[operations[operation]]
 
 test('the generated surfaces mirror the frozen backend contract', () => {
   const contractRouteKeys = contract.routes.map((route) => `${route.method} ${route.path}`)
-  assert.equal(contractRouteKeys.length, 13)
+  assert.equal(contractRouteKeys.length, 14)
   assert.deepEqual(Object.keys(routes), contractRouteKeys)
   assert.deepEqual([...errorCodes], Object.keys(contract.errorCodes))
 })
 
 const operationNames = [
   'defaults',
+  'paths',
   'browse',
   'state',
   'stateFiltered',
@@ -81,13 +82,13 @@ const operationNames = [
 ]
 
 test('every generated route maps to exactly one operation and back', () => {
-  assert.equal(Object.keys(operations).length, 13)
+  assert.equal(Object.keys(operations).length, 14)
   assert.deepEqual(Object.keys(operations), operationNames)
-  assert.equal(new Set(Object.values(operations)).size, 13)
+  assert.equal(new Set(Object.values(operations)).size, 14)
   assert.deepEqual(Object.values(operations), Object.keys(routes))
 })
 
-test('the facade exposes exactly the thirteen operations', () => {
+test('the facade exposes exactly the fourteen operations', () => {
   assert.deepEqual(Object.keys(api), operationNames)
 })
 
@@ -97,6 +98,16 @@ test('defaults requests GET /api/defaults', async () => {
   const call = expectSingleCall()
   assert.equal(call.method, routeFor('defaults').method)
   assert.equal(call.path, routeFor('defaults').path)
+  assert.equal(call.params.size, 0)
+  assert.equal(call.body, undefined)
+})
+
+test('paths requests GET /api/paths', async () => {
+  const result = await withStubbedFetch(() => api.paths())
+  assert.deepEqual(result, { ok: true })
+  const call = expectSingleCall()
+  assert.equal(call.method, routeFor('paths').method)
+  assert.equal(call.path, routeFor('paths').path)
   assert.equal(call.params.size, 0)
   assert.equal(call.body, undefined)
 })

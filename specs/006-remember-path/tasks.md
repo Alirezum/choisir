@@ -99,21 +99,21 @@ than ten folders keep only the newest ten.
 
 ### Implementation for User Story 2
 
-- [ ] T020 [US2] Extend the API mocks and recent-list fixtures in `frontend/tests/ui/test-helpers.ts` with `paths()` returning `{ recent: string[], warning: string | null }` and remove/clear mocks for US3.
-- [ ] T021 [US2] In one atomic change, add `GET /api/paths` and `PathMemoryResponse` to `choosier/web.py`, add the route and response schema to `specs/001-standardize-api-responses/contracts/api-contract.json`, update the route-count assertion in `tests/test_api_contract.py` to 14, add the response type name in `frontend/scripts/generate-api-contract.mjs`, and regenerate `frontend/src/api-contract.generated.ts`; the route returns `{ recent, warning }` from `PathMemory().snapshot()` so unavailable entries are pruned before the response.
-- [ ] T022 [US2] Add the `paths` operation name in `frontend/src/api-operations.ts` and the `api.paths()` facade method in `frontend/src/api.ts`.
-- [ ] T023 [US2] Create `frontend/src/state/use-path-memory.ts` exposing `recent`, `warning`, and `refresh()` backed by `api.paths()`, with non-blocking error reporting through the shared status binding.
-- [ ] T024 [US2] Compose the new state in `frontend/src/state/use-workspace.ts`, load it during bootstrap, expose its binding to `App.vue`, and refresh it after a successful pick through the picker dependency in `frontend/src/state/use-picker.ts`.
-- [ ] T025 [US2] Load and apply `.agents/skills/frontend-design/SKILL.md`, then add the recent-folder section to `frontend/src/views/OptionsPanel.vue` (full-path row buttons that activate a folder, visible focus, accessible names containing the full path, empty state) and wire its props/events in `frontend/src/App.vue`; no new runtime dependency.
-- [ ] T026 [US2] Add the recent-folder section to the Options tab in `choosier/tui.py`: a keyboard-focusable `OptionList` whose row labels are the full paths, a `Use` button that sets `#path-input`, refresh on mount/after a successful pick/after `Use`, and an empty-state label.
+- [x] T020 [US2] Extend the API mocks and recent-list fixtures in `frontend/tests/ui/test-helpers.ts` with `paths()` returning `{ recent: string[], warning: string | null }` and remove/clear mocks for US3.
+- [x] T021 [US2] In one atomic change, add `GET /api/paths` and `PathMemoryResponse` to `choosier/web.py`, add the route and response schema to `specs/001-standardize-api-responses/contracts/api-contract.json`, update the route-count assertion in `tests/test_api_contract.py` to 14, add the response type name in `frontend/scripts/generate-api-contract.mjs`, and regenerate `frontend/src/api-contract.generated.ts`; the route returns `{ recent, warning }` from `PathMemory().snapshot()` so unavailable entries are pruned before the response.
+- [x] T022 [US2] Add the `paths` operation name in `frontend/src/api-operations.ts` and the `api.paths()` facade method in `frontend/src/api.ts`.
+- [x] T023 [US2] Create `frontend/src/state/use-path-memory.ts` exposing `recent`, `warning`, and `refresh()` backed by `api.paths()`, with non-blocking error reporting through the shared status binding.
+- [x] T024 [US2] Compose the new state in `frontend/src/state/use-workspace.ts`, load it during bootstrap, expose its binding to `App.vue`, and refresh it after a successful pick through the picker dependency in `frontend/src/state/use-picker.ts`.
+- [x] T025 [US2] Load and apply `.agents/skills/frontend-design/SKILL.md`, then add the recent-folder section to `frontend/src/views/OptionsPanel.vue` (full-path row buttons that activate a folder, visible focus, accessible names containing the full path, empty state) and wire its props/events in `frontend/src/App.vue`; no new runtime dependency.
+- [x] T026 [US2] Add the recent-folder section to the Options tab in `choosier/tui.py`: a keyboard-focusable `OptionList` whose row labels are the full paths, a `Use` button that sets `#path-input`, refresh on mount/after a successful pick/after `Use`, and an empty-state label.
 
 ### Tests for User Story 2
 
-- [ ] T027 [P] [US2] Add `GET /api/paths` tests in `tests/test_web.py`: newest-first order, reuse moves to top without duplication, cap at ten, stale pruning, empty list, warning on corrupt/unreadable records, and standard `405` behavior.
-- [ ] T028 [P] [US2] Add TUI recent-list tests in `tests/test_tui.py`: the list shows valid full paths newest first, stale entries are absent, `Use` sets the path input and refreshes panels, keyboard focus reaches every row and control, and the list refreshes after a successful pick.
-- [ ] T029 [P] [US2] Add `frontend/tests/ui/state/use-path-memory.test.ts` covering initial load, refresh, empty state, and non-blocking load errors.
-- [ ] T030 [P] [US2] Add picker refresh assertions in `frontend/tests/ui/state/use-picker.test.ts`: the recent list refreshes after `picked` (including dry-run) and does not refresh after invalid/empty/exhausted outcomes.
-- [ ] T031 [P] [US2] Add recent-section tests in `frontend/tests/ui/views/OptionsPanel.test.ts` for full-path labels, activating a folder, keyboard operation, empty state, and accessible names containing the full path.
+- [x] T027 [P] [US2] Add `GET /api/paths` tests in `tests/test_web.py`: newest-first order, reuse moves to top without duplication, cap at ten, stale pruning, empty list, warning on corrupt/unreadable records, and standard `405` behavior.
+- [x] T028 [P] [US2] Add TUI recent-list tests in `tests/test_tui.py`: the list shows valid full paths newest first, stale entries are absent, `Use` sets the path input and refreshes panels, keyboard focus reaches every row and control, and the list refreshes after a successful pick.
+- [x] T029 [P] [US2] Add `frontend/tests/ui/state/use-path-memory.test.ts` covering initial load, refresh, empty state, and non-blocking load errors.
+- [x] T030 [P] [US2] Add picker refresh assertions in `frontend/tests/ui/state/use-picker.test.ts`: the recent list refreshes after `picked` (including dry-run) and does not refresh after invalid/empty/exhausted outcomes.
+- [x] T031 [P] [US2] Add recent-section tests in `frontend/tests/ui/views/OptionsPanel.test.ts` for full-path labels, activating a folder, keyboard operation, empty state, and accessible names containing the full path.
 
 **Checkpoint**: US1 and US2 work independently; the recent list is usable from both interfaces.
 
