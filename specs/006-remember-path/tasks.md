@@ -154,11 +154,11 @@ byte-for-byte unchanged.
 
 **Purpose**: Documentation, full gates, and end-to-end validation.
 
-- [ ] T042 [P] Update `README.md` for remembered startup, the recent list, remove/clear actions, privacy/storage location, the `CHOOSIER_PATH_MEMORY_FILE` test/portable override, and `--web` remembered-folder fallback; state that one-shot CLI flags and exit codes are unchanged.
-- [ ] T043 [P] Update `CHANGELOG.md` under the next unreleased minor with the feature summary, privacy note, and the additive API routes/fields.
-- [ ] T044 Run the full Python gates (`uv run pytest`, `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy choosier`) and fix any failures in `choosier/` or `tests/`.
-- [ ] T045 Run the full frontend gates (`cd frontend && npm run check:api && npm run check:ui && npm run test:api && npm run test:ui && npm run build`) and fix any failures in `frontend/src/` or `frontend/tests/`.
-- [ ] T046 Execute all scenarios in `specs/006-remember-path/quickstart.md` on the reference machine, including TUI/web restore, recent ordering/cap, stale fallback/pruning, remove/clear side-effect checks, concurrent sessions, privacy inspection, and one-shot CLI regression; measure launch-to-usable time and confirm the path-memory overhead is at most one second (SC-009); record the results.
+- [x] T042 [P] Update `README.md` for remembered startup, the recent list, remove/clear actions, privacy/storage location, the `CHOOSIER_PATH_MEMORY_FILE` test/portable override, and `--web` remembered-folder fallback; state that one-shot CLI flags and exit codes are unchanged.
+- [x] T043 [P] Update `CHANGELOG.md` under the next unreleased minor with the feature summary, privacy note, and the additive API routes/fields.
+- [x] T044 Run the full Python gates (`uv run pytest`, `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy choosier`) and fix any failures in `choosier/` or `tests/`.
+- [x] T045 Run the full frontend gates (`cd frontend && npm run check:api && npm run check:ui && npm run test:api && npm run test:ui && npm run build`) and fix any failures in `frontend/src/` or `frontend/tests/`.
+- [x] T046 Execute all scenarios in `specs/006-remember-path/quickstart.md` on the reference machine, including TUI/web restore, recent ordering/cap, stale fallback/pruning, remove/clear side-effect checks, concurrent sessions, privacy inspection, and one-shot CLI regression; measure launch-to-usable time and confirm the path-memory overhead is at most one second (SC-009); record the results.
 
 ---
 

@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- TUI and web UI: the last successfully picked folder is remembered and
+  restored when no explicit path is supplied, with up to ten unique recent
+  folders listed in the Options tab/panel. Successful picks (including dry
+  runs) move their folder to the top; unavailable folders are pruned and the
+  next valid recent or today's default is used. Per-row remove and clear-all
+  actions forget folders without changing the running session's active path,
+  history, filters, choice, files, or folders. The record is local-only JSON at
+  the OS configuration location (override with `CHOOSIER_PATH_MEMORY_FILE`) and
+  stores only a version and folder paths — no file names, history, or
+  telemetry. The one-shot CLI keeps its flags, prompt, output, and exit codes;
+  `choosier --web` without a path now prefers the remembered folder and falls
+  back to the current directory. Web API: added `GET /api/paths`,
+  `DELETE /api/paths`, and `DELETE /api/paths/item`, plus additive
+  `path_warning` on `GET /api/defaults` and `path_memory_notice` on
+  `POST /api/pick`; the route inventory grows from 13 to 16.
 - TUI and web UI: the Options tab now offers exact file-type and per-entry
   filters. Types group folders, each lowercased final suffix, and suffixless
   files; entries list up to 1,000 visible names. Type and entry exclusions

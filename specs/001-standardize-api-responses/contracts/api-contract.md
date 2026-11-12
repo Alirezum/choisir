@@ -3,7 +3,7 @@
 **Feature**: `001-standardize-api-responses`
 **Date**: 2026-10-29
 **Machine-readable source**: [api-contract.json](./api-contract.json)
-**Coverage**: 13 routes under `/api`
+**Coverage**: 16 routes under `/api`
 
 This inventory is the human-readable audit of every route the FastAPI adapter
 exposes. The JSON file is the source of truth used by the contract tests; this
@@ -171,6 +171,9 @@ standalone image.
 | Method | Path | Purpose | Success |
 |--------|------|---------|---------|
 | GET | `/api/defaults` | Initial path and log file | 200 JSON |
+| GET | `/api/paths` | Remembered folders, newest first | 200 JSON |
+| DELETE | `/api/paths` | Clear all remembered folders | 200 JSON |
+| DELETE | `/api/paths/item` | Remove one remembered folder | 200 JSON |
 | GET | `/api/browse` | Directory listing | 200 JSON |
 | GET | `/api/state` | Remaining choices and history | 200 JSON |
 | POST | `/api/state` | Filtered choices, history, and filter options | 200 JSON |
@@ -188,8 +191,10 @@ standalone image.
 
 ## GET /api/defaults
 
-**Purpose**: Return the initial path and log file supplied when the server
-started.
+**Purpose**: Return the initial path and log file for the running server. When
+the server started without an explicit path, `path` is the first valid
+remembered folder, or the process working directory when none is valid. An
+explicit path is returned unchanged and memory is not consulted.
 
 **Success**: `200 application/json`
 
@@ -197,6 +202,7 @@ started.
 |-------|------|----------|
 | `path` | string | no |
 | `log_file` | string | no |
+| `path_warning` | string | yes |
 
 **Errors**
 
@@ -204,6 +210,69 @@ started.
 |------|--------|-----------|
 | `method_not_allowed` | 405 | Method other than GET |
 | `internal_error` | 500 | Unexpected exception |
+
+---
+
+## GET /api/paths
+
+**Purpose**: Return remembered folders after pruning unavailable entries.
+
+**Success**: `200 application/json`
+
+| Field | Type | Nullable | Notes |
+|-------|------|----------|-------|
+| `recent` | string[] | no | Canonical absolute paths, newest first, 0–10 |
+| `warning` | string | yes | Pruning or unreadable-record notice |
+
+**Errors**
+
+| Code | Status | Condition |
+|------|--------|-----------|
+| `method_not_allowed` | 405 | Method other than GET |
+| `internal_error` | 500 | Unexpected exception outside memory handling |
+
+---
+
+## DELETE /api/paths
+
+**Purpose**: Clear all remembered folders without changing the running
+session's active path, history, filters, choices, or target content.
+
+**Success**: `200 application/json`
+
+| Field | Type | Nullable |
+|-------|------|----------|
+| `cleared` | boolean | no |
+
+**Errors**
+
+| Code | Status | Condition |
+|------|--------|-----------|
+| `method_not_allowed` | 405 | Method other than DELETE |
+| `internal_error` | 500 | Remembered folders could not be updated |
+
+---
+
+## DELETE /api/paths/item?path=<value>
+
+**Purpose**: Remove one remembered folder using the same canonical identity as
+recording. Removing an absent path is a no-op, not an error.
+
+**Success**: `200 application/json`
+
+| Field | Type | Nullable |
+|-------|------|----------|
+| `path` | string | no |
+| `removed` | boolean | no |
+
+**Errors**
+
+| Code | Status | Condition |
+|------|--------|-----------|
+| `invalid_request` | 400 | `path` is empty, relative, or cannot be resolved |
+| `validation_error` | 422 | Missing required `path` query parameter |
+| `method_not_allowed` | 405 | Method other than DELETE |
+| `internal_error` | 500 | Remembered folders could not be updated |
 
 ---
 
@@ -346,6 +415,7 @@ log.
 | `item` | string | yes | — |
 | `logged` | boolean | no | — |
 | `preview` | PreviewModel | yes | — |
+| `path_memory_notice` | string | yes | Recording failure notice; `picked` still succeeds |
 
 **Domain outcomes (still 200)**
 

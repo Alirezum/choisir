@@ -246,3 +246,20 @@ folder but still falls back to cwd when memory is empty.
 - Stale entries never appear and startup never blocks.
 - No test or manual check finds a change to history, filters, choices, target
   files, or folders caused by path memory.
+
+## Validation Record
+
+**Date**: 2026-11-12 | **Environment**: Linux, Python 3.12.3, Node 22,
+isolated `CHOOSIER_PATH_MEMORY_FILE` in a temporary directory.
+
+- Automated gates: Python `394 passed, 4 skipped`; ruff check/format and mypy
+  clean. Frontend `check:api`, `check:ui`, `test:api` (49 passed), `test:ui`
+  (292 passed), and production build green.
+- Scripted equivalents of sections 2–12: 47 of 47 checks passed, covering
+  first-run behavior, TUI/web restore, explicit-path precedence, ordering,
+  deduplication, the ten-entry cap, recent-list switch/remove/clear, stale
+  fallback and pruning, API response shapes and validation, side-effect hashes
+  for history and target files, two-server concurrency, privacy keys, and the
+  one-shot CLI regression.
+- SC-009: startup resolution with ten remembered folders measured at 0.20 ms
+  per launch; web app creation measured at 7.2 ms, both well under one second.

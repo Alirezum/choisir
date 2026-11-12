@@ -86,6 +86,35 @@ are best-effort. If the browser cannot play a file, the preview explains
 this and the board's *Open* button launches it in the system player. No
 transcoding is performed, and videos inside archives are not previewed.
 
+## Remembered folders
+
+The TUI and web UI remember the last folder you successfully picked in. On
+launch without an explicit path, the TUI restores it, and `choosier --web`
+starts there instead of the current directory. When no remembered folder is
+usable, behavior matches a first run. An explicit path always wins, even when
+that path is invalid.
+
+A successful pick, including a dry run, records its folder. Browsing alone
+does not. Up to ten unique folders are kept, newest first; picking a folder
+again moves it to the top. Unavailable folders are pruned when the list is
+read, so a dead row is never shown, and the next valid recent folder is used
+at launch.
+
+The Options tab/panel lists remembered folders with per-row remove buttons and
+a clear-all action. These actions change only the remembered list: the running
+session's active folder, filters, history, current choice, files, and folders
+are untouched. The one-shot CLI never reads or writes this record, and its
+flags, prompt, output, and exit codes are unchanged.
+
+The record is local-only JSON in the OS configuration directory:
+`$XDG_CONFIG_HOME/choosier/path-memory.json` (default
+`~/.config/choosier/path-memory.json`) on Linux,
+`~/Library/Application Support/choosier/path-memory.json` on macOS, and
+`%APPDATA%\choosier\path-memory.json` on Windows. It stores a version and
+folder paths only — no file names, history, filters, choices, previews, or
+telemetry. Set `CHOOSIER_PATH_MEMORY_FILE` to use a different file, which is
+useful for tests or portable setups.
+
 In the History tab, clicking a row loads that item onto the board and into
 the preview; the `↗` button next to it opens the item with the OS default
 program. Each row's delete button removes every log entry for that item,
@@ -162,7 +191,7 @@ bytes and MIME types; the video endpoint keeps `200`/`206` streaming and
 answers malformed or unsatisfiable `Range` headers with the JSON envelope
 (400/416) instead of plain text.
 
-The machine-readable inventory (13 `/api` routes and all error codes) lives in
+The machine-readable inventory (16 `/api` routes and all error codes) lives in
 [`specs/001-standardize-api-responses/contracts/api-contract.json`](specs/001-standardize-api-responses/contracts/api-contract.json),
 with a human-readable audit in
 [`api-contract.md`](specs/001-standardize-api-responses/contracts/api-contract.md).
