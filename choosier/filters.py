@@ -170,25 +170,26 @@ def _validate_type_key(value: object) -> str:
     )
 
 
-def _validate_entry_name(value: object) -> str:
+def validate_entry_name(value: object, field: str) -> str:
+    """Validate one entry name, tagging failures with the request field."""
     if not isinstance(value, str):
-        raise FilterValidationError(
-            "excluded_entries", "excluded_entries must contain strings"
-        )
+        raise FilterValidationError(field, f"{field} must contain strings")
     if len(value) > MAX_VALUE_LENGTH:
         raise FilterValidationError(
-            "excluded_entries",
+            field,
             f"entry names must be at most {MAX_VALUE_LENGTH} characters",
         )
     if value in ("", ".", ".."):
         raise FilterValidationError(
-            "excluded_entries", "entry names must not be empty, '.' or '..'"
+            field, "entry names must not be empty, '.' or '..'"
         )
     if "/" in value or "\x00" in value:
-        raise FilterValidationError(
-            "excluded_entries", "entry names must not contain '/' or NUL"
-        )
+        raise FilterValidationError(field, "entry names must not contain '/' or NUL")
     return value
+
+
+def _validate_entry_name(value: object) -> str:
+    return validate_entry_name(value, "excluded_entries")
 
 
 def normalize_exclusions(
