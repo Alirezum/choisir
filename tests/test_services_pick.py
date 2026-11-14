@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from choosier.filters import FilterSelection
 from choosier.services import FailureKind, ServiceError, pick
+from choosier.skip import SkipSelection
 
 
 class PickTest(unittest.TestCase):
@@ -333,6 +334,79 @@ class FilteredPickTest(unittest.TestCase):
             self.assertEqual(outcome.status, "picked")
             self.assertIn(outcome.item, allowed)
         self.assertFalse(self.log.exists())
+
+
+class PickSkipTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.target = Path(self.tmp.name) / "target"
+        self.target.mkdir()
+        self.log = self.target / ".choosier.jsonl"
+        for name in ("a", "b", "c", "d"):
+            (self.target / name).touch()
+
+    def test_skipped_entry_is_never_selected(self) -> None:
+        skips = SkipSelection(frozenset({"b"}))
+        for seed in range(50):
+            outcome = pick(
+                self.target,
+                self.log,
+                seed=seed,
+                dry_run=True,
+                skips=skips,
+            )
+            self.assertEqual(outcome.status, "picked")
+            self.assertNotEqual(outcome.item, "b")
+            self.assertIn(outcome.item, {"a", "c", "d"})
+        self.assertFalse(self.log.exists())
+
+    def test_all_skipped_writes_nothing(self) -> None:
+        skips = SkipSelection(frozenset({"a", "b", "c", "d"}))
+        outcome = pick(self.target, self.log, seed=1, skips=skips)
+        self.assertEqual(outcome.status, "all_skipped")
+        self.assertIsNone(outcome.item)
+        self.assertFalse(outcome.logged)
+        self.assertFalse(self.log.exists())
+
+    def test_all_skipped_holds_for_dry_run_too(self) -> None:
+        skips = SkipSelection(frozenset({"a", "b", "c", "d"}))
+        outcome = pick(self.target, self.log, seed=1, dry_run=True, skips=skips)
+        self.assertEqual(outcome.status, "all_skipped")
+        self.assertIsNone(outcome.item)
+
+    def test_empty_folder_stays_empty_not_all_skipped(self) -> None:
+        empty = Path(self.tmp.name) / "empty"
+        empty.mkdir()
+        outcome = pick(
+            empty,
+            empty / ".choosier.jsonl",
+            skips=SkipSelection(frozenset({"ghost"})),
+        )
+        self.assertEqual(outcome.status, "empty")
+
+    def test_filtered_out_skip_keeps_the_filtered_status(self) -> None:
+        selection = FilterSelection(excluded_entries=frozenset({"b"}))
+        outcome = pick(
+            self.target,
+            self.log,
+            seed=1,
+            selection=selection,
+            skips=SkipSelection(frozenset({"b"})),
+        )
+        self.assertEqual(outcome.status, "picked")
+        self.assertIn(outcome.item, {"a", "c", "d"})
+
+    def test_fully_filtered_folder_is_not_all_skipped(self) -> None:
+        selection = FilterSelection(excluded_entries=frozenset({"a", "b", "c", "d"}))
+        outcome = pick(
+            self.target,
+            self.log,
+            seed=1,
+            selection=selection,
+            skips=SkipSelection(frozenset({"a"})),
+        )
+        self.assertEqual(outcome.status, "filtered_empty")
 
 
 if __name__ == "__main__":
