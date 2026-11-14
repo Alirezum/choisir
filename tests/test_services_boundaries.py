@@ -17,8 +17,9 @@ ALLOWED_CHOOSIER_SUBMODULES = {
     "filters",
     "preview",
     "launcher",
-    "storage",
     "services",
+    "skip",
+    "storage",
 }
 FORBIDDEN_CHOOSIER_SUBMODULES = {"web", "tui", "web_media", "cli"}
 FORBIDDEN_TOP_LEVEL_MODULES = {
