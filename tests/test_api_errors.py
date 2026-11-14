@@ -507,6 +507,47 @@ class FilterValidationApiTest(unittest.TestCase):
             excluded_entries=[*at_entry_limit, "other"],
         )
 
+    def test_malformed_skip_names_are_rejected(self) -> None:
+        for value in ("", ".", "..", "dir/name", "nul\x00name"):
+            with self.subTest(value=value):
+                for route in ("state", "pick"):
+                    self._assert_rejected(
+                        route, "skipped_entries", skipped_entries=[value]
+                    )
+
+    def test_skip_name_length_and_list_limits(self) -> None:
+        at_limit = "y" * 1024
+        response = self._post("state", skipped_entries=[at_limit])
+        self.assertEqual(response.status_code, 200)
+
+        self._assert_rejected(
+            "state", "skipped_entries", skipped_entries=[at_limit + "y"]
+        )
+        self._assert_rejected(
+            "state", "skipped_entries", skipped_entries=["same"] * 20001
+        )
+
+    def test_skip_payload_type_errors(self) -> None:
+        for body in ({"skipped_entries": "a.txt"}, {"skipped_entries": [1]}):
+            with self.subTest(body=body):
+                response = self._post("state", **body)
+                error = assert_error_envelope(
+                    self, response, 422, "validation_error"
+                )
+                issues = error["error"]["details"]["issues"]
+                self.assertTrue(
+                    any(
+                        "skipped_entries" in issue["location"] for issue in issues
+                    ),
+                    issues,
+                )
+
+    def test_stale_skip_names_are_accepted(self) -> None:
+        response = self._post("state", skipped_entries=["missing.bin"])
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["skipped_present"], [])
+        self.assertEqual(response.json()["skipped"], [])
+
     def test_conflicting_folder_options_are_400(self) -> None:
         for route in ("state", "pick"):
             with self.subTest(route=route):
