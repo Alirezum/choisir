@@ -1,5 +1,6 @@
 """Remaining candidates and recent history for one target."""
 
+import os
 from pathlib import Path
 
 from choosier.chooser import resolve_log_path, scan_candidates
@@ -12,6 +13,7 @@ from choosier.filters import (
 from choosier.services.errors import FailureKind, ServiceError
 from choosier.services.history import HistoryService
 from choosier.services.models import StateSnapshot
+from choosier.skip import SkipSelection
 
 PANEL_MAX_LINES = 200
 
@@ -35,6 +37,15 @@ def _empty_snapshot(
     )
 
 
+def _present_names(target: Path) -> frozenset[str]:
+    """Every direct child name, independent of the current option filters."""
+    try:
+        with os.scandir(target) as entries:
+            return frozenset(entry.name for entry in entries)
+    except OSError:
+        return frozenset()
+
+
 def build_state(
     path: str | Path,
     log_file: str | Path | None = None,
@@ -43,6 +54,7 @@ def build_state(
     files_only: bool = False,
     dirs_only: bool = False,
     selection: FilterSelection | None = None,
+    skips: SkipSelection | None = None,
     max_lines: int | None = PANEL_MAX_LINES,
 ) -> StateSnapshot:
     """Remaining picks and recent history for the current target and filters."""
@@ -67,11 +79,20 @@ def build_state(
     chosen = selection or FilterSelection()
     filtered = filter_candidates(scan.entries, chosen)
     snapshot = HistoryService(log_path).snapshot()
-    remaining = [
+    skip_names = skips.names if skips is not None else frozenset()
+    skipped_present = tuple(
+        sorted(name for name in skip_names if name in _present_names(target))
+    )
+    skipped = tuple(
+        name for name in skipped_present if name not in snapshot.logged
+    )
+    eligible = [
         candidate.name
         for candidate in filtered
         if candidate.name not in snapshot.logged
     ]
+    remaining = [name for name in eligible if name not in skip_names]
+    all_skipped = bool(eligible) and not remaining
     history = list(snapshot.entries)
     remaining_total = len(remaining)
     history_total = len(history)
@@ -92,4 +113,8 @@ def build_state(
         history_total=history_total,
         filter_options=build_filter_options(scan.entries),
         known_entry_exclusions=known_entry_exclusions,
+        skipped=skipped,
+        skipped_total=len(skipped),
+        skipped_present=skipped_present,
+        all_skipped=all_skipped,
     )
