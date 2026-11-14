@@ -107,8 +107,34 @@ class ApiContractTest(unittest.TestCase):
                 "invalid_path",
                 "filtered_empty",
                 "filtered_exhausted",
+                "all_skipped",
             ],
         )
+
+    def test_additive_skip_contract_matches_openapi(self) -> None:
+        self.assertEqual(len(self.contract["routes"]), 17)
+        self.assertFalse(
+            any(route["path"].startswith("/api/skip") for route in self.contract["routes"])
+        )
+
+        state_fields = {
+            "skipped",
+            "skipped_total",
+            "skipped_present",
+            "all_skipped",
+        }
+        get_state = contract_route(self.contract, "GET", "/api/state")
+        post_state = contract_route(self.contract, "POST", "/api/state")
+        self.assertTrue(state_fields.issubset(get_state["success"]["schema"]["fields"]))
+        self.assertTrue(state_fields.issubset(post_state["success"]["schema"]["fields"]))
+
+        components = self.openapi["components"]["schemas"]
+        for model in ("StateRequest", "PickRequest"):
+            self.assertIn("skipped_entries", components[model]["properties"])
+        for model in ("StateResponse", "FilteredStateResponse"):
+            self.assertTrue(state_fields.issubset(components[model]["properties"]))
+        status = components["PickResponse"]["properties"]["status"]
+        self.assertIn("all_skipped", str(status))
 
     def test_additive_path_memory_fields_match_openapi(self) -> None:
         defaults_route = contract_route(self.contract, "GET", "/api/defaults")
@@ -235,6 +261,10 @@ class ApiContractTest(unittest.TestCase):
                 "remaining_total",
                 "history",
                 "history_total",
+                "skipped",
+                "skipped_total",
+                "skipped_present",
+                "all_skipped",
             },
         )
         self.assertNotIn("filter_options", fields)
