@@ -200,6 +200,10 @@ export interface StateResponse {
   remaining_total: number
   history: HistoryEntry[]
   history_total: number
+  skipped: string[]
+  skipped_total: number
+  skipped_present: string[]
+  all_skipped: boolean
 }
 
 export interface FilteredStateResponse {
@@ -212,10 +216,14 @@ export interface FilteredStateResponse {
   history_total: number
   filter_options: FilterOptions
   known_entry_exclusions: string[]
+  skipped: string[]
+  skipped_total: number
+  skipped_present: string[]
+  all_skipped: boolean
 }
 
 export interface PickResponse {
-  status: 'picked' | 'empty' | 'exhausted' | 'invalid_path' | 'filtered_empty' | 'filtered_exhausted'
+  status: 'picked' | 'empty' | 'exhausted' | 'invalid_path' | 'filtered_empty' | 'filtered_exhausted' | 'all_skipped'
   log_file: string
   item: string | null
   logged: boolean

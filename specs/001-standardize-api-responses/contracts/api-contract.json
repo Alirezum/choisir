@@ -538,6 +538,28 @@
             "history_total": {
               "type": "integer",
               "nullable": false
+            },
+            "skipped": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "nullable": false
+              }
+            },
+            "skipped_total": {
+              "type": "integer",
+              "nullable": false
+            },
+            "skipped_present": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "nullable": false
+              }
+            },
+            "all_skipped": {
+              "type": "boolean",
+              "nullable": false
             }
           }
         }
@@ -620,6 +642,28 @@
                 "type": "string",
                 "nullable": false
               }
+            },
+            "skipped": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "nullable": false
+              }
+            },
+            "skipped_total": {
+              "type": "integer",
+              "nullable": false
+            },
+            "skipped_present": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "nullable": false
+              }
+            },
+            "all_skipped": {
+              "type": "boolean",
+              "nullable": false
             }
           }
         }
@@ -669,7 +713,8 @@
                 "exhausted",
                 "invalid_path",
                 "filtered_empty",
-                "filtered_exhausted"
+                "filtered_exhausted",
+                "all_skipped"
               ]
             },
             "log_file": {
