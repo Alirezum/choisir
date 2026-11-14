@@ -36,6 +36,7 @@ from choosier.preview import (
     PreviewVideo,
     preview_entry,
 )
+from choosier.skip import SkipSelection, normalize_skips
 
 DEFAULT_PORT = 8765
 STATIC_DIR = Path(__file__).resolve().parent / "web_static"
@@ -212,6 +213,10 @@ class StateResponse(BaseModel):
     remaining_total: int
     history: list[HistoryEntryModel]
     history_total: int
+    skipped: list[str] = Field(default_factory=list)
+    skipped_total: int = 0
+    skipped_present: list[str] = Field(default_factory=list)
+    all_skipped: bool = False
 
 
 class FilterTypeOptionModel(BaseModel):
@@ -243,6 +248,7 @@ class FilterExclusionsRequest(BaseModel):
 
     excluded_types: list[str] = Field(default_factory=list)
     excluded_entries: list[str] = Field(default_factory=list)
+    skipped_entries: list[str] = Field(default_factory=list)
 
     @field_validator("excluded_types")
     @classmethod
@@ -262,10 +268,24 @@ class FilterExclusionsRequest(BaseModel):
             raise ValueError(str(exc)) from exc
         return sorted(selection.excluded_entries)
 
+    @field_validator("skipped_entries")
+    @classmethod
+    def _normalize_skips(cls, value: list[str]) -> list[str]:
+        try:
+            selection = normalize_skips(value)
+        except FilterValidationError as exc:
+            raise ValueError(str(exc)) from exc
+        return sorted(selection.names)
+
     @property
     def filter_selection(self) -> FilterSelection:
         """Already-validated values as the service-layer selection object."""
         return normalize_exclusions(self.excluded_types, self.excluded_entries)
+
+    @property
+    def skip_selection(self) -> SkipSelection:
+        """Already-validated values as the service-layer skip object."""
+        return normalize_skips(self.skipped_entries)
 
 
 class StateRequest(FilterExclusionsRequest):
@@ -314,6 +334,7 @@ class PickResponse(BaseModel):
         "invalid_path",
         "filtered_empty",
         "filtered_exhausted",
+        "all_skipped",
     ]
     log_file: str
     item: str | None = None
@@ -634,6 +655,7 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
             files_only=request.files_only,
             dirs_only=request.dirs_only,
             selection=request.filter_selection,
+            skips=request.skip_selection,
         )
         return FilteredStateResponse(
             valid_path=snapshot.valid_path,
@@ -645,6 +667,10 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
             history_total=snapshot.history_total,
             filter_options=_filter_options_model(snapshot.filter_options),
             known_entry_exclusions=list(snapshot.known_entry_exclusions),
+            skipped=list(snapshot.skipped),
+            skipped_total=snapshot.skipped_total,
+            skipped_present=list(snapshot.skipped_present),
+            all_skipped=snapshot.all_skipped,
         )
 
     @app.post("/api/pick")
@@ -659,6 +685,7 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
             files_only=request.files_only,
             dirs_only=request.dirs_only,
             selection=request.filter_selection,
+            skips=request.skip_selection,
             include_preview=True,
         )
         memory_notice: str | None = None
