@@ -862,8 +862,9 @@ class FilteredWebApiTest(unittest.TestCase):
     def test_get_state_shape_is_unchanged(self) -> None:
         response = self.client.get("/api/state", params={"path": str(self.target)})
         self.assertEqual(response.status_code, 200)
+        body = response.json()
         self.assertEqual(
-            set(response.json()),
+            set(body),
             {
                 "valid_path",
                 "path",
@@ -872,8 +873,16 @@ class FilteredWebApiTest(unittest.TestCase):
                 "remaining_total",
                 "history",
                 "history_total",
+                "skipped",
+                "skipped_total",
+                "skipped_present",
+                "all_skipped",
             },
         )
+        self.assertEqual(body["skipped"], [])
+        self.assertEqual(body["skipped_total"], 0)
+        self.assertEqual(body["skipped_present"], [])
+        self.assertFalse(body["all_skipped"])
 
     def test_pick_honors_exclusions_without_writing_on_failure(self) -> None:
         filtered_empty = self.client.post(
@@ -1331,6 +1340,99 @@ class StaticServingTest(unittest.TestCase):
         response = TestClient(create_app()).get("/")
         self.assertEqual(response.status_code, 200)
         self.assertIn("choosier", response.text)
+
+
+@unittest.skipUnless(HAS_WEB, "web extra (fastapi) not installed")
+class WebSkipApiTest(unittest.TestCase):
+    """Route-level coverage for the additive skip request and response fields."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.target = Path(self.tmp.name) / "target"
+        self.target.mkdir()
+        for name in ("alpha.txt", "beta.txt", "gamma.txt"):
+            (self.target / name).touch()
+        self.log = self.target / ".choosier.jsonl"
+        self.client = TestClient(create_app())
+
+    def _post_state(self, **body: object) -> dict[str, Any]:
+        payload: dict[str, object] = {"path": str(self.target)}
+        payload.update(body)
+        response = self.client.post("/api/state", json=payload)
+        self.assertEqual(response.status_code, 200)
+        return cast(dict[str, Any], response.json())
+
+    def test_post_state_reports_skipped_entries(self) -> None:
+        body = self._post_state(skipped_entries=["beta.txt"])
+        self.assertEqual(body["remaining"], ["alpha.txt", "gamma.txt"])
+        self.assertEqual(body["remaining_total"], 2)
+        self.assertEqual(body["skipped"], ["beta.txt"])
+        self.assertEqual(body["skipped_total"], 1)
+        self.assertEqual(body["skipped_present"], ["beta.txt"])
+        self.assertFalse(body["all_skipped"])
+
+    def test_post_state_all_skipped(self) -> None:
+        body = self._post_state(
+            skipped_entries=["alpha.txt", "beta.txt", "gamma.txt"]
+        )
+        self.assertEqual(body["remaining"], [])
+        self.assertEqual(body["remaining_total"], 0)
+        self.assertEqual(body["skipped_total"], 3)
+        self.assertTrue(body["all_skipped"])
+
+    def test_post_state_stale_skip_name_is_ignored(self) -> None:
+        body = self._post_state(skipped_entries=["missing.bin"])
+        self.assertEqual(body["remaining_total"], 3)
+        self.assertEqual(body["skipped"], [])
+        self.assertEqual(body["skipped_present"], [])
+        self.assertFalse(body["all_skipped"])
+
+    def test_pick_never_returns_a_skipped_entry(self) -> None:
+        for seed in range(20):
+            response = self.client.post(
+                "/api/pick",
+                json={
+                    "path": str(self.target),
+                    "seed": seed,
+                    "dry_run": True,
+                    "skipped_entries": ["beta.txt"],
+                },
+            )
+            self.assertEqual(response.status_code, 200)
+            item = response.json()["item"]
+            self.assertIn(item, {"alpha.txt", "gamma.txt"})
+        self.assertFalse(self.log.exists())
+
+    def test_pick_all_skipped_writes_nothing(self) -> None:
+        response = self.client.post(
+            "/api/pick",
+            json={
+                "path": str(self.target),
+                "seed": 1,
+                "skipped_entries": ["alpha.txt", "beta.txt", "gamma.txt"],
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["status"], "all_skipped")
+        self.assertIsNone(body["item"])
+        self.assertFalse(body["logged"])
+        self.assertIsNone(body["preview"])
+        self.assertIsNone(body["path_memory_notice"])
+        self.assertIsNone(body["undo"])
+        self.assertFalse(self.log.exists())
+
+    def test_logged_skip_is_hidden_but_present(self) -> None:
+        response = self.client.post(
+            "/api/pick",
+            json={"path": str(self.target), "seed": 1},
+        )
+        picked = response.json()["item"]
+        body = self._post_state(skipped_entries=[picked, "beta.txt"])
+        self.assertNotIn(picked, body["skipped"])
+        self.assertIn(picked, body["skipped_present"])
+        self.assertNotIn(picked, body["remaining"])
 
 
 if __name__ == "__main__":
