@@ -48,6 +48,10 @@ class StateSnapshot:
     history_total: int
     filter_options: FilterOptions = FilterOptions()
     known_entry_exclusions: tuple[str, ...] = ()
+    skipped: tuple[str, ...] = ()
+    skipped_total: int = 0
+    skipped_present: tuple[str, ...] = ()
+    all_skipped: bool = False
 
 
 PickStatus = Literal[
@@ -57,6 +61,7 @@ PickStatus = Literal[
     "invalid_path",
     "filtered_empty",
     "filtered_exhausted",
+    "all_skipped",
 ]
 
 
