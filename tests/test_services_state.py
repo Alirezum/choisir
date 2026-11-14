@@ -12,6 +12,8 @@ from choosier.services import (
     ServiceError,
     build_state,
 )
+from choosier.services.history import HistoryService
+from choosier.skip import SkipSelection
 
 
 class StateSnapshotTest(unittest.TestCase):
@@ -228,6 +230,169 @@ class FilteredStateTest(unittest.TestCase):
     def test_no_selection_reports_no_known_exclusions(self) -> None:
         state = build_state(self.target, self.log, max_lines=None)
         self.assertEqual(state.known_entry_exclusions, ())
+
+
+class StateSkipTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.target = Path(self.tmp.name) / "target"
+        self.target.mkdir()
+        self.log = self.target / ".choosier.jsonl"
+        for name in ("alpha.txt", "beta.txt", "gamma", "sub"):
+            if name == "sub":
+                (self.target / name).mkdir()
+            else:
+                (self.target / name).touch()
+        self.history = HistoryService(self.log)
+
+    def test_skip_leaves_remaining_and_reports_skipped(self) -> None:
+        state = build_state(
+            self.target,
+            self.log,
+            max_lines=None,
+            skips=SkipSelection(frozenset({"beta.txt"})),
+        )
+        self.assertEqual(
+            state.remaining, ("alpha.txt", "gamma", "sub")
+        )
+        self.assertEqual(state.remaining_total, 3)
+        self.assertEqual(state.skipped, ("beta.txt",))
+        self.assertEqual(state.skipped_total, 1)
+        self.assertEqual(state.skipped_present, ("beta.txt",))
+        self.assertFalse(state.all_skipped)
+
+    def test_logged_skip_is_hidden_but_still_present(self) -> None:
+        self.history.append("beta.txt")
+        state = build_state(
+            self.target,
+            self.log,
+            max_lines=None,
+            skips=SkipSelection(frozenset({"beta.txt"})),
+        )
+        self.assertEqual(state.skipped, ())
+        self.assertEqual(state.skipped_total, 0)
+        self.assertEqual(state.skipped_present, ("beta.txt",))
+        self.assertNotIn("beta.txt", state.remaining)
+
+    def test_removing_history_makes_the_skip_displayable_again(self) -> None:
+        self.history.append("beta.txt")
+        skipped = SkipSelection(frozenset({"beta.txt"}))
+        before = build_state(self.target, self.log, skips=skipped)
+        self.assertEqual(before.skipped, ())
+        self.history.remove("beta.txt")
+        after = build_state(self.target, self.log, skips=skipped)
+        self.assertEqual(after.skipped, ("beta.txt",))
+        self.assertNotIn("beta.txt", after.remaining)
+
+    def test_deleted_or_renamed_entry_is_pruned_from_both_lists(self) -> None:
+        (self.target / "alpha.txt").rename(self.target / "renamed.txt")
+        state = build_state(
+            self.target,
+            self.log,
+            max_lines=None,
+            skips=SkipSelection(frozenset({"alpha.txt"})),
+        )
+        self.assertEqual(state.skipped, ())
+        self.assertEqual(state.skipped_present, ())
+        self.assertNotIn("alpha.txt", state.remaining)
+        self.assertIn("renamed.txt", state.remaining)
+
+    def test_filter_hidden_skip_stays_listed(self) -> None:
+        selection = FilterSelection(excluded_entries=frozenset({"beta.txt"}))
+        state = build_state(
+            self.target,
+            self.log,
+            selection=selection,
+            skips=SkipSelection(frozenset({"beta.txt"})),
+        )
+        self.assertNotIn("beta.txt", state.remaining)
+        self.assertEqual(state.skipped, ("beta.txt",))
+        self.assertEqual(state.skipped_present, ("beta.txt",))
+
+    def test_option_hidden_skip_stays_listed(self) -> None:
+        (self.target / ".hidden").touch()
+        state = build_state(
+            self.target,
+            self.log,
+            include_hidden=False,
+            files_only=True,
+            skips=SkipSelection(frozenset({".hidden"})),
+        )
+        self.assertEqual(state.skipped, (".hidden",))
+        self.assertEqual(state.skipped_present, (".hidden",))
+        self.assertNotIn(".hidden", state.remaining)
+
+    def test_all_skipped_only_when_every_eligible_entry_is_skipped(self) -> None:
+        names = ("alpha.txt", "beta.txt", "gamma")
+        state = build_state(
+            self.target,
+            self.log,
+            files_only=True,
+            skips=SkipSelection(frozenset(names)),
+        )
+        self.assertTrue(state.all_skipped)
+        self.assertEqual(state.remaining, ())
+        self.assertEqual(state.remaining_total, 0)
+        self.assertEqual(state.skipped, ("alpha.txt", "beta.txt", "gamma"))
+
+        partial = build_state(
+            self.target,
+            self.log,
+            files_only=True,
+            skips=SkipSelection(frozenset({"alpha.txt"})),
+        )
+        self.assertFalse(partial.all_skipped)
+
+    def test_all_skipped_excludes_logged_entries(self) -> None:
+        self.history.append("alpha.txt")
+        state = build_state(
+            self.target,
+            self.log,
+            files_only=True,
+            skips=SkipSelection(frozenset({"alpha.txt", "beta.txt", "gamma"})),
+        )
+        self.assertTrue(state.all_skipped)
+        self.assertEqual(state.skipped, ("beta.txt", "gamma"))
+
+    def test_skipped_list_is_not_truncated_by_panel_limit(self) -> None:
+        names = [f"entry-{index:03d}" for index in range(5)]
+        for name in names:
+            (self.target / name).touch()
+        state = build_state(
+            self.target,
+            self.log,
+            max_lines=1,
+            skips=SkipSelection(frozenset(names)),
+        )
+        self.assertEqual(len(state.remaining), 1)
+        self.assertEqual(state.remaining_total, 4)
+        self.assertEqual(state.skipped, tuple(sorted(names)))
+        self.assertEqual(state.skipped_total, 5)
+
+    def test_empty_skips_leave_the_existing_result_unchanged(self) -> None:
+        baseline = build_state(self.target, self.log, max_lines=None)
+        explicit = build_state(
+            self.target,
+            self.log,
+            max_lines=None,
+            skips=SkipSelection(),
+        )
+        self.assertEqual(baseline, explicit)
+        self.assertEqual(baseline.skipped, ())
+        self.assertFalse(baseline.all_skipped)
+
+    def test_invalid_path_has_empty_skip_fields(self) -> None:
+        state = build_state(
+            self.target / "missing",
+            self.log,
+            skips=SkipSelection(frozenset({"alpha.txt"})),
+        )
+        self.assertFalse(state.valid_path)
+        self.assertEqual(state.skipped, ())
+        self.assertEqual(state.skipped_total, 0)
+        self.assertEqual(state.skipped_present, ())
+        self.assertFalse(state.all_skipped)
 
 
 if __name__ == "__main__":
