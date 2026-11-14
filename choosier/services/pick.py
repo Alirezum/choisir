@@ -9,6 +9,7 @@ from choosier.preview import preview_entry
 from choosier.services.errors import FailureKind, ServiceError
 from choosier.services.history import HistoryService
 from choosier.services.models import PickOutcome, PickStatus
+from choosier.skip import SkipSelection
 
 
 def _empty_status(
@@ -38,6 +39,7 @@ def pick(
     files_only: bool = False,
     dirs_only: bool = False,
     selection: FilterSelection | None = None,
+    skips: SkipSelection | None = None,
     commit: bool = True,
     include_preview: bool = False,
 ) -> PickOutcome:
@@ -75,8 +77,12 @@ def pick(
             filtered_count=len(filtered),
         )
         return PickOutcome(status=status, log_file=log_path)
+    skip_names = skips.names if skips is not None else frozenset()
+    eligible = [name for name in remaining if name not in skip_names]
+    if not eligible:
+        return PickOutcome(status="all_skipped", log_file=log_path)
     rng = random.Random(seed) if seed is not None else random.Random()
-    item = rng.choice(remaining)
+    item = rng.choice(eligible)
     logged = False
     undo = None
     if commit and not dry_run:
