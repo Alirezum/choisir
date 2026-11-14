@@ -60,6 +60,7 @@ export interface FilteredStateRequest extends FolderFlags {
   log_file?: string | null
   excluded_types?: string[]
   excluded_entries?: string[]
+  skipped_entries?: string[]
 }
 
 export interface PickRequest extends FolderFlags {
@@ -69,6 +70,7 @@ export interface PickRequest extends FolderFlags {
   dry_run: boolean
   excluded_types?: string[]
   excluded_entries?: string[]
+  skipped_entries?: string[]
 }
 
 export interface RemoveHistoryItemsRequest {
