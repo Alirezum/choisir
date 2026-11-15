@@ -181,6 +181,16 @@ class CandidateScanTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             scan_candidates(self.target, self.log, files_only=True, dirs_only=True)
 
+    def test_lock_file_is_managed_with_hidden_enabled(self) -> None:
+        (self.target / ".hidden.txt").touch()
+        (self.target / "history.jsonl.lock").touch()
+        scan = scan_candidates(self.target, self.log, include_hidden=True)
+        self.assertEqual([entry.name for entry in scan.entries], [".hidden.txt"])
+        self.assertEqual(
+            list_available_items(self.target, self.log, include_hidden=True),
+            [".hidden.txt"],
+        )
+
 
 class FilteredSelectionTest(unittest.TestCase):
     def setUp(self) -> None:
