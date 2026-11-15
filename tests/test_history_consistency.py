@@ -1,5 +1,6 @@
 """Cross-interface history consistency: CLI, web, and the shared service."""
 
+import hashlib
 import io
 import json
 import os
@@ -13,6 +14,7 @@ from unittest.mock import patch
 
 from choosier.cli import main
 from choosier.services import HistoryService, build_state, pick
+from choosier.storage import UndoReceipt
 
 try:
     from fastapi.testclient import TestClient
@@ -106,6 +108,54 @@ class HistoryConsistencyTest(unittest.TestCase):
         )
         self.assertEqual(web_entries, service_entries)
         self.assertEqual(len(service_state.history), len(EXPECTED_ENTRIES))
+
+    def test_undo_agrees_across_cli_web_and_service(self) -> None:
+        target_before = sorted(entry.name for entry in self.target.iterdir())
+        cli_code, _ = self._run_cli(
+            str(self.target),
+            "--log-file",
+            str(self.logs["cli"]),
+            "--seed",
+            "1",
+        )
+        web_pick = self.client.post(
+            "/api/pick",
+            json={
+                "path": str(self.target),
+                "log_file": str(self.logs["web"]),
+                "seed": 1,
+            },
+        ).json()
+        service_pick = pick(self.target, self.logs["service"], seed=1)
+        self.assertEqual(cli_code, 0)
+        self.assertEqual(web_pick["status"], "picked")
+        self.assertEqual(service_pick.status, "picked")
+        assert service_pick.undo is not None
+
+        cli_data = self.logs["cli"].read_bytes()
+        cli_line = cli_data.rstrip(b"\n").split(b"\n")[-1].decode("utf-8")
+        cli_receipt = UndoReceipt(
+            item=json.loads(cli_line)["item"],
+            entry=cli_line,
+            digest=hashlib.sha256(cli_data).hexdigest(),
+        )
+        web_receipt = UndoReceipt(**web_pick["undo"])
+
+        cli_status = HistoryService(self.logs["cli"]).undo(cli_receipt).status
+        web_status = HistoryService(self.logs["web"]).undo(web_receipt).status
+        service_status = (
+            HistoryService(self.logs["service"]).undo(service_pick.undo).status
+        )
+
+        self.assertEqual(cli_status, "undone")
+        self.assertEqual(web_status, "undone")
+        self.assertEqual(service_status, "undone")
+        for log in self.logs.values():
+            self.assertEqual(log.read_text(encoding="utf-8"), MIXED)
+        self.assertEqual(
+            sorted(entry.name for entry in self.target.iterdir()),
+            target_before,
+        )
 
     def test_pick_appends_identically_across_all_interfaces(self) -> None:
         with patch("choosier.storage.datetime") as mock_datetime:

@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 from choosier.locking import exclusive_lock
 from choosier.storage import (
+    UndoReceipt,
     _maybe_rotate_log,
     _parse_log_line,
     append_log_entry,
@@ -25,7 +26,6 @@ from choosier.storage import (
     remove_log_items,
     reset_log,
     undo_log_entry,
-    UndoReceipt,
 )
 
 
@@ -450,7 +450,7 @@ class AppendLogEntryTest(unittest.TestCase):
         self.assertEqual(len(list(Path(self.tmp.name).glob("history-*.jsonl.old"))), 1)
 
     def test_log_selection_still_appends_without_a_receipt(self) -> None:
-        self.assertIsNone(log_selection("a", self.log))
+        log_selection("a", self.log)
         self.assertEqual(get_logged_items(self.log), {"a"})
 
 

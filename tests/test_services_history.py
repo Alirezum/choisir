@@ -9,7 +9,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 from choosier import storage
-from choosier.services import FailureKind, HistoryService, ServiceError
+from choosier.services import (
+    FailureKind,
+    HistoryService,
+    ServiceError,
+    UndoReceipt,
+)
 
 FIXED = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
 MIXED = (
@@ -134,7 +139,7 @@ class HistoryUndoTest(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.log = Path(self.tmp.name) / "history.jsonl"
 
-    def _receipt(self, item: str = "a"):
+    def _receipt(self, item: str = "a") -> UndoReceipt:
         receipt = HistoryService(self.log).append(item)
         assert receipt is not None
         return receipt

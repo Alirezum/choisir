@@ -51,6 +51,24 @@ describe('useShortcuts', () => {
     expect(other.defaultPrevented).toBe(false)
   })
 
+  it('does not intercept Ctrl+Z inside a text input', () => {
+    const { pick } = setup()
+    const input = document.createElement('input')
+    document.body.append(input)
+
+    const event = new KeyboardEvent('keydown', {
+      key: 'z',
+      ctrlKey: true,
+      cancelable: true,
+      bubbles: true,
+    })
+    input.dispatchEvent(event)
+
+    expect(pick).not.toHaveBeenCalled()
+    expect(event.defaultPrevented).toBe(false)
+    input.remove()
+  })
+
   it('blocks the pick while clear is pending, without skipping preventDefault', () => {
     const { pick, clearing } = setup()
     clearing.value = true

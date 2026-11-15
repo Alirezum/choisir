@@ -10,7 +10,13 @@ from unittest.mock import patch
 from rich.text import Text
 
 from choosier.path_memory import MutationResult, PathMemory
-from choosier.services import HistoryService, build_state, pick
+from choosier.services import (
+    FailureKind,
+    HistoryService,
+    ServiceError,
+    build_state,
+    pick,
+)
 from choosier.services.state import PANEL_MAX_LINES
 
 try:
@@ -247,10 +253,13 @@ class TuiUndoScenarioTest(unittest.IsolatedAsyncioTestCase):
             undo = app.query_one("#undo", Button)
             self.assertFalse(undo.disabled)
             self.assertEqual(_plain(undo.label), "Undo second.txt")
+            self.assertEqual(undo.tooltip, "Undo the pick of second.txt")
             self.assertEqual(
                 [entry.item for entry in read_log_entries(self.log)],
                 ["first.txt", "second.txt"],
             )
+            tree_before = sorted(entry.name for entry in self.target.iterdir())
+            recent_before = PathMemory().snapshot().recent
 
             undo.press()
             await pilot.pause()
@@ -272,6 +281,12 @@ class TuiUndoScenarioTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(self._status(app), "Undid pick of second.txt.")
             self.assertTrue(app.query_one("#undo", Button).disabled)
             self.assertEqual(_plain(app.query_one("#undo", Button).label), "Undo")
+            self.assertEqual(app.query_one("#undo", Button).tooltip, "Nothing to undo")
+            self.assertEqual(
+                sorted(entry.name for entry in self.target.iterdir()),
+                tree_before,
+            )
+            self.assertEqual(PathMemory().snapshot().recent, recent_before)
 
             before = self.log.read_bytes()
             app.query_one("#undo", Button).press()
@@ -292,6 +307,7 @@ class TuiUndoScenarioTest(unittest.IsolatedAsyncioTestCase):
             second = app._current_choice
             self.assertNotEqual(first, second)
             self.assertIsNotNone(second)
+            assert first is not None
             assert second is not None
 
             app.query_one("#undo", Button).press()
@@ -390,9 +406,7 @@ class TuiUndoScenarioTest(unittest.IsolatedAsyncioTestCase):
                 _plain(app.query_one("#undo", Button).label).startswith("Undo ")
             )
 
-            app.query_one("#log-input", Input).value = str(
-                self.target / "custom.jsonl"
-            )
+            app.query_one("#log-input", Input).value = str(self.target / "custom.jsonl")
             await pilot.pause()
             self.assertTrue(app.query_one("#undo", Button).disabled)
             self.assertEqual(_plain(app.query_one("#undo", Button).label), "Undo")
@@ -477,6 +491,66 @@ class TuiUndoScenarioTest(unittest.IsolatedAsyncioTestCase):
             )
             self.assertTrue(app.query_one("#undo", Button).disabled)
             self.assertFalse(log.exists())
+
+    async def test_undo_failure_keeps_the_receipt_for_retry(self) -> None:
+        (self.target / "alpha.txt").touch()
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            receipt = app._undo_receipt
+            self.assertIsNotNone(receipt)
+
+            with patch.object(
+                HistoryService,
+                "undo",
+                side_effect=ServiceError(
+                    FailureKind.IO_ERROR,
+                    "Error undoing pick: denied",
+                ),
+            ):
+                app.query_one("#undo", Button).press()
+                await pilot.pause()
+
+            self.assertEqual(self._status(app), "Error undoing pick: denied")
+            self.assertFalse(app.query_one("#undo", Button).disabled)
+            self.assertIs(app._undo_receipt, receipt)
+            self.assertIsNotNone(app._current_choice)
+
+    async def test_undo_is_keyboard_reachable_and_has_no_shortcut(self) -> None:
+        (self.target / "alpha.txt").touch()
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            undo = app.query_one("#undo", Button)
+            self.assertEqual(_plain(undo.label), "Undo alpha.txt")
+
+            app.query_one("#pick", Button).focus()
+            await pilot.pause()
+            await pilot.press("tab")
+            await pilot.pause()
+            self.assertIs(app.focused, app.query_one("#open", Button))
+
+            await pilot.press("tab")
+            await pilot.pause()
+            self.assertIs(app.focused, undo)
+
+            await pilot.press("enter")
+            await pilot.pause()
+
+            self.assertEqual(self._status(app), "Undid pick of alpha.txt.")
+            self.assertEqual(self.log.read_bytes(), b"")
+
+        bindings = [
+            binding for binding in ChooserApp.BINDINGS if isinstance(binding, tuple)
+        ]
+        keys = {binding[0] for binding in bindings}
+        actions = {binding[1] for binding in bindings}
+        self.assertNotIn("ctrl+z", keys)
+        self.assertNotIn("undo", actions)
 
 
 @unittest.skipUnless(HAS_TEXTUAL, "ui extra (textual) not installed")

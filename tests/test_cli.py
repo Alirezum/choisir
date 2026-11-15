@@ -1,7 +1,9 @@
 """Tests for choosier.cli: flags, exit codes, and output."""
 
+import hashlib
 import importlib.util
 import io
+import json
 import os
 import tempfile
 import unittest
@@ -10,7 +12,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from choosier.cli import main
-from choosier.storage import get_logged_items
+from choosier.services import HistoryService
+from choosier.storage import UndoReceipt, get_logged_items
 
 HAS_WEB = importlib.util.find_spec("fastapi") is not None
 
@@ -118,6 +121,33 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertTrue(custom.exists())
         self.assertFalse(self.log.exists())
+
+    def test_help_has_no_undo_option(self) -> None:
+        buf = io.StringIO()
+        with self.assertRaises(SystemExit) as ctx, redirect_stdout(buf):
+            main(["--help"])
+        self.assertEqual(ctx.exception.code, 0)
+        self.assertNotIn("undo", buf.getvalue().lower())
+
+    def test_a_cli_pick_can_be_undone_by_the_service(self) -> None:
+        code, _ = self._run(str(self.target), "--seed", "1")
+        self.assertEqual(code, 0)
+        data = self.log.read_bytes()
+        final = data.rstrip(b"\n").split(b"\n")[-1].decode("utf-8")
+        receipt = UndoReceipt(
+            item=json.loads(final)["item"],
+            entry=final,
+            digest=hashlib.sha256(data).hexdigest(),
+        )
+
+        outcome = HistoryService(self.log).undo(receipt)
+
+        self.assertEqual(outcome.status, "undone")
+        self.assertTrue(outcome.removed)
+        self.assertEqual(self.log.read_bytes(), b"")
+        code, out = self._run(str(self.target), "--list")
+        self.assertEqual(code, 0)
+        self.assertEqual(set(out.split()), {"a", "b"})
 
     @unittest.skipUnless(HAS_WEB, "web extra (fastapi) not installed")
     def test_web_without_path_forwards_an_empty_initial_path(self) -> None:

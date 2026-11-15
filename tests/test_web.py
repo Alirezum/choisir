@@ -1,5 +1,7 @@
 """Tests for choosier.web: JSON API behavior (no browser testing)."""
 
+import hashlib
+import os
 import tempfile
 import unittest
 import zipfile
@@ -201,7 +203,7 @@ class WebApiTest(unittest.TestCase):
             self.client.post("/api/pick", json=body).json(),
         )
 
-    def _undo(self, receipt: object, **extra: object):
+    def _undo(self, receipt: object, **extra: object) -> Any:
         body: dict[str, object] = {"path": str(self.target), "receipt": receipt}
         body.update(extra)
         return self.client.post("/api/history/undo", json=body)
@@ -289,9 +291,7 @@ class WebApiTest(unittest.TestCase):
         self.assertIsNone(invalid["undo"])
         empty = Path(self.tmp.name) / "empty"
         empty.mkdir()
-        empty_body = self.client.post(
-            "/api/pick", json={"path": str(empty)}
-        ).json()
+        empty_body = self.client.post("/api/pick", json={"path": str(empty)}).json()
         self.assertIsNone(empty_body["undo"])
 
     def test_exhausted_and_filtered_picks_have_no_receipt(self) -> None:
@@ -344,6 +344,95 @@ class WebApiTest(unittest.TestCase):
         self.assertFalse(second["removed"])
         self.assertEqual(second["item"], receipt["item"])
         self.assertEqual(self.log.read_bytes(), before)
+
+    def test_two_sessions_share_only_the_latest_receipt(self) -> None:
+        first = self._pick()
+        second = self._pick()
+        self.assertNotEqual(first["item"], second["item"])
+        before = self.log.read_bytes()
+
+        refused = self._undo(first["undo"]).json()
+
+        self.assertEqual(refused["status"], "changed")
+        self.assertFalse(refused["removed"])
+        self.assertEqual(self.log.read_bytes(), before)
+
+        undone = self._undo(second["undo"]).json()
+
+        self.assertEqual(undone["status"], "undone")
+        self.assertTrue(undone["removed"])
+        self.assertEqual(
+            [entry.item for entry in read_log_entries(self.log)],
+            [first["item"]],
+        )
+
+    def test_undo_refuses_external_removal_rewrite_and_malformed_line(
+        self,
+    ) -> None:
+        self._pick()
+        receipt = self._pick()["undo"]
+        data = self.log.read_bytes()
+        lines = data.splitlines(keepends=True)
+        self.log.write_bytes(b"".join(lines[:-1]))
+        before = self.log.read_bytes()
+        self.assertEqual(self._undo(receipt).json()["status"], "changed")
+        self.assertEqual(self.log.read_bytes(), before)
+
+        self.log.write_text('{"ts": "t", "item": "other"}\n', encoding="utf-8")
+        before = self.log.read_bytes()
+        self.assertEqual(self._undo(receipt).json()["status"], "changed")
+        self.assertEqual(self.log.read_bytes(), before)
+
+        malformed = b"[1, 2]\n"
+        self.log.write_bytes(malformed)
+        crafted = {
+            "item": "anything",
+            "entry": "[1, 2]",
+            "digest": hashlib.sha256(malformed).hexdigest(),
+        }
+        before = self.log.read_bytes()
+        body = self._undo(crafted).json()
+        self.assertEqual(body["status"], "changed")
+        self.assertFalse(body["removed"])
+        self.assertEqual(self.log.read_bytes(), before)
+
+    def test_undo_changes_only_the_history_log(self) -> None:
+        memory = Path(os.environ["CHOOSIER_PATH_MEMORY_FILE"])
+        tree_before = {
+            entry.name: ("dir" if entry.is_dir() else entry.read_bytes())
+            for entry in self.target.iterdir()
+        }
+        picked = self._pick()
+        self.assertEqual(picked["status"], "picked")
+        lock = Path(f"{self.log}.lock")
+        self.assertTrue(lock.exists())
+        memory_before = memory.read_bytes() if memory.exists() else None
+
+        body = self._undo(picked["undo"]).json()
+
+        self.assertEqual(body["status"], "undone")
+        tree_after = {
+            entry.name: ("dir" if entry.is_dir() else entry.read_bytes())
+            for entry in self.target.iterdir()
+        }
+        excluded = {self.log.name, lock.name}
+        self.assertEqual(
+            {name: value for name, value in tree_after.items() if name not in excluded},
+            tree_before,
+        )
+        self.assertEqual(
+            sorted(tree_after),
+            sorted([*tree_before, self.log.name, lock.name]),
+        )
+        self.assertEqual(
+            memory.read_bytes() if memory.exists() else None,
+            memory_before,
+        )
+        filtered = self.client.post(
+            "/api/state", json={"path": str(self.target)}
+        ).json()
+        self.assertEqual(sorted(filtered["remaining"]), ["a", "b", "sub"])
+        self.assertEqual(filtered["history_total"], 0)
 
     def test_preview_kinds(self) -> None:
         doc = self.target / "doc.txt"

@@ -696,15 +696,31 @@ describe('useWorkspace', () => {
       item: 'alpha.txt',
       removed: true,
     })
-    const { workspace, wrapper } = setup({
-      path: '/tmp/choosier',
-      log_file: '',
-      path_warning: null,
-    })
+    const { workspace, wrapper } = setup(
+      {
+        path: '/tmp/choosier',
+        log_file: '',
+        path_warning: null,
+      },
+      stateResponse({
+        filter_options: {
+          types: [{ key: 'dir', label: 'Folders', count: 1 }],
+          entries: [{ name: 'alpha.txt', type_key: 'dir' }],
+          entries_total: 1,
+          entries_truncated: false,
+        },
+      }),
+    )
     await flushPromises()
 
     expect(workspace.canUndo.value).toBe(false)
     expect(workspace.undoLabel.value).toBe('Undo last pick (nothing to undo)')
+
+    workspace.seed.value = '7'
+    workspace.dryRun.value = true
+    workspace.toggleFilterType('dir')
+    await nextTick()
+    expect(workspace.filterPanel.value.active).toBe(true)
 
     await workspace.pick()
 
@@ -721,6 +737,11 @@ describe('useWorkspace', () => {
     expect(workspace.status.value).toBe('Undid pick of alpha.txt.')
     expect(workspace.canUndo.value).toBe(false)
     expect(workspace.choice.value).toBeNull()
+    expect(workspace.path.value).toBe('/tmp/choosier')
+    expect(workspace.logFile.value).toBe('')
+    expect(workspace.seed.value).toBe('7')
+    expect(workspace.dryRun.value).toBe(true)
+    expect(workspace.filterPanel.value.active).toBe(true)
 
     await workspace.pick()
     expect(workspace.canUndo.value).toBe(true)

@@ -332,6 +332,25 @@ class ApiErrorEnvelopeTest(unittest.TestCase):
         )
         self._assert_log_unchanged(before)
 
+        with patch(
+            "choosier.storage.undo_log_entry",
+            side_effect=OSError("undo fail"),
+        ):
+            undone = self.client.post(
+                "/api/history/undo",
+                json={
+                    "path": str(self.target),
+                    "receipt": {
+                        "item": "a",
+                        "entry": '{"ts": "t", "item": "a"}',
+                        "digest": "0" * 64,
+                    },
+                },
+            )
+        body = assert_error_envelope(self, undone, 500, "internal_error")
+        self.assertTrue(body["error"]["message"].startswith("Error undoing pick:"))
+        self._assert_log_unchanged(before)
+
     def test_malformed_range_returns_json_error(self) -> None:
         video = self.root / "clip.mp4"
         video.write_bytes(MP4)

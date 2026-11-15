@@ -398,6 +398,11 @@ class ChooserApp(App[None]):
         receipt = self._undo_receipt
         button.disabled = receipt is None
         button.label = f"Undo {receipt.item}" if receipt is not None else "Undo"
+        button.tooltip = (
+            f"Undo the pick of {receipt.item}"
+            if receipt is not None
+            else "Nothing to undo"
+        )
 
     def _filter_selection(self) -> FilterSelection:
         return FilterSelection(

@@ -140,4 +140,32 @@ describe('ChoiceBoard', () => {
     undo.trigger('click')
     expect(wrapper.emitted('undo')).toEqual([[]])
   })
+
+  it('keeps Undo a native tab stop without a shortcut binding', () => {
+    const wrapper = mount(ChoiceBoard, {
+      props: {
+        item: 'only.txt',
+        remaining: 0,
+        picked: 1,
+        serial: 1,
+        canUndo: true,
+        undoLabel: 'Undo last pick: only.txt',
+      },
+      attachTo: document.body,
+    })
+
+    const undo = wrapper.find('.board-undo')
+    expect(undo.element.tagName).toBe('BUTTON')
+    expect(undo.attributes('type')).toBe('button')
+    expect(undo.attributes('tabindex')).toBeUndefined()
+    expect(undo.attributes('aria-keyshortcuts')).toBeUndefined()
+
+    const button = undo.element as HTMLButtonElement
+    button.focus()
+    expect(document.activeElement).toBe(button)
+    button.click()
+    expect(wrapper.emitted('undo')).toEqual([[]])
+
+    wrapper.unmount()
+  })
 })

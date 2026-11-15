@@ -55,9 +55,7 @@ class HistoryService:
         try:
             status = storage.undo_log_entry(receipt, self._log_file)
         except OSError as e:
-            raise ServiceError(
-                FailureKind.IO_ERROR, f"Error undoing pick: {e}"
-            ) from e
+            raise ServiceError(FailureKind.IO_ERROR, f"Error undoing pick: {e}") from e
         return UndoOutcome(
             status=status,
             item=receipt.item,
