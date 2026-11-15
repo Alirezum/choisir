@@ -37,6 +37,7 @@ function setup(items: string[] = ['alpha.txt', 'beta.txt', 'gamma.txt']) {
   const reportError = vi.fn()
   const refresh = vi.fn(async () => {})
   const openEntry = vi.fn(async () => {})
+  const onHistoryChanged = vi.fn()
   const state = ref<StateResponse | null>({
     valid_path: true,
     path: '/tmp/choosier',
@@ -55,6 +56,7 @@ function setup(items: string[] = ['alpha.txt', 'beta.txt', 'gamma.txt']) {
     status: { setStatus, reportError },
     refresh,
     openEntry,
+    onHistoryChanged,
   })
 
   return {
@@ -67,6 +69,7 @@ function setup(items: string[] = ['alpha.txt', 'beta.txt', 'gamma.txt']) {
     reportError,
     refresh,
     openEntry,
+    onHistoryChanged,
     result,
   }
 }
@@ -117,6 +120,29 @@ describe('useHistoryActions', () => {
 
     expect(reportError).toHaveBeenCalledWith(failure)
     expect(refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('notifies only when archive actually moved a log', async () => {
+    const { result, onHistoryChanged } = setup()
+    const archive = vi.spyOn(api, 'archive')
+    archive.mockResolvedValue({
+      log_file: '/tmp/choosier/.choosier.jsonl',
+      backup: null,
+    })
+
+    await result.archive()
+    expect(onHistoryChanged).not.toHaveBeenCalled()
+
+    archive.mockResolvedValue({
+      log_file: '/tmp/choosier/.choosier.jsonl',
+      backup: '/tmp/choosier/.choosier.jsonl.old',
+    })
+    await result.archive()
+    expect(onHistoryChanged).toHaveBeenCalledTimes(1)
+
+    archive.mockRejectedValue(new Error('archive failed'))
+    await result.archive()
+    expect(onHistoryChanged).toHaveBeenCalledTimes(1)
   })
 
   it('opens and cancels the clear confirmation without a request', async () => {
@@ -171,6 +197,32 @@ describe('useHistoryActions', () => {
 
     expect(reportError).toHaveBeenCalledWith(failure)
     expect(refresh).toHaveBeenCalledTimes(2)
+  })
+
+  it('notifies only when clear actually removed the log', async () => {
+    const { result, onHistoryChanged } = setup()
+    const clear = vi.spyOn(api, 'clear')
+    clear.mockResolvedValue({
+      log_file: '/tmp/choosier/.choosier.jsonl',
+      removed: false,
+    })
+
+    result.requestClear()
+    await result.confirmClear()
+    expect(onHistoryChanged).not.toHaveBeenCalled()
+
+    clear.mockResolvedValue({
+      log_file: '/tmp/choosier/.choosier.jsonl',
+      removed: true,
+    })
+    result.requestClear()
+    await result.confirmClear()
+    expect(onHistoryChanged).toHaveBeenCalledTimes(1)
+
+    clear.mockRejectedValue(new Error('clear failed'))
+    result.requestClear()
+    await result.confirmClear()
+    expect(onHistoryChanged).toHaveBeenCalledTimes(1)
   })
 
   it.each([
@@ -232,6 +284,31 @@ describe('useHistoryActions', () => {
     expect(result.removingItem.value).toBeNull()
     expect(selection.checkedItems.value).toEqual(['beta.txt'])
     expect(refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('notifies only when a single removal removed an entry', async () => {
+    const { result, onHistoryChanged } = setup()
+    const remove = vi.spyOn(api, 'removeHistoryItem')
+    remove.mockResolvedValue({
+      log_file: '/tmp/choosier/.choosier.jsonl',
+      item: 'alpha.txt',
+      removed: 0,
+    })
+
+    await result.removeOne('alpha.txt')
+    expect(onHistoryChanged).not.toHaveBeenCalled()
+
+    remove.mockResolvedValue({
+      log_file: '/tmp/choosier/.choosier.jsonl',
+      item: 'alpha.txt',
+      removed: 2,
+    })
+    await result.removeOne('alpha.txt')
+    expect(onHistoryChanged).toHaveBeenCalledTimes(1)
+
+    remove.mockRejectedValue(new Error('remove failed'))
+    await result.removeOne('alpha.txt')
+    expect(onHistoryChanged).toHaveBeenCalledTimes(1)
   })
 
   it('copies the checked items into a pending batch and cancels cleanly', () => {
@@ -320,6 +397,37 @@ describe('useHistoryActions', () => {
     expect(result.removingHistory.value).toBe(false)
     expect(selection.checkedItems.value).toEqual([])
     expect(refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('notifies only when a batch removal removed entries', async () => {
+    const { result, selection, onHistoryChanged } = setup()
+    selection.addRange(['alpha.txt'])
+    const remove = vi.spyOn(api, 'removeHistoryItems')
+    remove.mockResolvedValue({
+      log_file: '/tmp/choosier/.choosier.jsonl',
+      items: ['alpha.txt'],
+      removed: 0,
+    })
+    result.requestDeleteSelected()
+
+    await result.confirmDeleteSelected()
+    expect(onHistoryChanged).not.toHaveBeenCalled()
+
+    remove.mockResolvedValue({
+      log_file: '/tmp/choosier/.choosier.jsonl',
+      items: ['alpha.txt'],
+      removed: 4,
+    })
+    selection.addRange(['alpha.txt'])
+    result.requestDeleteSelected()
+    await result.confirmDeleteSelected()
+    expect(onHistoryChanged).toHaveBeenCalledTimes(1)
+
+    remove.mockRejectedValue(new Error('batch failed'))
+    selection.addRange(['alpha.txt'])
+    result.requestDeleteSelected()
+    await result.confirmDeleteSelected()
+    expect(onHistoryChanged).toHaveBeenCalledTimes(1)
   })
 
   it('previews a history item and reports it only when the response is current', async () => {

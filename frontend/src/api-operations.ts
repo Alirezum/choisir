@@ -22,6 +22,7 @@ export const operations = {
   clear: 'DELETE /api/history',
   removeHistoryItem: 'DELETE /api/history/item',
   removeHistoryItems: 'POST /api/history/remove',
+  undoHistory: 'POST /api/history/undo',
 } as const satisfies Record<string, RouteKey>
 
 export type ApiOperation = keyof typeof operations

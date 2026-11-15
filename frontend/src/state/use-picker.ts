@@ -5,6 +5,7 @@ import type { FilterBinding } from './use-filters.ts'
 import type { FolderOptionsBinding } from './use-folder-options.ts'
 import type { ChoiceBinding } from './use-choice.ts'
 import type { StatusBinding } from './use-status.ts'
+import type { UndoBinding } from './use-undo.ts'
 
 export interface PickerDeps {
   options: FolderOptionsBinding
@@ -14,6 +15,7 @@ export interface PickerDeps {
   refreshPathMemory: () => Promise<void>
   pathInput: Ref<HTMLInputElement | null>
   filterExclusions: Pick<FilterBinding, 'exclusions' | 'revision'>
+  undo: Pick<UndoBinding, 'setReceipt' | 'clear'>
 }
 
 export interface PickerBinding {
@@ -31,6 +33,7 @@ export function usePicker(deps: PickerDeps): PickerBinding {
   const { options, choice, status } = deps
 
   async function pick(): Promise<void> {
+    deps.undo.clear()
     if (options.path.value.trim() === '') {
       status.setStatus('Enter a folder path.')
       deps.pathInput.value?.focus()
@@ -81,6 +84,7 @@ export function usePicker(deps: PickerDeps): PickerBinding {
           'All entries matching the filters have been picked. Clear filters or reset history to pick more.',
         )
       } else {
+        deps.undo.setReceipt(result.undo ?? null)
         const item = result.item ?? ''
         choice.setPicked({
           item,

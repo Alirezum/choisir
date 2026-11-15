@@ -18,6 +18,7 @@ except ImportError:
 
 from tests.api_contract_support import (
     api_routes,
+    assert_error_envelope,
     assert_error_taxonomy,
     assert_route_parity,
     assert_success_schema,
@@ -64,7 +65,7 @@ class ApiContractTest(unittest.TestCase):
                 assert_success_schema(self.contract, route, self.openapi)
 
     def test_additive_filter_contract_matches_openapi(self) -> None:
-        self.assertEqual(len(self.contract["routes"]), 16)
+        self.assertEqual(len(self.contract["routes"]), 17)
         post_state = contract_route(self.contract, "POST", "/api/state")
         self.assertEqual(post_state["success"]["statuses"], [200])
         fields = post_state["success"]["schema"]["fields"]
@@ -135,8 +136,91 @@ class ApiContractTest(unittest.TestCase):
                 "logged",
                 "preview",
                 "path_memory_notice",
+                "undo",
             },
         )
+
+    def test_undo_contract_matches_openapi(self) -> None:
+        self.assertEqual(len(self.contract["routes"]), 17)
+        self.assertIn("UndoReceipt", self.contract["schemas"])
+        receipt = self.contract["schemas"]["UndoReceipt"]
+        self.assertEqual(set(receipt["fields"]), {"item", "entry", "digest"})
+        for name in ("item", "entry", "digest"):
+            self.assertEqual(
+                receipt["fields"][name],
+                {"type": "string", "nullable": False},
+            )
+
+        pick = contract_route(self.contract, "POST", "/api/pick")
+        self.assertEqual(
+            pick["success"]["schema"]["fields"]["undo"],
+            {"ref": "UndoReceipt", "nullable": True},
+        )
+
+        route = contract_route(self.contract, "POST", "/api/history/undo")
+        fields = route["success"]["schema"]["fields"]
+        self.assertEqual(set(fields), {"log_file", "status", "item", "removed"})
+        self.assertEqual(
+            fields["status"]["enum"],
+            ["undone", "nothing_to_undo", "changed"],
+        )
+        self.assertEqual(fields["item"], {"type": "string", "nullable": False})
+        self.assertEqual(fields["removed"], {"type": "boolean", "nullable": False})
+        self.assertEqual(
+            {(error["code"], error["status"]) for error in route["errors"]},
+            {
+                ("validation_error", 422),
+                ("internal_error", 500),
+                ("method_not_allowed", 405),
+            },
+        )
+
+        components = self.openapi["components"]["schemas"]
+        self.assertEqual(
+            set(components["UndoReceiptModel"]["properties"]),
+            {"item", "entry", "digest"},
+        )
+        for name in ("item", "entry", "digest"):
+            self.assertEqual(
+                components["UndoReceiptModel"]["properties"][name]["type"],
+                "string",
+            )
+        self.assertEqual(
+            set(components["UndoHistoryResponse"]["properties"]),
+            {"log_file", "status", "item", "removed"},
+        )
+        self.assertEqual(
+            components["UndoHistoryResponse"]["properties"]["status"]["enum"],
+            ["undone", "nothing_to_undo", "changed"],
+        )
+
+    def test_undo_validation_errors(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        target = Path(tmp.name) / "target"
+        target.mkdir()
+        client = TestClient(self.app)
+        digest = "0" * 64
+        receipt = {"item": "a", "entry": '{"item": "a"}', "digest": digest}
+        cases = {
+            "non_hex_digest": {
+                "path": str(target),
+                "receipt": {**receipt, "digest": "g" * 64},
+            },
+            "short_digest": {
+                "path": str(target),
+                "receipt": {**receipt, "digest": digest[:63]},
+            },
+            "missing_receipt_field": {
+                "path": str(target),
+                "receipt": {"item": "a", "entry": '{"item": "a"}'},
+            },
+            "missing_receipt": {"path": str(target)},
+        }
+        for name, body in cases.items():
+            with self.subTest(case=name):
+                response = client.post("/api/history/undo", json=body)
+                assert_error_envelope(self, response, 422, "validation_error")
 
     def test_get_state_shape_stays_frozen(self) -> None:
         route = contract_route(self.contract, "GET", "/api/state")

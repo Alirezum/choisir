@@ -59,7 +59,7 @@ const routeFor = (operation) => routes[operations[operation]]
 
 test('the generated surfaces mirror the frozen backend contract', () => {
   const contractRouteKeys = contract.routes.map((route) => `${route.method} ${route.path}`)
-  assert.equal(contractRouteKeys.length, 16)
+  assert.equal(contractRouteKeys.length, 17)
   assert.deepEqual(Object.keys(routes), contractRouteKeys)
   assert.deepEqual([...errorCodes], Object.keys(contract.errorCodes))
 })
@@ -81,16 +81,17 @@ const operationNames = [
   'clear',
   'removeHistoryItem',
   'removeHistoryItems',
+  'undoHistory',
 ]
 
 test('every generated route maps to exactly one operation and back', () => {
-  assert.equal(Object.keys(operations).length, 16)
+  assert.equal(Object.keys(operations).length, 17)
   assert.deepEqual(Object.keys(operations), operationNames)
-  assert.equal(new Set(Object.values(operations)).size, 16)
+  assert.equal(new Set(Object.values(operations)).size, 17)
   assert.deepEqual(Object.values(operations), Object.keys(routes))
 })
 
-test('the facade exposes exactly the sixteen operations', () => {
+test('the facade exposes exactly the seventeen operations', () => {
   assert.deepEqual(Object.keys(api), operationNames)
 })
 
@@ -292,6 +293,24 @@ test('removeHistoryItems posts the selection with null for a blank log_file', as
   await withStubbedFetch(() => api.removeHistoryItems('/w', 'a.log', ['item 3']))
   call = expectSingleCall()
   assert.deepEqual(call.body, { path: '/w', log_file: 'a.log', items: ['item 3'] })
+})
+
+test('undoHistory posts the receipt verbatim as JSON', async () => {
+  const body = {
+    path: '/w',
+    log_file: null,
+    receipt: {
+      item: 'item 1',
+      entry: '{"ts": "t", "item": "item 1"}',
+      digest: 'a'.repeat(64),
+    },
+  }
+  await withStubbedFetch(() => api.undoHistory(body))
+  const call = expectSingleCall()
+  assert.equal(call.method, routeFor('undoHistory').method)
+  assert.equal(call.path, routeFor('undoHistory').path)
+  assert.equal(call.contentType, 'application/json')
+  assert.deepEqual(call.body, body)
 })
 
 test('image and video addresses are built without a fetch call', async () => {

@@ -52,6 +52,7 @@ ROUTE_DELEGATIONS = {
     "clear": ("services.HistoryService",),
     "remove_history_item": ("services.HistoryService",),
     "remove_history_items": ("services.HistoryService",),
+    "undo_history": ("services.HistoryService",),
 }
 SINGLE_DEFINITIONS = {
     "read_log_entries": PACKAGE / "storage.py",

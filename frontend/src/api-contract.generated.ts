@@ -74,6 +74,10 @@ export const routes = {
     method: 'POST',
     path: '/api/history/remove',
   },
+  'POST /api/history/undo': {
+    method: 'POST',
+    path: '/api/history/undo',
+  },
 } as const satisfies Record<string, RouteContract>
 
 export type RouteKey = keyof typeof routes
@@ -136,6 +140,12 @@ export interface PreviewModel {
   images: PreviewImage[]
   image_total: number
   video: PreviewVideo | null
+}
+
+export interface UndoReceipt {
+  item: string
+  entry: string
+  digest: string
 }
 
 export interface FilterTypeOption {
@@ -211,6 +221,7 @@ export interface PickResponse {
   logged: boolean
   preview: PreviewModel | null
   path_memory_notice: string | null
+  undo: UndoReceipt | null
 }
 
 export interface OpenResponse {
@@ -237,4 +248,11 @@ export interface RemoveHistoryItemsResponse {
   log_file: string
   items: string[]
   removed: number
+}
+
+export interface UndoHistoryResponse {
+  log_file: string
+  status: 'undone' | 'nothing_to_undo' | 'changed'
+  item: string
+  removed: boolean
 }

@@ -200,6 +200,23 @@
         }
       }
     },
+    "UndoReceipt": {
+      "type": "object",
+      "fields": {
+        "item": {
+          "type": "string",
+          "nullable": false
+        },
+        "entry": {
+          "type": "string",
+          "nullable": false
+        },
+        "digest": {
+          "type": "string",
+          "nullable": false
+        }
+      }
+    },
     "FilterTypeOption": {
       "type": "object",
       "fields": {
@@ -674,6 +691,10 @@
             "path_memory_notice": {
               "type": "string",
               "nullable": true
+            },
+            "undo": {
+              "ref": "UndoReceipt",
+              "nullable": true
             }
           }
         }
@@ -1065,6 +1086,61 @@
           "code": "internal_error",
           "status": 500,
           "when": "Removing the history items fails or an unexpected exception escapes the route."
+        },
+        {
+          "code": "method_not_allowed",
+          "status": 405,
+          "when": "A method other than POST is used."
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/history/undo",
+      "purpose": "Remove the exact final history line identified by a session receipt.",
+      "success": {
+        "statuses": [
+          200
+        ],
+        "contentType": "application/json",
+        "body": "json",
+        "schema": {
+          "type": "object",
+          "fields": {
+            "log_file": {
+              "type": "string",
+              "nullable": false
+            },
+            "status": {
+              "type": "string",
+              "nullable": false,
+              "enum": [
+                "undone",
+                "nothing_to_undo",
+                "changed"
+              ]
+            },
+            "item": {
+              "type": "string",
+              "nullable": false
+            },
+            "removed": {
+              "type": "boolean",
+              "nullable": false
+            }
+          }
+        }
+      },
+      "errors": [
+        {
+          "code": "validation_error",
+          "status": 422,
+          "when": "The JSON body is missing, malformed, path is missing, a receipt field is missing, item or entry is empty, or digest is not 64 lowercase hexadecimal characters."
+        },
+        {
+          "code": "internal_error",
+          "status": 500,
+          "when": "Reading or rewriting the history log fails or an unexpected exception escapes the route."
         },
         {
           "code": "method_not_allowed",

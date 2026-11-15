@@ -29,6 +29,7 @@ const RESPONSE_TYPE_NAMES = {
   'DELETE /api/history': 'ClearResponse',
   'DELETE /api/history/item': 'RemoveHistoryItemResponse',
   'POST /api/history/remove': 'RemoveHistoryItemsResponse',
+  'POST /api/history/undo': 'UndoHistoryResponse',
 }
 
 function usage() {

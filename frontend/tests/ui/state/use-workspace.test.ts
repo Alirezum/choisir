@@ -6,6 +6,7 @@ import { useWorkspace } from '../../../src/state/use-workspace.ts'
 import type {
   FilteredStateResponse,
   HistoryEntry,
+  PickResponse,
   PreviewModel,
   RemoveHistoryItemsResponse,
 } from '../../../src/types.ts'
@@ -669,6 +670,69 @@ describe('useWorkspace', () => {
     expect(workspace.removingHistory.value).toBe(false)
     expect(workspace.status.value).toBe('Removed 2 entries from history.')
     expect(workspace.historyChecked.value).toEqual([])
+
+    wrapper.unmount()
+  })
+
+  it('composes undo from the latest pick and clears it on path or log changes', async () => {
+    const receipt = {
+      item: 'alpha.txt',
+      entry: '{"ts": "t", "item": "alpha.txt"}',
+      digest: 'd'.repeat(64),
+    }
+    const picked: PickResponse = {
+      status: 'picked',
+      log_file: '/tmp/choosier/.choosier.jsonl',
+      item: 'alpha.txt',
+      logged: true,
+      preview: textPreview('alpha'),
+      path_memory_notice: null,
+      undo: receipt,
+    }
+    vi.spyOn(api, 'pick').mockResolvedValue(picked)
+    const undoHistory = vi.spyOn(api, 'undoHistory').mockResolvedValue({
+      log_file: '/tmp/choosier/.choosier.jsonl',
+      status: 'undone',
+      item: 'alpha.txt',
+      removed: true,
+    })
+    const { workspace, wrapper } = setup({
+      path: '/tmp/choosier',
+      log_file: '',
+      path_warning: null,
+    })
+    await flushPromises()
+
+    expect(workspace.canUndo.value).toBe(false)
+    expect(workspace.undoLabel.value).toBe('Undo last pick (nothing to undo)')
+
+    await workspace.pick()
+
+    expect(workspace.canUndo.value).toBe(true)
+    expect(workspace.undoLabel.value).toBe('Undo last pick: alpha.txt')
+
+    await workspace.undo()
+
+    expect(undoHistory).toHaveBeenCalledWith({
+      path: '/tmp/choosier',
+      log_file: null,
+      receipt,
+    })
+    expect(workspace.status.value).toBe('Undid pick of alpha.txt.')
+    expect(workspace.canUndo.value).toBe(false)
+    expect(workspace.choice.value).toBeNull()
+
+    await workspace.pick()
+    expect(workspace.canUndo.value).toBe(true)
+    workspace.path.value = '/tmp/choosier/next'
+    await nextTick()
+    expect(workspace.canUndo.value).toBe(false)
+
+    await workspace.pick()
+    expect(workspace.canUndo.value).toBe(true)
+    workspace.logFile.value = '/tmp/choosier/custom.jsonl'
+    await nextTick()
+    expect(workspace.canUndo.value).toBe(false)
 
     wrapper.unmount()
   })

@@ -398,6 +398,19 @@ kbd {
   background: rgba(217, 162, 58, 0.1);
 }
 
+.board-undo {
+  padding: 4px 10px;
+  border-color: #3a464e;
+  background: transparent;
+  color: #b8c4c9;
+  font-size: 12px;
+}
+
+.board-undo:hover:not(:disabled) {
+  border-color: #5a6a73;
+  background: rgba(184, 196, 201, 0.08);
+}
+
 .pick-lever {
   display: flex;
   flex-direction: column;

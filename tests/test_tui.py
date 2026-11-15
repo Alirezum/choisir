@@ -27,9 +27,11 @@ try:
     )
 
     from choosier.filters import FilterOptions, FilterSelection
+    from choosier.storage import read_log_entries
     from choosier.tui import (
         FILTERED_EMPTY_TEXT,
         FILTERED_EXHAUSTED_TEXT,
+        NO_CHOICE_TEXT,
         ChooserApp,
         filter_notice,
         filter_summary,
@@ -212,6 +214,92 @@ class TuiHistoryScenarioTest(unittest.TestCase):
         state = build_state(self.target, self.log, max_lines=None)
         self.assertEqual(state.history_total, 0)
         self.assertEqual(state.history, ())
+
+
+@unittest.skipUnless(HAS_TEXTUAL, "ui extra (textual) not installed")
+class TuiUndoScenarioTest(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.target = Path(self.tmp.name) / "target"
+        self.target.mkdir()
+        self.log = self.target / ".choosier.jsonl"
+
+    def _status(self, app: "ChooserApp") -> str:
+        return _plain(app.query_one("#status", Static).content)
+
+    def _remaining(self, app: "ChooserApp") -> str:
+        return _plain(app.query_one("#remaining", Static).content)
+
+    def _history(self, app: "ChooserApp") -> str:
+        return _plain(app.query_one("#history", Static).content)
+
+    async def test_undo_removes_one_entry_and_restores_the_item(self) -> None:
+        (self.target / "first.txt").touch()
+        (self.target / "second.txt").touch()
+        HistoryService(self.log).append("first.txt")
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            self.assertEqual(app._current_choice, self.target / "second.txt")
+            undo = app.query_one("#undo", Button)
+            self.assertFalse(undo.disabled)
+            self.assertEqual(_plain(undo.label), "Undo second.txt")
+            self.assertEqual(
+                [entry.item for entry in read_log_entries(self.log)],
+                ["first.txt", "second.txt"],
+            )
+
+            undo.press()
+            await pilot.pause()
+
+            self.assertEqual(
+                [entry.item for entry in read_log_entries(self.log)],
+                ["first.txt"],
+            )
+            self.assertEqual(self._remaining(app), "second.txt")
+            self.assertEqual(
+                _plain(app.query_one("#choice", Static).content),
+                NO_CHOICE_TEXT,
+            )
+            self.assertEqual(
+                _plain(app.query_one("#preview", Static).content),
+                "(preview appears here)",
+            )
+            self.assertTrue(app.query_one("#open", Button).disabled)
+            self.assertEqual(self._status(app), "Undid pick of second.txt.")
+            self.assertTrue(app.query_one("#undo", Button).disabled)
+            self.assertEqual(_plain(app.query_one("#undo", Button).label), "Undo")
+
+            before = self.log.read_bytes()
+            app.query_one("#undo", Button).press()
+            await pilot.pause()
+            self.assertEqual(self.log.read_bytes(), before)
+
+    async def test_undo_targets_only_the_latest_of_two_picks(self) -> None:
+        (self.target / "alpha.txt").touch()
+        (self.target / "beta.txt").touch()
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            first = app._current_choice
+            app.do_pick()
+            await pilot.pause()
+            second = app._current_choice
+            self.assertNotEqual(first, second)
+            self.assertIsNotNone(second)
+            assert second is not None
+
+            app.query_one("#undo", Button).press()
+            await pilot.pause()
+
+            logged = [entry.item for entry in read_log_entries(self.log)]
+            self.assertEqual(logged, [first.name])
+            self.assertNotIn(second.name, logged)
 
 
 @unittest.skipUnless(HAS_TEXTUAL, "ui extra (textual) not installed")

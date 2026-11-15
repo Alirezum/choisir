@@ -6,9 +6,11 @@ const props = defineProps<{
   remaining: number
   picked: number
   serial: number
+  canUndo: boolean
+  undoLabel: string
 }>()
 
-const emit = defineEmits<{ pick: []; open: [] }>()
+const emit = defineEmits<{ pick: []; open: []; undo: [] }>()
 
 function characters(): string[] {
   if (props.item === null) return []
@@ -68,6 +70,15 @@ function emptyMeta(): string {
           @click="emit('open')"
         >
           Open
+        </button>
+        <button
+          class="board-undo"
+          type="button"
+          :disabled="!canUndo"
+          :aria-label="undoLabel"
+          @click="canUndo && emit('undo')"
+        >
+          Undo
         </button>
       </div>
     </div>

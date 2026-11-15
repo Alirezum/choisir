@@ -188,6 +188,10 @@ export interface WorkspaceBinding {
   historyDeleteMessage: ComputedRef<string>
   historyDeleteLabel: ComputedRef<string>
 
+  canUndo: ComputedRef<boolean>
+  undoLabel: ComputedRef<string>
+  undo: () => Promise<void>
+
   browserListing: Ref<BrowseResponse | null>
   browserError: Ref<string>
 

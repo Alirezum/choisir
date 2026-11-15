@@ -25,6 +25,7 @@ const pickResponse = (overrides: Partial<PickResponse> = {}): PickResponse => ({
   logged: true,
   preview,
   path_memory_notice: null,
+  undo: null,
   ...overrides,
 })
 
@@ -45,6 +46,7 @@ function setup() {
   const pathInput = ref<HTMLInputElement | null>({
     focus: vi.fn(),
   } as unknown as HTMLInputElement)
+  const undo = { setReceipt: vi.fn(), clear: vi.fn() }
 
   const result = usePicker({
     options,
@@ -54,6 +56,7 @@ function setup() {
     refreshPathMemory,
     pathInput,
     filterExclusions: { exclusions, revision },
+    undo,
   })
 
   return {
@@ -67,6 +70,7 @@ function setup() {
     revision,
     excludedTypes,
     excludedEntries,
+    undo,
     result,
   }
 }
@@ -140,6 +144,114 @@ describe('usePicker', () => {
     expect(setStatus).toHaveBeenCalledWith('Picked alpha.txt.')
     expect(refresh).toHaveBeenCalledTimes(1)
     expect(refreshPathMemory).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears and stores the receipt from a logged pick', async () => {
+    const { options, undo, result } = setup()
+    const receipt = {
+      item: 'alpha.txt',
+      entry: '{"ts": "t", "item": "alpha.txt"}',
+      digest: 'b'.repeat(64),
+    }
+    vi.spyOn(api, 'pick').mockResolvedValue(pickResponse({ undo: receipt }))
+    options.path.value = '/tmp/choosier'
+
+    await result.pick()
+
+    expect(undo.clear).toHaveBeenCalled()
+    expect(undo.setReceipt).toHaveBeenCalledWith(receipt)
+    expect(undo.clear.mock.invocationCallOrder[0]).toBeLessThan(
+      undo.setReceipt.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER,
+    )
+  })
+
+  it('clears the receipt before rejecting an invalid path', async () => {
+    const { options, undo, result } = setup()
+    const pick = vi.spyOn(api, 'pick')
+    options.path.value = '   '
+
+    await result.pick()
+
+    expect(undo.clear).toHaveBeenCalledTimes(1)
+    expect(undo.setReceipt).not.toHaveBeenCalled()
+    expect(pick).not.toHaveBeenCalled()
+  })
+
+  it('clears the receipt before an invalid seed is rejected', async () => {
+    const { options, undo, result } = setup()
+    options.path.value = '/tmp/choosier'
+    options.seed.value = 'abc'
+
+    await result.pick()
+
+    expect(undo.clear).toHaveBeenCalledTimes(1)
+    expect(undo.setReceipt).not.toHaveBeenCalled()
+  })
+
+  it('stores a null receipt for a dry-run pick', async () => {
+    const { options, undo, result } = setup()
+    vi.spyOn(api, 'pick').mockResolvedValue(
+      pickResponse({ logged: false, undo: null }),
+    )
+    options.path.value = '/tmp/choosier'
+    options.dryRun.value = true
+
+    await result.pick()
+
+    expect(undo.clear).toHaveBeenCalledTimes(1)
+    expect(undo.setReceipt).toHaveBeenCalledWith(null)
+  })
+
+  it('leaves the receipt cleared for a non-picked outcome', async () => {
+    const { options, undo, result } = setup()
+    vi.spyOn(api, 'pick').mockResolvedValue(
+      pickResponse({ status: 'exhausted', item: null, preview: null }),
+    )
+    options.path.value = '/tmp/choosier'
+
+    await result.pick()
+
+    expect(undo.clear).toHaveBeenCalledTimes(1)
+    expect(undo.setReceipt).not.toHaveBeenCalled()
+  })
+
+  it('leaves the receipt cleared when the pick request fails', async () => {
+    const { options, undo, result, reportError } = setup()
+    vi.spyOn(api, 'pick').mockRejectedValue(new Error('pick failed'))
+    options.path.value = '/tmp/choosier'
+
+    await result.pick()
+
+    expect(reportError).toHaveBeenCalled()
+    expect(undo.clear).toHaveBeenCalledTimes(1)
+    expect(undo.setReceipt).not.toHaveBeenCalled()
+  })
+
+  it('does not store a receipt from a stale pick result', async () => {
+    const { options, undo, result, revision } = setup()
+    let resolvePick!: (value: PickResponse) => void
+    vi.spyOn(api, 'pick').mockReturnValue(
+      new Promise<PickResponse>((resolve) => {
+        resolvePick = resolve
+      }),
+    )
+    options.path.value = '/tmp/choosier'
+
+    const pending = result.pick()
+    revision.value += 1
+    resolvePick(
+      pickResponse({
+        undo: {
+          item: 'alpha.txt',
+          entry: '{"ts": "t", "item": "alpha.txt"}',
+          digest: 'c'.repeat(64),
+        },
+      }),
+    )
+    await pending
+
+    expect(undo.clear).toHaveBeenCalledTimes(1)
+    expect(undo.setReceipt).not.toHaveBeenCalled()
   })
 
   it('uses the dry-run message when the pick was not logged and refreshes the recent list', async () => {

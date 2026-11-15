@@ -9,7 +9,16 @@ const mountBoard = (
     remaining: number
     picked: number
     serial: number
-  } = { item: null, remaining: 10, picked: 0, serial: 0 },
+    canUndo: boolean
+    undoLabel: string
+  } = {
+    item: null,
+    remaining: 10,
+    picked: 0,
+    serial: 0,
+    canUndo: false,
+    undoLabel: 'Undo last pick (nothing to undo)',
+  },
 ) => mount(ChoiceBoard, { props })
 
 describe('ChoiceBoard', () => {
@@ -95,5 +104,40 @@ describe('ChoiceBoard', () => {
     expect(empty.find('.board-open').exists()).toBe(false)
     empty.find('.pick-lever').trigger('click')
     expect(empty.emitted('pick')).toEqual([[]])
+  })
+
+  it('renders a disabled Undo control with the unavailable accessible name', () => {
+    const wrapper = mountBoard()
+
+    const undo = wrapper.find('.board-undo')
+    expect(undo.exists()).toBe(true)
+    expect(undo.text()).toBe('Undo')
+    expect(undo.attributes('type')).toBe('button')
+    expect(undo.attributes('aria-label')).toBe(
+      'Undo last pick (nothing to undo)',
+    )
+    expect(undo.attributes('disabled')).toBeDefined()
+
+    undo.trigger('click')
+    expect(wrapper.emitted('undo')).toBeUndefined()
+  })
+
+  it('renders an enabled Undo control naming the item and emits undo', () => {
+    const wrapper = mountBoard({
+      item: 'only.txt',
+      remaining: 0,
+      picked: 1,
+      serial: 1,
+      canUndo: true,
+      undoLabel: 'Undo last pick: only.txt',
+    })
+
+    const undo = wrapper.find('.board-undo')
+    expect(undo.text()).toBe('Undo')
+    expect(undo.attributes('aria-label')).toBe('Undo last pick: only.txt')
+    expect(undo.attributes('disabled')).toBeUndefined()
+
+    undo.trigger('click')
+    expect(wrapper.emitted('undo')).toEqual([[]])
   })
 })

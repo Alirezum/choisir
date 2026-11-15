@@ -47,6 +47,10 @@ const {
   historyDeleteMessage,
   historyDeleteLabel,
 
+  canUndo,
+  undoLabel,
+  undo,
+
   browserListing,
   browserError,
   tabCounts,
@@ -107,8 +111,11 @@ void pathInput
         :remaining="state?.remaining_total ?? 0"
         :picked="state?.history_total ?? 0"
         :serial="pickSerial"
+        :can-undo="canUndo"
+        :undo-label="undoLabel"
         @pick="pick"
         @open="openCurrent"
+        @undo="undo"
       />
 
       <div class="workspace">

@@ -24,6 +24,8 @@ import type {
   RemovePathMemoryResponse,
   StateQuery,
   StateResponse,
+  UndoHistoryRequest,
+  UndoHistoryResponse,
 } from './types.ts'
 
 export { ApiError, apiErrorMessage } from './api-errors.ts'
@@ -130,4 +132,7 @@ export const api = {
       log_file: logFile === '' ? null : logFile,
       items,
     }),
+
+  undoHistory: (body: UndoHistoryRequest) =>
+    postJson<UndoHistoryResponse>('undoHistory', body),
 }

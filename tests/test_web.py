@@ -22,7 +22,7 @@ from choosier.path_memory import (
     RECORD_WARNING,
     PathMemory,
 )
-from choosier.storage import log_selection
+from choosier.storage import log_selection, read_log_entries
 
 PNG = b"\x89PNG\r\n\x1a\npngdata"
 JPEG = b"\xff\xd8\xffjpegdata"
@@ -192,6 +192,107 @@ class WebApiTest(unittest.TestCase):
             },
         )
         self.assertEqual(response.status_code, 400)
+
+    def _pick(self, **extra: object) -> dict[str, Any]:
+        body: dict[str, object] = {"path": str(self.target), "seed": 1}
+        body.update(extra)
+        return cast(
+            dict[str, Any],
+            self.client.post("/api/pick", json=body).json(),
+        )
+
+    def _undo(self, receipt: object, **extra: object):
+        body: dict[str, object] = {"path": str(self.target), "receipt": receipt}
+        body.update(extra)
+        return self.client.post("/api/history/undo", json=body)
+
+    def test_pick_returns_an_undo_receipt(self) -> None:
+        body = self._pick()
+        self.assertEqual(body["status"], "picked")
+        undo = body["undo"]
+        self.assertIsNotNone(undo)
+        assert isinstance(undo, dict)
+        self.assertEqual(undo["item"], body["item"])
+        self.assertIsInstance(undo["entry"], str)
+        self.assertTrue(undo["entry"])
+        self.assertRegex(undo["digest"], r"^[0-9a-f]{64}$")
+
+    def test_undo_removes_only_the_final_entry_and_restores_eligibility(
+        self,
+    ) -> None:
+        first = self._pick()
+        second = self._pick()
+        self.assertNotEqual(first["item"], second["item"])
+        before = self.log.read_text(encoding="utf-8")
+        self.assertEqual(
+            [entry.item for entry in read_log_entries(self.log)],
+            [first["item"], second["item"]],
+        )
+
+        response = self._undo(second["undo"])
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["status"], "undone")
+        self.assertTrue(body["removed"])
+        self.assertEqual(body["item"], second["item"])
+        self.assertEqual(body["log_file"], str(self.log))
+        self.assertLess(len(self.log.read_text(encoding="utf-8")), len(before))
+        self.assertEqual(
+            [entry.item for entry in read_log_entries(self.log)],
+            [first["item"]],
+        )
+
+        state = self.client.get("/api/state", params=self._params()).json()
+        self.assertIn(second["item"], state["remaining"])
+        self.assertEqual(state["history_total"], 1)
+
+    def test_undo_without_a_log_reports_nothing_to_undo(self) -> None:
+        receipt = self._pick()["undo"]
+        self.log.unlink()
+        response = self._undo(receipt)
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["status"], "nothing_to_undo")
+        self.assertFalse(body["removed"])
+        self.assertFalse(self.log.exists())
+
+    def test_undo_with_an_empty_log_reports_nothing_to_undo(self) -> None:
+        receipt = self._pick()["undo"]
+        self.log.write_bytes(b"")
+        response = self._undo(receipt)
+        body = response.json()
+        self.assertEqual(body["status"], "nothing_to_undo")
+        self.assertFalse(body["removed"])
+        self.assertEqual(self.log.read_bytes(), b"")
+
+    def test_undo_after_an_external_append_reports_changed(self) -> None:
+        receipt = self._pick()["undo"]
+        with open(self.log, "a", encoding="utf-8") as handle:
+            handle.write('{"ts": "t", "item": "external"}\n')
+        before = self.log.read_bytes()
+
+        response = self._undo(receipt)
+
+        body = response.json()
+        self.assertEqual(body["status"], "changed")
+        self.assertFalse(body["removed"])
+        self.assertEqual(body["item"], receipt["item"])
+        self.assertEqual(self.log.read_bytes(), before)
+
+    def test_pick_without_logging_has_no_receipt(self) -> None:
+        dry = self._pick(dry_run=True)
+        self.assertIsNone(dry["undo"])
+        invalid = self.client.post(
+            "/api/pick", json={"path": str(self.target / "missing")}
+        ).json()
+        self.assertIsNone(invalid["undo"])
+        empty = Path(self.tmp.name) / "empty"
+        empty.mkdir()
+        empty_body = self.client.post(
+            "/api/pick", json={"path": str(empty)}
+        ).json()
+        self.assertIsNone(empty_body["undo"])
 
     def test_preview_kinds(self) -> None:
         doc = self.target / "doc.txt"

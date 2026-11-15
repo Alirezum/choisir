@@ -3,7 +3,7 @@
 **Feature**: `001-standardize-api-responses`
 **Date**: 2026-10-29
 **Machine-readable source**: [api-contract.json](./api-contract.json)
-**Coverage**: 16 routes under `/api`
+**Coverage**: 17 routes under `/api`
 
 This inventory is the human-readable audit of every route the FastAPI adapter
 exposes. The JSON file is the source of truth used by the contract tests; this
@@ -166,6 +166,14 @@ standalone image.
 | `image_total` | integer | no | — |
 | `video` | PreviewVideo | yes | — |
 
+### UndoReceipt
+
+| Field | Type | Nullable | Notes |
+|-------|------|----------|-------|
+| `item` | string | no | Non-empty picked entry name |
+| `entry` | string | no | Exact appended JSON line without a line terminator |
+| `digest` | string | no | SHA-256 of the complete log after the append; 64 lowercase hex characters |
+
 ## Route Summary
 
 | Method | Path | Purpose | Success |
@@ -186,6 +194,7 @@ standalone image.
 | DELETE | `/api/history` | Delete the log | 200 JSON |
 | DELETE | `/api/history/item` | Remove one item's history | 200 JSON |
 | POST | `/api/history/remove` | Remove selected items in one rewrite | 200 JSON |
+| POST | `/api/history/undo` | Remove the latest pick identified by a receipt | 200 JSON |
 
 ---
 
@@ -416,6 +425,7 @@ log.
 | `logged` | boolean | no | — |
 | `preview` | PreviewModel | yes | — |
 | `path_memory_notice` | string | yes | Recording failure notice; `picked` still succeeds |
+| `undo` | UndoReceipt | yes | Receipt for the appended line; `null` for non-logged outcomes, dry runs, unlogged picks, and rotation |
 
 **Domain outcomes (still 200)**
 
@@ -637,6 +647,47 @@ leaves the log bytes unchanged.
 |------|--------|-----------|
 | `validation_error` | 422 | Missing/malformed body, missing `path`, or empty `items` |
 | `internal_error` | 500 | Remove failure or unexpected exception |
+| `method_not_allowed` | 405 | Method other than POST |
+
+---
+
+## POST /api/history/undo
+
+**Purpose**: Remove the exact final history line identified by a session
+receipt, only when the log still matches the bytes written by that pick.
+
+**Request body**: `application/json`
+
+| Field | Type | Required | Rules |
+|-------|------|----------|-------|
+| `path` | string | yes | Active target folder, used to resolve the default log |
+| `log_file` | string or null | no | Explicit override; null/empty uses `<path>/.choosier.jsonl` |
+| `receipt` | UndoReceipt | yes | Must match the schema above |
+
+**Success**: `200 application/json`
+
+| Field | Type | Nullable | Values |
+|-------|------|----------|--------|
+| `log_file` | string | no | — |
+| `status` | string enum | no | `undone`, `nothing_to_undo`, `changed` |
+| `item` | string | no | Echo of the receipt's item |
+| `removed` | boolean | no | `true` only for `undone` |
+
+**Domain outcomes (still 200)**
+
+- `undone`: the digest matched, the final line matched, and one line was
+  removed.
+- `nothing_to_undo`: the log is missing, empty, or its parent folder no longer
+  exists. Nothing is created or rewritten.
+- `changed`: the digest, trailing line, or parsed item did not match. No line
+  is removed.
+
+**Errors**
+
+| Code | Status | Condition |
+|------|--------|-----------|
+| `validation_error` | 422 | Missing/malformed body, missing `path`, missing receipt fields, empty `item`/`entry`, or a digest that is not 64 lowercase hex characters |
+| `internal_error` | 500 | Read or atomic rewrite failure; the log remains as found |
 | `method_not_allowed` | 405 | Method other than POST |
 
 ---

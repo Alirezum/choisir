@@ -33,6 +33,7 @@ from choosier.services import (
     FailureKind,
     HistoryService,
     ServiceError,
+    UndoReceipt,
     build_state,
     open_entry,
     pick,
@@ -241,6 +242,7 @@ class ChooserApp(App[None]):
         self._syncing_filters = False
         self._last_remaining_total = 0
         self._last_valid_path = False
+        self._undo_receipt: UndoReceipt | None = None
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -257,6 +259,7 @@ class ChooserApp(App[None]):
                 with Horizontal(id="actions"):
                     yield Button("Pick", id="pick", variant="primary")
                     yield Button("Open", id="open")
+                    yield Button("Undo", id="undo", disabled=True)
                 yield Static("", id="status")
             with TabbedContent(id="tabs"):
                 with TabPane("Browse", id="browse-tab"):
@@ -386,7 +389,15 @@ class ChooserApp(App[None]):
         self._excluded_entries.clear()
         self._filter_options = None
         self._known_entry_exclusions.clear()
+        self._undo_receipt = None
         return True
+
+    def _sync_undo_control(self) -> None:
+        """Match the Undo control to the session receipt."""
+        button = self.query_one("#undo", Button)
+        receipt = self._undo_receipt
+        button.disabled = receipt is None
+        button.label = f"Undo {receipt.item}" if receipt is not None else "Undo"
 
     def _filter_selection(self) -> FilterSelection:
         return FilterSelection(
@@ -469,6 +480,7 @@ class ChooserApp(App[None]):
 
     def _refresh_panels(self, rebuild_filters: bool = True) -> None:
         self._sync_filter_scope()
+        self._sync_undo_control()
         snapshot = build_state(
             self._target,
             self._current_log_path(),
@@ -528,6 +540,8 @@ class ChooserApp(App[None]):
             self.do_pick()
         elif event.button.id == "open":
             self._open_current()
+        elif event.button.id == "undo":
+            self._undo_pick()
         elif event.button.id == "archive":
             self._archive_history()
         elif event.button.id == "clear":
@@ -715,6 +729,7 @@ class ChooserApp(App[None]):
         if self._sync_filter_scope():
             self._clear_filter_lists()
             self._update_filter_widgets()
+            self._sync_undo_control()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id in ("path-input", "seed-input", "log-input"):
@@ -753,6 +768,7 @@ class ChooserApp(App[None]):
         if backup is None:
             self._set_status(f"No log at {log_path}.")
         else:
+            self._undo_receipt = None
             self._set_status(f"Archived to {backup.name}.")
         self._refresh_panels()
 
@@ -782,9 +798,36 @@ class ChooserApp(App[None]):
             self._set_status(e.message)
             return
         if removed:
+            self._undo_receipt = None
             self._set_status(f"Removed {log_path}.")
         else:
             self._set_status(f"No log at {log_path}.")
+        self._refresh_panels()
+
+    def _undo_pick(self) -> None:
+        """Remove the exact entry appended by the latest logged pick."""
+        receipt = self._undo_receipt
+        if receipt is None:
+            self._set_status("Nothing to undo.")
+            return
+        try:
+            outcome = HistoryService(self._current_log_path()).undo(receipt)
+        except ServiceError as e:
+            self._set_status(e.message)
+            self._refresh_panels()
+            return
+        if outcome.status == "undone":
+            self._set_status(f"Undid pick of {outcome.item}.")
+        elif outcome.status == "changed":
+            self._set_status(f"Could not undo {outcome.item}: history changed.")
+        else:
+            self._set_status(f"Could not undo {outcome.item}: history is empty.")
+        self._undo_receipt = None
+        if self._current_choice == self._target / outcome.item:
+            self._current_choice = None
+            self.query_one("#choice", Static).update(NO_CHOICE_TEXT)
+            self.query_one("#preview", Static).update("(preview appears here)")
+            self.query_one("#open", Button).disabled = True
         self._refresh_panels()
 
     def _open_current(self) -> None:
@@ -804,7 +847,9 @@ class ChooserApp(App[None]):
 
     def do_pick(self) -> None:
         """Pick one unselected entry, log it, and display the result."""
+        self._undo_receipt = None
         self._sync_filter_scope()
+        self._sync_undo_control()
         target = self._target
         if not target.is_dir():
             self._set_status("Invalid Path.")
@@ -850,6 +895,7 @@ class ChooserApp(App[None]):
         if dry_run:
             self._finish_pick(target, outcome.item, "Dry run: selection not logged.")
             return
+        self._undo_receipt = outcome.undo
         self._finish_pick(target, outcome.item, f"Logged in {log_path}.")
 
     def _finish_pick(self, target: Path, item: str, message: str) -> None:

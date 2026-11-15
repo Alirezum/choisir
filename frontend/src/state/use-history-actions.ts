@@ -15,6 +15,7 @@ export interface HistoryActionsDeps {
   status: Pick<StatusBinding, 'setStatus' | 'reportError'>
   refresh: () => Promise<void>
   openEntry: (entry: string) => Promise<void>
+  onHistoryChanged: () => void
 }
 
 export interface HistoryActionsBinding {
@@ -83,6 +84,7 @@ export function useHistoryActions(
   async function archive(): Promise<void> {
     try {
       const result = await api.archive(options.path.value, options.logFile.value)
+      if (result.backup !== null) deps.onHistoryChanged()
       status.setStatus(
         result.backup === null
           ? `No history file at ${result.log_file}.`
@@ -104,6 +106,7 @@ export function useHistoryActions(
     clearing.value = false
     try {
       const result = await api.clear(options.path.value, options.logFile.value)
+      if (result.removed) deps.onHistoryChanged()
       status.setStatus(
         result.removed
           ? `Cleared ${result.log_file}.`
@@ -130,6 +133,7 @@ export function useHistoryActions(
         options.logFile.value,
         item,
       )
+      if (result.removed > 0) deps.onHistoryChanged()
       if (result.removed === 0) {
         status.setStatus(`No history entry for "${item}".`)
       } else if (result.removed === 1) {
@@ -162,6 +166,7 @@ export function useHistoryActions(
         options.logFile.value,
         items,
       )
+      if (result.removed > 0) deps.onHistoryChanged()
       if (result.removed === 0) {
         status.setStatus('No matching history entries to remove.')
       } else if (result.removed === 1) {

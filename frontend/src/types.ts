@@ -1,4 +1,8 @@
-import type { PickResponse, PreviewModel } from './api-contract.generated.ts'
+import type {
+  PickResponse,
+  PreviewModel,
+  UndoReceipt,
+} from './api-contract.generated.ts'
 
 export type {
   ArchiveResponse,
@@ -22,6 +26,8 @@ export type {
   RemoveHistoryItemsResponse,
   RemovePathMemoryResponse,
   StateResponse,
+  UndoHistoryResponse,
+  UndoReceipt,
 } from './api-contract.generated.ts'
 
 export type PreviewKind = PreviewModel['kind']
@@ -69,4 +75,10 @@ export interface RemoveHistoryItemsRequest {
   path: string
   log_file: string | null
   items: string[]
+}
+
+export interface UndoHistoryRequest {
+  path: string
+  log_file: string | null
+  receipt: UndoReceipt
 }

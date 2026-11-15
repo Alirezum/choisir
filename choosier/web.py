@@ -291,6 +291,21 @@ class PickRequest(FilterExclusionsRequest):
     dirs_only: bool = False
 
 
+class UndoReceiptModel(BaseModel):
+    """The exact appended line and log digest that prove a session pick."""
+
+    item: str = Field(min_length=1)
+    entry: str = Field(min_length=1)
+    digest: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator("entry")
+    @classmethod
+    def _single_line(cls, value: str) -> str:
+        if "\n" in value or "\r" in value:
+            raise ValueError("entry must not contain a line break")
+        return value
+
+
 class PickResponse(BaseModel):
     status: Literal[
         "picked",
@@ -305,6 +320,20 @@ class PickResponse(BaseModel):
     logged: bool = False
     preview: PreviewModel | None = None
     path_memory_notice: str | None
+    undo: UndoReceiptModel | None = None
+
+
+class UndoHistoryRequest(BaseModel):
+    path: str
+    log_file: str | None = None
+    receipt: UndoReceiptModel
+
+
+class UndoHistoryResponse(BaseModel):
+    log_file: str
+    status: Literal["undone", "nothing_to_undo", "changed"]
+    item: str
+    removed: bool
 
 
 class OpenRequest(BaseModel):
@@ -642,6 +671,15 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
             logged=outcome.logged,
             preview=_preview_model(outcome.preview) if outcome.preview else None,
             path_memory_notice=memory_notice,
+            undo=(
+                UndoReceiptModel(
+                    item=outcome.undo.item,
+                    entry=outcome.undo.entry,
+                    digest=outcome.undo.digest,
+                )
+                if outcome.undo is not None
+                else None
+            ),
         )
 
     @app.get("/api/preview")
@@ -758,6 +796,24 @@ def create_app(initial_path: str = "", log_file: str | None = None) -> FastAPI:
         removed = services.HistoryService(log_path).remove_many(request.items)
         return RemoveHistoryItemsResponse(
             log_file=str(log_path), items=request.items, removed=removed
+        )
+
+    @app.post("/api/history/undo")
+    def undo_history(request: UndoHistoryRequest) -> UndoHistoryResponse:
+        """Remove the exact final log line proven by a session receipt."""
+        log_path = _log_path(request.path, request.log_file)
+        outcome = services.HistoryService(log_path).undo(
+            services.UndoReceipt(
+                item=request.receipt.item,
+                entry=request.receipt.entry,
+                digest=request.receipt.digest,
+            )
+        )
+        return UndoHistoryResponse(
+            log_file=str(outcome.log_file),
+            status=outcome.status,
+            item=outcome.item,
+            removed=outcome.removed,
         )
 
     if STATIC_DIR.is_dir():

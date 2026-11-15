@@ -14,6 +14,7 @@ import { usePicker } from './use-picker.ts'
 import { useShortcuts } from './use-shortcuts.ts'
 import { useStatus } from './use-status.ts'
 import { useTabs } from './use-tabs.ts'
+import { useUndo } from './use-undo.ts'
 import { useWorkspaceState } from './use-workspace-state.ts'
 
 const EMPTY_FILTER_OPTIONS: FilterOptions = {
@@ -41,12 +42,14 @@ export function useWorkspace(): WorkspaceBinding {
 
   function resetOnPathChange(): void {
     choice.invalidate()
+    undo.clear()
     selection.clear()
     historyActions.cancelDelete()
     filterState.reset()
   }
 
   function resetOnLogChange(): void {
+    undo.clear()
     selection.clear()
     historyActions.cancelDelete()
     filterState.reset()
@@ -76,6 +79,12 @@ export function useWorkspace(): WorkspaceBinding {
   const selection = useHistorySelection({
     entries: () => workspaceState.state.value?.history ?? [],
   })
+  const undo = useUndo({
+    options,
+    choice,
+    status,
+    refresh: workspaceState.refresh,
+  })
   const picker = usePicker({
     options,
     choice,
@@ -84,6 +93,7 @@ export function useWorkspace(): WorkspaceBinding {
     refreshPathMemory: pathMemory.refresh,
     pathInput,
     filterExclusions: filterState,
+    undo,
   })
   const historyActions = useHistoryActions({
     options,
@@ -93,6 +103,7 @@ export function useWorkspace(): WorkspaceBinding {
     status,
     refresh: workspaceState.refresh,
     openEntry: picker.openEntry,
+    onHistoryChanged: undo.clear,
   })
   const tabs = useTabs({ state: workspaceState.state })
   const browser = useBrowser({
@@ -169,6 +180,10 @@ export function useWorkspace(): WorkspaceBinding {
     historyDeleteCount: historyActions.historyDeleteCount,
     historyDeleteMessage: historyActions.historyDeleteMessage,
     historyDeleteLabel: historyActions.historyDeleteLabel,
+
+    canUndo: undo.canUndo,
+    undoLabel: undo.undoLabel,
+    undo: undo.undo,
 
     browserListing: browser.listing,
     browserError: browser.error,
