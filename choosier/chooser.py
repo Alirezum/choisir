@@ -42,6 +42,8 @@ def parse_seed(text: str) -> int | None:
 def _is_managed_file(name: str, log_path: Path) -> bool:
     if name == log_path.name:
         return True
+    if name == f"{log_path.name}.lock":
+        return True
     return fnmatch.fnmatch(name, f"{log_path.stem}-*{log_path.suffix}.old")
 
 
