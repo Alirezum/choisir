@@ -294,6 +294,57 @@ class WebApiTest(unittest.TestCase):
         ).json()
         self.assertIsNone(empty_body["undo"])
 
+    def test_exhausted_and_filtered_picks_have_no_receipt(self) -> None:
+        lonely = Path(self.tmp.name) / "lonely"
+        lonely.mkdir()
+        (lonely / "only.txt").touch()
+        first = self.client.post("/api/pick", json={"path": str(lonely)}).json()
+        second = self.client.post("/api/pick", json={"path": str(lonely)}).json()
+        self.assertEqual(first["status"], "picked")
+        self.assertIsNotNone(first["undo"])
+        self.assertEqual(second["status"], "exhausted")
+        self.assertIsNone(second["undo"])
+
+        empty = self.client.post(
+            "/api/pick",
+            json={"path": str(self.target), "excluded_types": ["dir", "file:"]},
+        ).json()
+        self.assertEqual(empty["status"], "filtered_empty")
+        self.assertIsNone(empty["undo"])
+
+        only_txt = Path(self.tmp.name) / "only-txt"
+        only_txt.mkdir()
+        (only_txt / "one.txt").touch()
+        (only_txt / "two.txt").touch()
+        (only_txt / "skip.md").touch()
+        filtered = {
+            "path": str(only_txt),
+            "excluded_types": ["dir", "file:", "file:.md"],
+        }
+        picked = self.client.post("/api/pick", json=filtered).json()
+        second = self.client.post("/api/pick", json=filtered).json()
+        exhausted = self.client.post("/api/pick", json=filtered).json()
+        self.assertEqual(picked["status"], "picked")
+        self.assertIsNotNone(picked["undo"])
+        self.assertEqual(second["status"], "picked")
+        self.assertIsNotNone(second["undo"])
+        self.assertEqual(exhausted["status"], "filtered_exhausted")
+        self.assertIsNone(exhausted["undo"])
+        self.assertFalse((self.target / ".choosier.jsonl").exists())
+
+    def test_second_undo_reports_nothing_to_undo(self) -> None:
+        receipt = self._pick()["undo"]
+        first = self._undo(receipt).json()
+        self.assertEqual(first["status"], "undone")
+        before = self.log.read_bytes()
+
+        second = self._undo(receipt).json()
+
+        self.assertEqual(second["status"], "nothing_to_undo")
+        self.assertFalse(second["removed"])
+        self.assertEqual(second["item"], receipt["item"])
+        self.assertEqual(self.log.read_bytes(), before)
+
     def test_preview_kinds(self) -> None:
         doc = self.target / "doc.txt"
         doc.write_text("hello\n", encoding="utf-8")

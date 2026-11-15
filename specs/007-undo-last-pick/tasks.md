@@ -268,14 +268,14 @@ change beyond the intended undo.
 
 ### Tests for User Story 2
 
-- [ ] T023 [P] [US2] Extend `tests/test_tui.py`: `#undo` starts disabled;
+- [X] T023 [P] [US2] Extend `tests/test_tui.py`: `#undo` starts disabled;
   dry-run, invalid-path, empty, exhausted, and filtered outcomes leave it
   disabled; a successful undo disables it; folder-input and log-input changes
   clear availability; archive and clear disable it only when the log actually
   changed; `Undo`/`Undo <item>` labels match availability; the changed and
   nothing-to-undo messages name the item; a second undo attempt removes
   nothing.
-- [ ] T024 [P] [US2] Extend `tests/test_web.py` and the frontend tests
+- [X] T024 [P] [US2] Extend `tests/test_web.py` and the frontend tests
   (`frontend/tests/ui/state/use-picker.test.ts`,
   `frontend/tests/ui/state/use-history-actions.test.ts`): every non-logged
   pick returns `undo: null`; a second undo returns `nothing_to_undo`; archive,
@@ -284,7 +284,7 @@ change beyond the intended undo.
 
 ### Implementation for User Story 2
 
-- [ ] T025 [US2] Update `choosier/tui.py` availability: clear
+- [X] T025 [US2] Update `choosier/tui.py` availability: clear
   `self._undo_receipt` at the start of every `do_pick`, whenever
   `_sync_filter_scope` detects a path/log change (including from
   `on_input_changed`), and after `_archive_history` / `_do_clear` only when
@@ -292,7 +292,7 @@ change beyond the intended undo.
   `#undo.disabled` and label `Undo <item>` / `Undo`, and call it from
   `on_mount`, `_refresh_panels`, `on_input_changed` when the scope changed, and
   after undo.
-- [ ] T026 [US2] Update the frontend state: `frontend/src/state/use-picker.ts`
+- [X] T026 [US2] Update the frontend state: `frontend/src/state/use-picker.ts`
   clears the receipt before validation and every request, sets it from
   `result.undo` on a picked response, and leaves it cleared for every other
   outcome and error; `frontend/src/state/use-history-actions.ts` gains an

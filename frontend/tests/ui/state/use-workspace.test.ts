@@ -724,15 +724,18 @@ describe('useWorkspace', () => {
 
     await workspace.pick()
     expect(workspace.canUndo.value).toBe(true)
+    const undoCalls = undoHistory.mock.calls.length
     workspace.path.value = '/tmp/choosier/next'
     await nextTick()
     expect(workspace.canUndo.value).toBe(false)
+    expect(undoHistory.mock.calls.length).toBe(undoCalls)
 
     await workspace.pick()
     expect(workspace.canUndo.value).toBe(true)
     workspace.logFile.value = '/tmp/choosier/custom.jsonl'
     await nextTick()
     expect(workspace.canUndo.value).toBe(false)
+    expect(undoHistory.mock.calls.length).toBe(undoCalls)
 
     wrapper.unmount()
   })

@@ -301,6 +301,183 @@ class TuiUndoScenarioTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(logged, [first.name])
             self.assertNotIn(second.name, logged)
 
+    async def test_undo_starts_disabled_and_stays_disabled_after_a_dry_run(
+        self,
+    ) -> None:
+        (self.target / "alpha.txt").touch()
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            undo = app.query_one("#undo", Button)
+            self.assertTrue(undo.disabled)
+            self.assertEqual(_plain(undo.label), "Undo")
+
+            app.query_one("#dry-run", Checkbox).value = True
+            app.do_pick()
+            await pilot.pause()
+
+            self.assertTrue(app.query_one("#undo", Button).disabled)
+            self.assertEqual(_plain(app.query_one("#undo", Button).label), "Undo")
+            self.assertFalse(self.log.exists())
+
+    async def test_non_picked_outcomes_keep_undo_unavailable(self) -> None:
+        empty = Path(self.tmp.name) / "empty"
+        empty.mkdir()
+        app = ChooserApp(str(empty))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            self.assertEqual(self._status(app), "Path Empty.")
+            self.assertTrue(app.query_one("#undo", Button).disabled)
+
+        exhausted = Path(self.tmp.name) / "exhausted"
+        exhausted.mkdir()
+        (exhausted / "only.txt").touch()
+        HistoryService(exhausted / ".choosier.jsonl").append("only.txt")
+        app = ChooserApp(str(exhausted))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            self.assertIn("All choices have been selected", self._status(app))
+            self.assertTrue(app.query_one("#undo", Button).disabled)
+
+        app = ChooserApp(str(Path(self.tmp.name) / "missing"))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            self.assertEqual(self._status(app), "Invalid Path.")
+            self.assertTrue(app.query_one("#undo", Button).disabled)
+
+        filtered = Path(self.tmp.name) / "filtered"
+        filtered.mkdir()
+        (filtered / "a.txt").touch()
+        app = ChooserApp(str(filtered))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.query_one("#type-filter", SelectionList).toggle("file:.txt")
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            self.assertEqual(self._status(app), FILTERED_EMPTY_TEXT)
+            self.assertTrue(app.query_one("#undo", Button).disabled)
+
+    async def test_folder_and_log_changes_clear_undo_availability(self) -> None:
+        (self.target / "alpha.txt").touch()
+        (self.target / "beta.txt").touch()
+        other = Path(self.tmp.name) / "other"
+        other.mkdir()
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            self.assertFalse(app.query_one("#undo", Button).disabled)
+
+            app.query_one("#path-input", Input).value = str(other)
+            await pilot.pause()
+            self.assertTrue(app.query_one("#undo", Button).disabled)
+            self.assertEqual(_plain(app.query_one("#undo", Button).label), "Undo")
+
+            app.query_one("#path-input", Input).value = str(self.target)
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            self.assertFalse(app.query_one("#undo", Button).disabled)
+            self.assertTrue(
+                _plain(app.query_one("#undo", Button).label).startswith("Undo ")
+            )
+
+            app.query_one("#log-input", Input).value = str(
+                self.target / "custom.jsonl"
+            )
+            await pilot.pause()
+            self.assertTrue(app.query_one("#undo", Button).disabled)
+            self.assertEqual(_plain(app.query_one("#undo", Button).label), "Undo")
+
+    async def test_archive_and_clear_disable_undo_only_after_a_real_change(
+        self,
+    ) -> None:
+        (self.target / "alpha.txt").touch()
+        (self.target / "beta.txt").touch()
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            self.assertFalse(app.query_one("#undo", Button).disabled)
+
+            app._archive_history()
+            await pilot.pause()
+            self.assertFalse(self.log.exists())
+            self.assertTrue(app.query_one("#undo", Button).disabled)
+
+            app.do_pick()
+            await pilot.pause()
+            self.assertFalse(app.query_one("#undo", Button).disabled)
+
+            self.log.unlink()
+            app._archive_history()
+            await pilot.pause()
+            self.assertFalse(app.query_one("#undo", Button).disabled)
+
+            app._do_clear(True)
+            await pilot.pause()
+            self.assertFalse(app.query_one("#undo", Button).disabled)
+
+            app.do_pick()
+            await pilot.pause()
+            self.assertFalse(app.query_one("#undo", Button).disabled)
+            app._do_clear(True)
+            await pilot.pause()
+            self.assertTrue(app.query_one("#undo", Button).disabled)
+
+    async def test_undo_conflict_and_missing_history_name_the_item(self) -> None:
+        (self.target / "alpha.txt").touch()
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            assert app._current_choice is not None
+            item = app._current_choice.name
+            with open(self.log, "a", encoding="utf-8") as handle:
+                handle.write('{"ts": "t", "item": "external"}\n')
+            before = self.log.read_bytes()
+
+            app.query_one("#undo", Button).press()
+            await pilot.pause()
+
+            self.assertEqual(
+                self._status(app),
+                f"Could not undo {item}: history changed.",
+            )
+            self.assertTrue(app.query_one("#undo", Button).disabled)
+            self.assertEqual(self.log.read_bytes(), before)
+
+        gone = Path(self.tmp.name) / "gone"
+        gone.mkdir()
+        (gone / "only.txt").touch()
+        log = gone / ".choosier.jsonl"
+        app = ChooserApp(str(gone))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            log.unlink()
+
+            app.query_one("#undo", Button).press()
+            await pilot.pause()
+
+            self.assertEqual(
+                self._status(app),
+                "Could not undo only.txt: history is empty.",
+            )
+            self.assertTrue(app.query_one("#undo", Button).disabled)
+            self.assertFalse(log.exists())
+
 
 @unittest.skipUnless(HAS_TEXTUAL, "ui extra (textual) not installed")
 class TuiFilterScenarioTest(unittest.IsolatedAsyncioTestCase):
