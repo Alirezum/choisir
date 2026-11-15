@@ -321,30 +321,30 @@ boundary checks.
 
 ### Tests for User Story 3
 
-- [ ] T027 [P] [US3] Add TUI accessibility tests in `tests/test_tui.py`: Tab
+- [X] T027 [P] [US3] Add TUI accessibility tests in `tests/test_tui.py`: Tab
   reaches `#undo` after Open, the button receives focus, its rendered label
   includes the item, Enter activates the undo, and no new key binding is
   registered for undo.
-- [ ] T028 [P] [US3] Add frontend accessibility tests in
+- [X] T028 [P] [US3] Add frontend accessibility tests in
   `frontend/tests/ui/views/ChoiceBoard.test.ts` and
   `frontend/tests/ui/state/use-shortcuts.test.ts`: `aria-label` is
   `Undo last pick: <item>` when available and
   `Undo last pick (nothing to undo)` otherwise; the button is a normal tab
   stop and Enter/Space activate it; `Ctrl+Z` inside a text input is not
   intercepted and does not call the picker.
-- [ ] T029 [P] [US3] Add conflict/failure tests in `tests/test_storage.py`,
+- [X] T029 [P] [US3] Add conflict/failure tests in `tests/test_storage.py`,
   `tests/test_web.py`, and `tests/test_api_errors.py`: external append,
   external removal, full rewrite, malformed final line, and a 63-character or
   non-hex digest produce `changed`/422 with a byte-identical log; two sessions
   where the later pick makes the earlier session's undo refuse while the later
   session succeeds; a simulated `OSError` returns the existing 500 envelope
   and leaves bytes unchanged.
-- [ ] T030 [P] [US3] Add boundary tests in `tests/test_cli.py` and
+- [X] T030 [P] [US3] Add boundary tests in `tests/test_cli.py` and
   `tests/test_history_consistency.py`: `choosier --help` has no undo option;
   `--dry-run`, `--seed`, `--list`, prompt behavior, output lines, and exit
   codes `0`/`1`/`3`/`4` are unchanged; a CLI pick remains readable and
   undoable by the service; no undo state survives a restart.
-- [ ] T031 [P] [US3] Add side-effect tests in `tests/test_web.py` and
+- [X] T031 [P] [US3] Add side-effect tests in `tests/test_web.py` and
   `tests/test_history_consistency.py`: undo leaves the active path, log-file
   setting, filter selection, seed, dry-run setting, remembered folders, target
   files, and target folders unchanged; only the history log differs; no new
@@ -352,17 +352,17 @@ boundary checks.
 
 ### Implementation for User Story 3
 
-- [ ] T032 [US3] Finish TUI accessibility in `choosier/tui.py`: give `#undo`
+- [X] T032 [US3] Finish TUI accessibility in `choosier/tui.py`: give `#undo`
   a tooltip that names the item when available, keep it enabled/disabled with
   `_sync_undo_control`, do not add a `Binding` or key handler for undo, and
   keep the label as the accessible name (`Undo <item>` / `Undo`).
-- [ ] T033 [US3] Finish web accessibility in `frontend/src/state/use-undo.ts`
+- [X] T033 [US3] Finish web accessibility in `frontend/src/state/use-undo.ts`
   and `frontend/src/views/ChoiceBoard.vue`: compute
   `undoLabel` as `Undo last pick: <item>` / `Undo last pick (nothing to undo)`,
   keep visible text `Undo`, set `disabled` from `canUndo`, add no shortcut or
   `aria-keyshortcuts`, and rely on the existing `.board :focus-visible` amber
   ring.
-- [ ] T034 [US3] Harden adapter error handling in `choosier/tui.py` and
+- [X] T034 [US3] Harden adapter error handling in `choosier/tui.py` and
   `frontend/src/state/use-undo.ts`: on `ServiceError`/API error show the
   service message, retain the receipt for retry, and keep the interface
   usable; clear the receipt and refresh history after `changed`,
@@ -378,16 +378,16 @@ side-effect free outside the one history line.
 
 **Purpose**: Documentation, manual validation, and the full repository gate.
 
-- [ ] T035 [P] Update `README.md` (TUI and web undo behavior, session-only
+- [X] T035 [P] Update `README.md` (TUI and web undo behavior, session-only
   availability, no CLI undo flag) and `CHANGELOG.md` (Unreleased bullet for Undo
   last pick, additive API route/field, hidden lock file).
-- [ ] T036 Run the manual scenarios in
+- [X] T036 Run the manual scenarios in
   `specs/007-undo-last-pick/quickstart.md`: T1–T8 for the TUI, W1–W7 for the
   web UI, and the command-line boundary; record the observed results in the
   feature notes or PR body, including keyboard focus, accessible names, the
   one-second feedback check at the rotation limit, and the target-tree hash
   comparison.
-- [ ] T037 Run the full quality gate from the repository root across
+- [X] T037 Run the full quality gate from the repository root across
   `choosier/`, `tests/`, and `frontend/`:
   `uv run pytest`, `uv run ruff check .`, `uv run ruff format --check .`,
   `uv run mypy choosier main.py tests`, and

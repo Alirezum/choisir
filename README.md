@@ -153,6 +153,21 @@ can report the distinct `filtered_empty` and `filtered_exhausted` outcomes.
 `GET /api/state` and the one-shot CLI keep their existing behavior and have no
 filter flags.
 
+## Undo last pick
+
+Both interactive interfaces can undo the latest logged pick. Undo removes
+exactly the final history line written by that pick — not every entry for the
+item — and makes the item eligible again. It does not pick a replacement; the
+board and preview clear only when they still show the undone item.
+
+Undo is single-level and session-only. It is unavailable after a dry run, a
+failed, empty, exhausted, or fully filtered pick, a pick that rotated the log,
+a completed undo, or any path, log-file, archive, clear, or history-removal
+change. If the log changed externally after the pick, Undo removes nothing and
+reports that history changed. The action never changes user files or folders,
+the active path, the log-file setting, filters, seed, dry-run mode, or
+remembered folders, and the one-shot CLI gains no undo flag or command.
+
 ## API contract
 
 Every failed `/api/*` request returns the same JSON envelope:
@@ -206,7 +221,9 @@ type, nullability, enum, binary/content-type, and error-status drift.
 Selections are stored as JSON Lines (`{"ts": ..., "item": ...}`) in
 `<target>/.choosier.jsonl`, colocated with the target so history is shared
 across working directories. Legacy `<timestamp> - <item>` lines are still
-read. Logs over 1MB rotate to timestamped `.old` backups.
+read. Logs over 1MB rotate to timestamped `.old` backups. Mutations coordinate
+through a sibling `<log>.lock` file, which contains no user data and is never
+offered as a pick candidate.
 
 ## Architecture
 

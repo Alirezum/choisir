@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- TUI and web UI: Undo removes exactly the history line written by the latest
+  successful logged pick in the current session and makes that item eligible
+  again. It is single-level and session-only: dry runs, failed, empty,
+  exhausted, or fully filtered picks, log rotation, path/log changes, history
+  mutations, and completed undos leave it unavailable. If the log changed
+  externally, Undo removes nothing rather than a substitute entry. No CLI flag
+  was added, and no user file, filter, seed, dry-run setting, active path,
+  log-file setting, or remembered folder changes. Web API: added the additive
+  nullable `undo` receipt on `POST /api/pick` and `POST /api/history/undo`;
+  the route inventory grows from 16 to 17. History mutations now coordinate
+  through a `<log>.lock` file, which is excluded from pick candidates.
 - TUI and web UI: the last successfully picked folder is remembered and
   restored when no explicit path is supplied, with up to ten unique recent
   folders listed in the Options tab/panel. Successful picks (including dry
