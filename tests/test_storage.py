@@ -1,23 +1,31 @@
 """Tests for choosier.storage: JSONL history, legacy fallback, rotation."""
 
+import hashlib
 import json
 import tempfile
+import threading
+import time
 import unittest
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
 
+from choosier.locking import exclusive_lock
 from choosier.storage import (
     _maybe_rotate_log,
     _parse_log_line,
+    append_log_entry,
     archive_log,
     get_logged_items,
     load_log,
     log_selection,
+    parse_log_line,
     read_log_entries,
     remove_log_item,
     remove_log_items,
     reset_log,
+    undo_log_entry,
+    UndoReceipt,
 )
 
 
@@ -414,6 +422,180 @@ class ArchiveLogTest(unittest.TestCase):
     def test_unarchivable_path_raises(self) -> None:
         with self.assertRaises(OSError):
             archive_log(Path(self.tmp.name))
+
+
+class AppendLogEntryTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.log = Path(self.tmp.name) / "history.jsonl"
+
+    def test_receipt_matches_the_appended_bytes(self) -> None:
+        receipt = append_log_entry("a - b ✓", self.log)
+        self.assertIsNotNone(receipt)
+        assert receipt is not None
+        self.assertEqual(receipt.item, "a - b ✓")
+        self.assertNotIn("\n", receipt.entry)
+        self.assertNotIn("\r", receipt.entry)
+        self.assertEqual(parse_log_line(receipt.entry)[1], "a - b ✓")
+        data = self.log.read_bytes()
+        self.assertEqual(receipt.digest, hashlib.sha256(data).hexdigest())
+        self.assertRegex(receipt.digest, r"^[0-9a-f]{64}$")
+
+    def test_rotation_returns_no_receipt(self) -> None:
+        self.log.write_bytes(b"x" * 1_000_000)
+        receipt = append_log_entry("a", self.log)
+        self.assertIsNone(receipt)
+        self.assertFalse(self.log.exists())
+        self.assertEqual(len(list(Path(self.tmp.name).glob("history-*.jsonl.old"))), 1)
+
+    def test_log_selection_still_appends_without_a_receipt(self) -> None:
+        self.assertIsNone(log_selection("a", self.log))
+        self.assertEqual(get_logged_items(self.log), {"a"})
+
+
+class UndoLogEntryTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.log = Path(self.tmp.name) / "history.jsonl"
+
+    def _append(self, item: str = "a") -> UndoReceipt:
+        receipt = append_log_entry(item, self.log)
+        assert receipt is not None
+        return receipt
+
+    def test_undo_removes_only_the_final_entry(self) -> None:
+        first = self._append("a")
+        second = self._append("b")
+        self.assertEqual(undo_log_entry(second, self.log), "undone")
+        self.assertEqual(self.log.read_text(encoding="utf-8"), f"{first.entry}\n")
+
+    def test_same_item_twice_removes_only_the_newest_entry(self) -> None:
+        first = self._append("a")
+        second = self._append("a")
+        self.assertNotEqual(first.digest, second.digest)
+        self.assertEqual(undo_log_entry(first, self.log), "changed")
+        self.assertEqual(undo_log_entry(second, self.log), "undone")
+        self.assertEqual(self.log.read_text(encoding="utf-8"), f"{first.entry}\n")
+
+    def test_external_append_refuses_and_preserves_bytes(self) -> None:
+        receipt = self._append("a")
+        with open(self.log, "a", encoding="utf-8") as handle:
+            handle.write('{"ts": "t", "item": "external"}\n')
+        before = self.log.read_bytes()
+        self.assertEqual(undo_log_entry(receipt, self.log), "changed")
+        self.assertEqual(self.log.read_bytes(), before)
+
+    def test_external_removal_refuses_and_preserves_bytes(self) -> None:
+        first = self._append("a")
+        second = self._append("b")
+        data = self.log.read_bytes()
+        prefix = f"{first.entry}\n".encode()
+        self.assertTrue(data.startswith(prefix))
+        self.log.write_bytes(data[len(prefix) :])
+        before = self.log.read_bytes()
+        self.assertEqual(undo_log_entry(second, self.log), "changed")
+        self.assertEqual(self.log.read_bytes(), before)
+
+    def test_full_rewrite_refuses_and_preserves_bytes(self) -> None:
+        receipt = self._append("a")
+        self.log.write_text('{"ts": "t", "item": "other"}\n', encoding="utf-8")
+        before = self.log.read_bytes()
+        self.assertEqual(undo_log_entry(receipt, self.log), "changed")
+        self.assertEqual(self.log.read_bytes(), before)
+
+    def test_missing_log_reports_nothing_to_undo(self) -> None:
+        receipt = UndoReceipt(item="a", entry='{"item": "a"}', digest="0" * 64)
+        self.assertEqual(undo_log_entry(receipt, self.log), "nothing_to_undo")
+        self.assertFalse(self.log.exists())
+
+    def test_empty_log_reports_nothing_to_undo(self) -> None:
+        receipt = self._append("a")
+        self.log.write_bytes(b"")
+        self.assertEqual(undo_log_entry(receipt, self.log), "nothing_to_undo")
+        self.assertEqual(self.log.read_bytes(), b"")
+
+    def test_missing_parent_is_not_created(self) -> None:
+        missing = Path(self.tmp.name) / "missing" / "history.jsonl"
+        receipt = UndoReceipt(item="a", entry='{"item": "a"}', digest="0" * 64)
+        self.assertEqual(undo_log_entry(receipt, missing), "nothing_to_undo")
+        self.assertFalse(missing.parent.exists())
+
+    def test_sixty_three_character_digest_is_refused(self) -> None:
+        receipt = self._append("a")
+        short = UndoReceipt(receipt.item, receipt.entry, receipt.digest[:63])
+        before = self.log.read_bytes()
+        self.assertEqual(undo_log_entry(short, self.log), "changed")
+        self.assertEqual(self.log.read_bytes(), before)
+
+    def test_uppercase_digest_is_refused(self) -> None:
+        receipt = self._append("a")
+        upper = UndoReceipt(receipt.item, receipt.entry, receipt.digest.upper())
+        before = self.log.read_bytes()
+        self.assertEqual(undo_log_entry(upper, self.log), "changed")
+        self.assertEqual(self.log.read_bytes(), before)
+
+    def test_missing_line_terminator_is_refused(self) -> None:
+        receipt = self._append("a")
+        data = self.log.read_bytes()
+        unterminated = data.rstrip(b"\n")
+        self.log.write_bytes(unterminated)
+        crafted = UndoReceipt(
+            item=receipt.item,
+            entry=receipt.entry,
+            digest=hashlib.sha256(unterminated).hexdigest(),
+        )
+        self.assertEqual(undo_log_entry(crafted, self.log), "changed")
+        self.assertEqual(self.log.read_bytes(), unterminated)
+
+    def test_entry_with_a_line_break_is_refused(self) -> None:
+        receipt = self._append("a")
+        data = self.log.read_bytes()
+        crafted = UndoReceipt(
+            item=receipt.item,
+            entry=f"{receipt.entry}\n",
+            digest=hashlib.sha256(data).hexdigest(),
+        )
+        self.assertEqual(undo_log_entry(crafted, self.log), "changed")
+        self.assertEqual(self.log.read_bytes(), data)
+
+    def test_malformed_final_line_is_refused(self) -> None:
+        self.log.write_text("[1, 2]\n", encoding="utf-8")
+        data = self.log.read_bytes()
+        receipt = UndoReceipt(
+            item="anything",
+            entry="[1, 2]",
+            digest=hashlib.sha256(data).hexdigest(),
+        )
+        self.assertEqual(undo_log_entry(receipt, self.log), "changed")
+        self.assertEqual(self.log.read_bytes(), data)
+
+    def test_io_error_propagates(self) -> None:
+        receipt = self._append("a")
+        with patch(
+            "choosier.storage.Path.read_bytes",
+            side_effect=PermissionError("denied"),
+        ):
+            with self.assertRaises(PermissionError):
+                undo_log_entry(receipt, self.log)
+
+    def test_concurrent_undo_waits_for_the_history_lock(self) -> None:
+        receipt = self._append("a")
+        results: list[str] = []
+
+        def run_undo() -> None:
+            results.append(undo_log_entry(receipt, self.log))
+
+        thread = threading.Thread(target=run_undo)
+        with exclusive_lock(self.log):
+            thread.start()
+            time.sleep(0.2)
+            self.assertTrue(thread.is_alive())
+            self.assertEqual(results, [])
+        thread.join(timeout=5)
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(results, ["undone"])
 
 
 if __name__ == "__main__":

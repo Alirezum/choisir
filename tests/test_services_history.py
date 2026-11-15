@@ -107,7 +107,7 @@ class HistoryAppendTest(unittest.TestCase):
     def test_append_writes_one_current_jsonl_line(self) -> None:
         with patch("choosier.storage.datetime") as mock_datetime:
             mock_datetime.now.return_value = FIXED
-            HistoryService(self.log).append("a - b ✓")
+            receipt = HistoryService(self.log).append("a - b ✓")
         content = self.log.read_text(encoding="utf-8")
         self.assertTrue(content.endswith("\n"))
         lines = content.splitlines()
@@ -116,12 +116,51 @@ class HistoryAppendTest(unittest.TestCase):
             json.loads(lines[0]),
             {"ts": FIXED.isoformat(), "item": "a - b ✓"},
         )
+        self.assertIsNotNone(receipt)
+        assert receipt is not None
+        self.assertEqual(receipt.item, "a - b ✓")
+        self.assertEqual(receipt.entry, lines[0])
 
     def test_append_creates_missing_history(self) -> None:
         HistoryService(self.log).append("fresh")
         entries = HistoryService(self.log).read_entries()
         self.assertEqual([entry.item for entry in entries], ["fresh"])
         self.assertEqual(HistoryService(self.log).logged_items(), {"fresh"})
+
+
+class HistoryUndoTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.log = Path(self.tmp.name) / "history.jsonl"
+
+    def _receipt(self, item: str = "a"):
+        receipt = HistoryService(self.log).append(item)
+        assert receipt is not None
+        return receipt
+
+    def test_undone_returns_a_removed_outcome(self) -> None:
+        service = HistoryService(self.log)
+        receipt = self._receipt()
+        outcome = service.undo(receipt)
+        self.assertEqual(outcome.status, "undone")
+        self.assertEqual(outcome.item, "a")
+        self.assertEqual(outcome.log_file, self.log)
+        self.assertTrue(outcome.removed)
+        self.assertEqual(self.log.read_text(encoding="utf-8"), "")
+
+    def test_changed_and_nothing_to_undo_are_not_removed(self) -> None:
+        service = HistoryService(self.log)
+        receipt = self._receipt()
+        with open(self.log, "a", encoding="utf-8") as handle:
+            handle.write('{"ts": "t", "item": "external"}\n')
+        changed = service.undo(receipt)
+        self.assertEqual(changed.status, "changed")
+        self.assertFalse(changed.removed)
+        self.log.unlink()
+        missing = service.undo(receipt)
+        self.assertEqual(missing.status, "nothing_to_undo")
+        self.assertFalse(missing.removed)
 
 
 class HistoryRemovalTest(unittest.TestCase):
@@ -235,8 +274,20 @@ class HistoryServiceErrorTest(unittest.TestCase):
             (
                 "append",
                 lambda target: target.append("item"),
-                "choosier.storage.log_selection",
+                "choosier.storage.append_log_entry",
                 "Error writing log: boom",
+            ),
+            (
+                "undo",
+                lambda target: target.undo(
+                    storage.UndoReceipt(
+                        item="item",
+                        entry='{"item": "item"}',
+                        digest="0" * 64,
+                    )
+                ),
+                "choosier.storage.undo_log_entry",
+                "Error undoing pick: boom",
             ),
             (
                 "remove",

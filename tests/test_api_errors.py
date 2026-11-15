@@ -156,7 +156,7 @@ class ApiErrorEnvelopeTest(unittest.TestCase):
         log_selection("a", self.log)
         before = self._log_bytes()
         with patch(
-            "choosier.storage.log_selection",
+            "choosier.storage.append_log_entry",
             side_effect=OSError("disk full"),
         ):
             response = self.client.post(

@@ -86,7 +86,7 @@ class PickTest(unittest.TestCase):
         for name in ("a", "b"):
             (self.target / name).touch()
         with patch(
-            "choosier.storage.log_selection",
+            "choosier.storage.append_log_entry",
             side_effect=OSError("boom"),
         ):
             with self.assertRaises(ServiceError) as caught:
@@ -95,6 +95,68 @@ class PickTest(unittest.TestCase):
         self.assertEqual(caught.exception.message, "Error writing log: boom")
         self.assertIsInstance(caught.exception.__cause__, OSError)
         self.assertFalse(self.log.exists())
+
+    def test_logged_pick_returns_a_receipt(self) -> None:
+        (self.target / "only").touch()
+        outcome = pick(self.target, self.log, seed=1)
+        self.assertEqual(outcome.status, "picked")
+        self.assertTrue(outcome.logged)
+        self.assertIsNotNone(outcome.undo)
+        assert outcome.undo is not None
+        self.assertEqual(outcome.undo.item, outcome.item)
+        self.assertEqual(outcome.undo.entry.splitlines(), [outcome.undo.entry])
+        self.assertRegex(outcome.undo.digest, r"^[0-9a-f]{64}$")
+
+    def test_non_logged_outcomes_have_no_receipt(self) -> None:
+        (self.target / "only").touch()
+        dry = pick(self.target, self.log, seed=1, dry_run=True)
+        self.assertIsNone(dry.undo)
+        uncommitted = pick(self.target, self.log, seed=1, commit=False)
+        self.assertIsNone(uncommitted.undo)
+        invalid = pick(self.target / "missing", self.log, seed=1)
+        self.assertIsNone(invalid.undo)
+        empty_target = Path(self.tmp.name) / "empty"
+        empty_target.mkdir()
+        empty = pick(empty_target, empty_target / ".choosier.jsonl", seed=1)
+        self.assertIsNone(empty.undo)
+
+    def test_exhausted_and_filtered_outcomes_have_no_receipt(self) -> None:
+        for name in ("a", "b"):
+            (self.target / name).touch()
+        self.log.write_text(
+            '{"ts": "t", "item": "a"}\n{"ts": "t", "item": "b"}\n',
+            encoding="utf-8",
+        )
+        exhausted = pick(self.target, self.log, seed=1)
+        self.assertEqual(exhausted.status, "exhausted")
+        self.assertIsNone(exhausted.undo)
+        filtered_empty = pick(
+            self.target,
+            self.log,
+            seed=1,
+            selection=FilterSelection(
+                excluded_entries=frozenset({"a", "b"}),
+            ),
+        )
+        self.assertEqual(filtered_empty.status, "filtered_empty")
+        self.assertIsNone(filtered_empty.undo)
+        self.log.write_text('{"ts": "t", "item": "a"}\n', encoding="utf-8")
+        filtered_exhausted = pick(
+            self.target,
+            self.log,
+            seed=1,
+            selection=FilterSelection(excluded_entries=frozenset({"b"})),
+        )
+        self.assertEqual(filtered_exhausted.status, "filtered_exhausted")
+        self.assertIsNone(filtered_exhausted.undo)
+
+    def test_rotated_pick_has_no_receipt(self) -> None:
+        (self.target / "only").touch()
+        self.log.write_bytes(b"x" * 1_000_000)
+        outcome = pick(self.target, self.log, seed=1)
+        self.assertEqual(outcome.status, "picked")
+        self.assertTrue(outcome.logged)
+        self.assertIsNone(outcome.undo)
 
     def test_preview_is_optional(self) -> None:
         (self.target / "note.txt").write_text("hello\nworld\n", encoding="utf-8")
