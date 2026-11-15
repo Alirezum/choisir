@@ -78,8 +78,9 @@ def pick(
     rng = random.Random(seed) if seed is not None else random.Random()
     item = rng.choice(remaining)
     logged = False
+    undo = None
     if commit and not dry_run:
-        HistoryService(log_path).append(item)
+        undo = HistoryService(log_path).append(item)
         logged = True
     preview = preview_entry(target / item) if include_preview else None
     return PickOutcome(
@@ -88,4 +89,5 @@ def pick(
         item=item,
         logged=logged,
         preview=preview,
+        undo=undo,
     )

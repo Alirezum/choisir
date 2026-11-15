@@ -6,7 +6,7 @@ from typing import Literal
 
 from choosier.filters import FilterOptions
 from choosier.preview import Preview
-from choosier.storage import LogEntry
+from choosier.storage import LogEntry, UndoReceipt, UndoStatus
 
 
 @dataclass(frozen=True)
@@ -69,6 +69,17 @@ class PickOutcome:
     item: str | None = None
     logged: bool = False
     preview: Preview | None = None
+    undo: UndoReceipt | None = None
+
+
+@dataclass(frozen=True)
+class UndoOutcome:
+    """The result of one undo attempt."""
+
+    status: UndoStatus
+    item: str
+    log_file: Path
+    removed: bool
 
 
 @dataclass(frozen=True)

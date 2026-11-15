@@ -5,8 +5,8 @@ from pathlib import Path
 
 from choosier import storage
 from choosier.services.errors import FailureKind, ServiceError
-from choosier.services.models import HistorySnapshot
-from choosier.storage import LogEntry
+from choosier.services.models import HistorySnapshot, UndoOutcome
+from choosier.storage import LogEntry, UndoReceipt
 
 
 class HistoryService:
@@ -43,12 +43,27 @@ class HistoryService:
         """Display lines derived from one history read."""
         return list(self.snapshot(ignore_errors=ignore_errors).display)
 
-    def append(self, item: str) -> None:
-        """Append one selection using the existing append and rotation rules."""
+    def append(self, item: str) -> UndoReceipt | None:
+        """Append one selection and return the receipt that can undo it."""
         try:
-            storage.log_selection(item, self._log_file)
+            return storage.append_log_entry(item, self._log_file)
         except OSError as e:
             raise ServiceError(FailureKind.IO_ERROR, f"Error writing log: {e}") from e
+
+    def undo(self, receipt: UndoReceipt) -> UndoOutcome:
+        """Remove the exact entry identified by a session receipt, or nothing."""
+        try:
+            status = storage.undo_log_entry(receipt, self._log_file)
+        except OSError as e:
+            raise ServiceError(
+                FailureKind.IO_ERROR, f"Error undoing pick: {e}"
+            ) from e
+        return UndoOutcome(
+            status=status,
+            item=receipt.item,
+            log_file=self._log_file,
+            removed=status == "undone",
+        )
 
     def remove(self, item: str) -> int:
         """Remove every entry for one item; return the number removed."""

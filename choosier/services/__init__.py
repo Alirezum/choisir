@@ -10,10 +10,12 @@ from choosier.services.models import (
     OpenOutcome,
     PickOutcome,
     StateSnapshot,
+    UndoOutcome,
 )
 from choosier.services.opening import open_entry
 from choosier.services.pick import pick
 from choosier.services.state import PANEL_MAX_LINES, build_state
+from choosier.storage import UndoReceipt, UndoStatus
 
 __all__ = [
     "FailureKind",
@@ -26,6 +28,9 @@ __all__ = [
     "StateSnapshot",
     "PickOutcome",
     "OpenOutcome",
+    "UndoOutcome",
+    "UndoReceipt",
+    "UndoStatus",
     "browse_directory",
     "build_state",
     "pick",
