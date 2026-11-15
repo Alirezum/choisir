@@ -15,10 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-if sys.platform == "win32":
-    import msvcrt
-else:
-    import fcntl
+from choosier.locking import exclusive_lock
 
 MAX_RECENT = 10
 DEFAULT_FILENAME = "path-memory.json"
@@ -132,30 +129,10 @@ def _skip_warning(count: int) -> str | None:
 
 @contextmanager
 def _exclusive_lock(file: Path) -> Iterator[None]:
-    """Hold the exclusive sibling lock for the duration of the block."""
+    """Hold the exclusive sibling lock, creating the memory directory first."""
     file.parent.mkdir(parents=True, exist_ok=True)
-    lock_path = file.with_name(f"{file.name}.lock")
-    handle = open(lock_path, "a+b")
-    try:
-        if sys.platform == "win32":
-            handle.seek(0, os.SEEK_END)
-            if handle.tell() == 0:
-                handle.write(b"\0")
-                handle.flush()
-            handle.seek(0)
-            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
-        else:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+    with exclusive_lock(file):
         yield
-    finally:
-        try:
-            if sys.platform == "win32":
-                handle.seek(0)
-                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
-            else:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-        finally:
-            handle.close()
 
 
 class PathMemory:
