@@ -1,10 +1,11 @@
-import type { Ref } from 'vue'
+import { ref, type Ref } from 'vue'
 
 import { api } from '../api.ts'
 import type { FilterBinding } from './use-filters.ts'
 import type { FolderOptionsBinding } from './use-folder-options.ts'
 import type { ChoiceBinding } from './use-choice.ts'
 import type { StatusBinding } from './use-status.ts'
+import type { SkipBinding } from './use-skip.ts'
 import type { UndoBinding } from './use-undo.ts'
 
 export interface PickerDeps {
@@ -16,10 +17,12 @@ export interface PickerDeps {
   pathInput: Ref<HTMLInputElement | null>
   filterExclusions: Pick<FilterBinding, 'exclusions' | 'revision'>
   undo: Pick<UndoBinding, 'setReceipt' | 'clear'>
+  skips?: Pick<SkipBinding, 'names' | 'remove' | 'skipping'>
 }
 
 export interface PickerBinding {
   pick: () => Promise<void>
+  picking: Ref<boolean>
   openEntry: (entry: string) => Promise<void>
   openCurrent: () => Promise<void>
 }
@@ -31,9 +34,14 @@ export interface PickerBinding {
  */
 export function usePicker(deps: PickerDeps): PickerBinding {
   const { options, choice, status } = deps
+  const picking = ref(false)
 
   async function pick(): Promise<void> {
     deps.undo.clear()
+    if (deps.skips?.skipping.value) {
+      status.setStatus('Wait for the skip action to finish.')
+      return
+    }
     if (options.path.value.trim() === '') {
       status.setStatus('Enter a folder path.')
       deps.pathInput.value?.focus()
@@ -52,6 +60,7 @@ export function usePicker(deps: PickerDeps): PickerBinding {
 
     const revisionAtStart = deps.filterExclusions.revision.value
     const pathAtStart = options.path.value
+    picking.value = true
     try {
       const result = await api.pick({
         path: options.path.value,
@@ -60,6 +69,7 @@ export function usePicker(deps: PickerDeps): PickerBinding {
         dry_run: options.dryRun.value,
         ...options.folderFlags.value,
         ...deps.filterExclusions.exclusions.value,
+        skipped_entries: [...(deps.skips?.names.value ?? [])],
       })
       if (
         deps.filterExclusions.revision.value !== revisionAtStart ||
@@ -83,9 +93,14 @@ export function usePicker(deps: PickerDeps): PickerBinding {
         status.setStatus(
           'All entries matching the filters have been picked. Clear filters or reset history to pick more.',
         )
+      } else if (result.status === 'all_skipped') {
+        status.setStatus(
+          'Every available item is skipped. Restore skipped items to pick again.',
+        )
       } else {
         deps.undo.setReceipt(result.undo ?? null)
         const item = result.item ?? ''
+        deps.skips?.remove(item)
         choice.setPicked({
           item,
           path: options.entryPath(item),
@@ -104,6 +119,7 @@ export function usePicker(deps: PickerDeps): PickerBinding {
     } catch (error) {
       status.reportError(error)
     } finally {
+      picking.value = false
       await deps.refresh()
     }
   }
@@ -125,5 +141,5 @@ export function usePicker(deps: PickerDeps): PickerBinding {
     await openEntry(choice.choice.value.path)
   }
 
-  return { pick, openEntry, openCurrent }
+  return { pick, picking, openEntry, openCurrent }
 }
