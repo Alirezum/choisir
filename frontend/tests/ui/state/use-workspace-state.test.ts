@@ -18,6 +18,8 @@ function setup() {
   const mode = ref<'all' | 'files' | 'dirs'>('all')
   const excludedTypes = ref<string[]>([])
   const excludedEntries = ref<string[]>([])
+  const skippedNames = ref<string[]>([])
+  const skippedEntries = computed(() => [...skippedNames.value])
   const folderFlags = computed(() => ({
     include_hidden: includeHidden.value,
     files_only: mode.value === 'files',
@@ -38,6 +40,7 @@ function setup() {
       logFile,
       folderFlags,
       filterExclusions,
+      skippedEntries,
       status: { reportError },
       onPathChange,
       onLogChange,
@@ -52,6 +55,7 @@ function setup() {
     mode,
     excludedTypes,
     excludedEntries,
+    skippedNames,
     reportError,
     onPathChange,
     onLogChange,
@@ -72,7 +76,7 @@ describe('useWorkspaceState', () => {
 
     expect(result.state.value).toBeNull()
     expect(stateFiltered).not.toHaveBeenCalled()
-    expect(onState).toHaveBeenLastCalledWith(null)
+    expect(onState).toHaveBeenLastCalledWith(null, [])
   })
 
   it('replaces state with the filtered response, merging flags and exclusions', async () => {
@@ -102,9 +106,10 @@ describe('useWorkspaceState', () => {
       dirs_only: false,
       excluded_types: ['file:.txt'],
       excluded_entries: ['notes.md'],
+      skipped_entries: [],
     })
     expect(result.state.value).toEqual(response)
-    expect(onState).toHaveBeenCalledWith(response)
+    expect(onState).toHaveBeenCalledWith(response, [])
   })
 
   it('never calls the frozen GET state route', async () => {
@@ -159,6 +164,7 @@ describe('useWorkspaceState', () => {
     expect(result.state.value?.remaining).toEqual(['new.txt'])
     expect(onState).toHaveBeenLastCalledWith(
       expect.objectContaining({ remaining: ['new.txt'] }),
+      [],
     )
 
     wrapper.unmount()
@@ -226,6 +232,7 @@ describe('useWorkspaceState', () => {
       dirs_only: true,
       excluded_types: ['file:.txt'],
       excluded_entries: [],
+      skipped_entries: [],
     })
 
     wrapper.unmount()
@@ -244,6 +251,35 @@ describe('useWorkspaceState', () => {
     await nextTick()
     expect(onPathChange).toHaveBeenCalledTimes(1)
     expect(onLogChange).toHaveBeenCalledTimes(1)
+  })
+
+  it('sends the active skips and reconciles only that request snapshot', async () => {
+    vi.useFakeTimers()
+    const response = filteredStateResponse({ skipped: ['alpha.txt'] })
+    const request = deferred<FilteredStateResponse>()
+    const stateFiltered = vi
+      .spyOn(api, 'stateFiltered')
+      .mockReturnValueOnce(request.promise)
+    const { result, path, skippedNames, onState, wrapper } = setup()
+
+    path.value = '/tmp/choosier'
+    skippedNames.value = ['alpha.txt']
+    await nextTick()
+    const refresh = result.refresh()
+    await flushPromises()
+
+    skippedNames.value = ['late.txt']
+    request.resolve(response)
+    await refresh
+
+    expect(stateFiltered).toHaveBeenCalledTimes(1)
+    expect(stateFiltered).toHaveBeenCalledWith(
+      expect.objectContaining({ skipped_entries: ['alpha.txt'] }),
+    )
+    expect(onState).toHaveBeenLastCalledWith(response, ['alpha.txt'])
+
+    wrapper.unmount()
+    vi.useRealTimers()
   })
 
   it('clears the pending debounce on unmount', async () => {
