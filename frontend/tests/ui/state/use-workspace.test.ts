@@ -265,6 +265,7 @@ describe('useWorkspace', () => {
       dirs_only: true,
       excluded_types: [],
       excluded_entries: [],
+      skipped_entries: [],
     })
 
     wrapper.unmount()
@@ -458,6 +459,37 @@ describe('useWorkspace', () => {
     expect(workspace.filterPanel.value.active).toBe(false)
     expect(workspace.filterPanel.value.checkedTypeKeys).toEqual(new Set(['dir']))
     expect(workspace.filterPanel.value.checkedEntryNames).toEqual(new Set(['sub']))
+
+    wrapper.unmount()
+  })
+
+  it('clears session skips on path and log changes', async () => {
+    const { workspace, wrapper } = setup({ path: '/tmp/choosier', log_file: '' })
+    vi.mocked(api.stateFiltered).mockImplementation(async (request) => {
+      const skipped = [...(request.skipped_entries ?? [])]
+      return filteredStateResponse({
+        remaining: ['alpha.txt'],
+        remaining_total: 1,
+        skipped,
+        skipped_total: skipped.length,
+        skipped_present: skipped,
+      })
+    })
+    await flushPromises()
+
+    await workspace.skip.skip('alpha.txt')
+    expect(workspace.skip.names.value).toEqual(['alpha.txt'])
+
+    workspace.path.value = '/tmp/choosier/next'
+    await nextTick()
+    expect(workspace.skip.names.value).toEqual([])
+
+    await workspace.skip.skip('alpha.txt')
+    expect(workspace.skip.names.value).toEqual(['alpha.txt'])
+
+    workspace.logFile.value = '/tmp/choosier/custom.jsonl'
+    await nextTick()
+    expect(workspace.skip.names.value).toEqual([])
 
     wrapper.unmount()
   })
