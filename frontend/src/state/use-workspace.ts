@@ -198,6 +198,13 @@ export function useWorkspace(): WorkspaceBinding {
     historyDeleteLabel: historyActions.historyDeleteLabel,
 
     skip,
+    skipped: skip.skippedRows,
+    skippedTotal: computed(() => skip.skippedRows.value.length),
+    allSkipped: computed(() => workspaceState.state.value?.all_skipped ?? false),
+    skipping: skip.skipping,
+    skipEntry: skip.skip,
+    restoreSkipped: skip.restore,
+    restoreAllSkipped: skip.restoreAll,
 
     canUndo: undo.canUndo,
     undoLabel: undo.undoLabel,

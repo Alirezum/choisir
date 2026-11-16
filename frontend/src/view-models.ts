@@ -2,7 +2,7 @@
 // shared presentation blocks. This module has no runtime logic.
 import type { ComputedRef, Ref } from 'vue'
 
-import type { SkipBinding } from './state/use-skip.ts'
+import type { SkipBinding, SkippedRow } from './state/use-skip.ts'
 
 import type {
   BrowseResponse,
@@ -201,6 +201,13 @@ export interface WorkspaceBinding {
 
   pick: () => Promise<void>
   skip: SkipBinding
+  skipped: ComputedRef<readonly SkippedRow[]>
+  skippedTotal: ComputedRef<number>
+  allSkipped: ComputedRef<boolean>
+  skipping: Ref<boolean>
+  skipEntry: (name: string) => Promise<void>
+  restoreSkipped: (name: string) => Promise<void>
+  restoreAllSkipped: () => Promise<void>
   openCurrent: () => Promise<void>
   openHistoryItem: (item: string) => void
   previewHistoryItem: (item: string) => Promise<void>
