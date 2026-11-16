@@ -2,6 +2,8 @@
 // shared presentation blocks. This module has no runtime logic.
 import type { ComputedRef, Ref } from 'vue'
 
+import type { SkipBinding } from './state/use-skip.ts'
+
 import type {
   BrowseResponse,
   BrowserEntry,
@@ -198,6 +200,7 @@ export interface WorkspaceBinding {
   tabCounts: ComputedRef<Record<TabId, number | null>>
 
   pick: () => Promise<void>
+  skip: SkipBinding
   openCurrent: () => Promise<void>
   openHistoryItem: (item: string) => void
   previewHistoryItem: (item: string) => Promise<void>

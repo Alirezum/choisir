@@ -12,10 +12,14 @@ import { useHistorySelection } from './use-history-selection.ts'
 import { usePathMemory } from './use-path-memory.ts'
 import { usePicker } from './use-picker.ts'
 import { useShortcuts } from './use-shortcuts.ts'
+import { useSkip, type SkipBinding } from './use-skip.ts'
 import { useStatus } from './use-status.ts'
 import { useTabs } from './use-tabs.ts'
 import { useUndo } from './use-undo.ts'
-import { useWorkspaceState } from './use-workspace-state.ts'
+import {
+  useWorkspaceState,
+  type WorkspaceStateBinding,
+} from './use-workspace-state.ts'
 
 const EMPTY_FILTER_OPTIONS: FilterOptions = {
   types: [],
@@ -46,6 +50,7 @@ export function useWorkspace(): WorkspaceBinding {
     selection.clear()
     historyActions.cancelDelete()
     filterState.reset()
+    skip.reset()
   }
 
   function resetOnLogChange(): void {
@@ -53,6 +58,7 @@ export function useWorkspace(): WorkspaceBinding {
     selection.clear()
     historyActions.cancelDelete()
     filterState.reset()
+    skip.reset()
   }
 
   function selectHistoryItem(item: string, shift: boolean): void {
@@ -60,19 +66,28 @@ export function useWorkspace(): WorkspaceBinding {
     if (applied && !shift) void historyActions.previewHistoryItem(item)
   }
 
-  const workspaceState = useWorkspaceState({
+  let workspaceState!: WorkspaceStateBinding
+  const skip: SkipBinding = useSkip({
+    status,
+    refresh: () => workspaceState.refresh(),
+    isRemaining: (name) =>
+      (workspaceState.state.value?.remaining ?? []).includes(name),
+  })
+  workspaceState = useWorkspaceState({
     path: options.path,
     logFile: options.logFile,
     folderFlags: options.folderFlags,
     filterExclusions: filterState.exclusions,
+    skippedEntries: skip.names,
     status,
     onPathChange: resetOnPathChange,
     onLogChange: resetOnLogChange,
-    onState: (response) => {
+    onState: (response, sentSkips) => {
       filterState.reconcile(
         response?.filter_options ?? EMPTY_FILTER_OPTIONS,
         response?.known_entry_exclusions ?? [],
       )
+      skip.reconcile(sentSkips, response?.skipped_present ?? [])
     },
   })
 
@@ -94,6 +109,7 @@ export function useWorkspace(): WorkspaceBinding {
     pathInput,
     filterExclusions: filterState,
     undo,
+    skips: skip,
   })
   const historyActions = useHistoryActions({
     options,
@@ -180,6 +196,8 @@ export function useWorkspace(): WorkspaceBinding {
     historyDeleteCount: historyActions.historyDeleteCount,
     historyDeleteMessage: historyActions.historyDeleteMessage,
     historyDeleteLabel: historyActions.historyDeleteLabel,
+
+    skip,
 
     canUndo: undo.canUndo,
     undoLabel: undo.undoLabel,
