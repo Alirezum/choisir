@@ -86,7 +86,7 @@ cooldown and confirm it returns, then reload/restart and confirm it is eligible.
 - [X] T023 [P] [US1] Extend `frontend/tests/ui/state/use-workspace.test.ts` to assert path and log changes call `skip.reset()`, the binding exposes `skip`, and a state response reconciles skips only from its own request snapshot.
 - [X] T024 [US1] Update `frontend/src/views/RemainingPanel.vue`: add an emitted `skip` event and a visible `Not now` button per remaining row with `:aria-label="'Skip ' + name"`, keeping the existing header, list, and empty state; the button is a native focusable `<button>` and is rendered only for rows in `items`.
 - [X] T025 [US1] Update `frontend/src/App.vue`: bind `skip` from the workspace binding to the panel's `@skip` event and keep the existing remaining props unchanged.
-- [ ] T026 [P] [US1] Extend `frontend/tests/ui/views/RemainingPanel.test.ts` to assert one `Not now` button per row, the exact `Skip <name>` accessible name, the emitted `skip` name on click and Enter, and no buttons when the list is empty.
+- [X] T026 [P] [US1] Extend `frontend/tests/ui/views/RemainingPanel.test.ts` to assert one `Not now` button per row, the exact `Skip <name>` accessible name, the emitted `skip` name on click and Enter, and no buttons when the list is empty.
 
 ### TUI for User Story 1
 
