@@ -56,6 +56,7 @@ const {
   tabCounts,
 
   pick,
+  skip,
   openCurrent,
   openHistoryItem,
   archiveHistory,
@@ -144,6 +145,7 @@ void pathInput
             <RemainingPanel
               :items="state?.remaining ?? []"
               :total="state?.remaining_total ?? 0"
+              @skip="skip.skip"
             />
           </div>
 
