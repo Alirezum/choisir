@@ -235,7 +235,9 @@ class TuiUndoScenarioTest(unittest.IsolatedAsyncioTestCase):
         return _plain(app.query_one("#status", Static).content)
 
     def _remaining(self, app: "ChooserApp") -> str:
-        return _plain(app.query_one("#remaining", Static).content)
+        remaining_list = app.query_one("#remaining-list", OptionList)
+        names = [_plain(option.prompt) for option in remaining_list.options]
+        return "\n".join(names) if names else "(none)"
 
     def _history(self, app: "ChooserApp") -> str:
         return _plain(app.query_one("#history", Static).content)
@@ -573,7 +575,9 @@ class TuiFilterScenarioTest(unittest.IsolatedAsyncioTestCase):
         return _plain(app.query_one("#filter-summary", Static).content)
 
     def _remaining(self, app: "ChooserApp") -> str:
-        return _plain(app.query_one("#remaining", Static).content)
+        remaining_list = app.query_one("#remaining-list", OptionList)
+        names = [_plain(option.prompt) for option in remaining_list.options]
+        return "\n".join(names) if names else "(none)"
 
     async def test_types_prompts_summary_and_filtered_remaining(self) -> None:
         self._touch("a.txt", "b.TXT", "c.jpg", "README", "sub/")
@@ -913,7 +917,7 @@ class TuiFilterScenarioTest(unittest.IsolatedAsyncioTestCase):
                 "Choose a valid folder to see filter options.",
             )
             self.assertEqual(
-                _plain(app.query_one("#remaining", Static).content), "(none)"
+                app.query_one("#remaining-list", OptionList).option_count, 0
             )
             self.assertFalse(app.query_one("#filter-notice", Static).display)
 
@@ -990,7 +994,9 @@ class TuiPathMemoryScenarioTest(unittest.IsolatedAsyncioTestCase):
         return _plain(app.query_one("#status", Static).content)
 
     def _remaining(self, app: "ChooserApp") -> str:
-        return _plain(app.query_one("#remaining", Static).content)
+        remaining_list = app.query_one("#remaining-list", OptionList)
+        names = [_plain(option.prompt) for option in remaining_list.options]
+        return "\n".join(names) if names else "(none)"
 
     def _recent_paths(self, app: "ChooserApp") -> list[str]:
         recent_list = app.query_one("#recent-paths", OptionList)

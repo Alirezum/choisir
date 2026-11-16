@@ -1,7 +1,9 @@
 """Terminal UI for choosier (requires the `ui` extra)."""
 
-from collections.abc import Collection
+import time
+from collections.abc import Callable, Collection
 from pathlib import Path
+from typing import TypedDict
 
 from rich.markup import escape
 from rich.text import Text
@@ -39,6 +41,7 @@ from choosier.services import (
     pick,
 )
 from choosier.services.state import PANEL_MAX_LINES
+from choosier.skip import SKIP_COOLDOWN_SECONDS, SkipSelection
 
 NO_CHOICE_TEXT = "No choice yet — enter a directory and press Pick."
 MODE_LABELS = ("all", "files", "dirs")
@@ -47,6 +50,15 @@ FILTERED_EXHAUSTED_TEXT = (
     "All entries matching the filters have been selected. "
     "Clear filters or reset history."
 )
+ALL_SKIPPED_TEXT = (
+    "Every available item is skipped. Restore skipped items to pick again."
+)
+
+
+class _PickerFlags(TypedDict):
+    include_hidden: bool
+    files_only: bool
+    dirs_only: bool
 
 
 def _plural(count: int, singular: str, plural_form: str) -> str:
@@ -222,6 +234,18 @@ class ChooserApp(App[None]):
         margin-top: 1;
         width: auto;
     }
+    #remaining-summary {
+        height: auto;
+        color: #98a4a7;
+    }
+    #remaining-list {
+        height: 1fr;
+        border: solid #2a343a;
+    }
+    #skip {
+        margin-top: 1;
+        width: auto;
+    }
     """
 
     BINDINGS = [
@@ -243,6 +267,8 @@ class ChooserApp(App[None]):
         self._last_remaining_total = 0
         self._last_valid_path = False
         self._undo_receipt: UndoReceipt | None = None
+        self._skips: dict[str, float] = {}
+        self._skip_clock: Callable[[], float] = time.monotonic
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -265,7 +291,9 @@ class ChooserApp(App[None]):
                 with TabPane("Browse", id="browse-tab"):
                     yield DirectoryTree(Path.home(), id="browser")
                 with TabPane("Remaining", id="remaining-tab"):
-                    yield Static("(none)", id="remaining")
+                    yield Static("", id="remaining-summary")
+                    yield OptionList(id="remaining-list")
+                    yield Button("Not now", id="skip", disabled=True)
                 with TabPane("History", id="history-tab"):
                     yield Static("(no history yet)", id="history")
                     yield Button("Archive history", id="archive")
@@ -335,6 +363,7 @@ class ChooserApp(App[None]):
         self._apply_startup_memory()
         self._refresh_recent_paths()
         self._refresh_panels()
+        self.set_interval(1, self._expire_skips)
 
     def _apply_startup_memory(self) -> None:
         """Fill an empty launch path from the first valid remembered folder."""
@@ -357,7 +386,7 @@ class ChooserApp(App[None]):
     def _current_log_path(self) -> Path:
         return resolve_log_path(self._target, self.query_one("#log-input", Input).value)
 
-    def _picker_flags(self) -> dict[str, bool]:
+    def _picker_flags(self) -> _PickerFlags:
         mode = MODE_LABELS[self.query_one("#mode", RadioSet).pressed_index]
         return {
             "include_hidden": self.query_one("#include-hidden", Checkbox).value,
@@ -390,6 +419,7 @@ class ChooserApp(App[None]):
         self._filter_options = None
         self._known_entry_exclusions.clear()
         self._undo_receipt = None
+        self._skips.clear()
         return True
 
     def _sync_undo_control(self) -> None:
@@ -409,6 +439,68 @@ class ChooserApp(App[None]):
             excluded_types=frozenset(self._excluded_types),
             excluded_entries=frozenset(self._excluded_entries),
         )
+
+    def _skip_selection(self) -> SkipSelection:
+        return SkipSelection(frozenset(self._skips))
+
+    def _selected_remaining_name(self) -> str | None:
+        """The highlighted remaining entry, or None when the list is empty."""
+        remaining_list = self.query_one("#remaining-list", OptionList)
+        if remaining_list.option_count == 0:
+            return None
+        index = remaining_list.highlighted
+        if index is None:
+            index = 0
+        prompt = remaining_list.get_option_at_index(index).prompt
+        return prompt.plain if isinstance(prompt, Text) else str(prompt)
+
+    def _sync_skip_control(self) -> None:
+        """Label the skip action with the highlighted remaining entry."""
+        button = self.query_one("#skip", Button)
+        name = self._selected_remaining_name()
+        button.disabled = name is None
+        button.label = f"Not now: {name}" if name is not None else "Not now"
+        button.tooltip = (
+            f"Skip {name} for ten minutes"
+            if name is not None
+            else "No remaining entry to skip"
+        )
+
+    def _skip_now(self) -> None:
+        """Defer the highlighted remaining entry without touching history."""
+        name = self._selected_remaining_name()
+        if name is None:
+            self._set_status("No remaining item to skip.")
+            return
+        snapshot = build_state(
+            self._target,
+            self._current_log_path(),
+            max_lines=None,
+            selection=self._filter_selection(),
+            **self._picker_flags(),
+        )
+        if name not in snapshot.remaining:
+            self._skips.pop(name, None)
+            self._set_status(f"Could not skip {name}: it is no longer available.")
+            self._refresh_panels()
+            return
+        self._skips[name] = self._skip_clock() + SKIP_COOLDOWN_SECONDS
+        self._set_status(
+            f"Skipped {name}. It returns in ten minutes or when this session ends."
+        )
+        self._refresh_panels()
+
+    def _expire_skips(self) -> None:
+        """Return entries whose cooldown elapsed while the session is open."""
+        current = self._skip_clock()
+        expired = [
+            name for name, expires_at in self._skips.items() if expires_at <= current
+        ]
+        if not expired:
+            return
+        for name in expired:
+            del self._skips[name]
+        self._refresh_panels()
 
     def _clear_filter_lists(self) -> None:
         self._syncing_filters = True
@@ -492,6 +584,7 @@ class ChooserApp(App[None]):
             max_lines=None,
             selection=self._filter_selection(),
             **self._picker_flags(),
+            skips=self._skip_selection(),
         )
         self._filter_options = snapshot.filter_options
         self._known_entry_exclusions = set(snapshot.known_entry_exclusions)
@@ -500,9 +593,14 @@ class ChooserApp(App[None]):
         present_types = {item.key for item in snapshot.filter_options.types}
         self._excluded_types &= present_types
         self._excluded_entries &= self._known_entry_exclusions
-        self.query_one("#remaining", Static).update(
-            render_panel(list(snapshot.remaining), "(none)")
+        remaining_list = self.query_one("#remaining-list", OptionList)
+        remaining_list.clear_options()
+        remaining_list.add_options(list(snapshot.remaining))
+        remaining_list.disabled = not snapshot.remaining
+        self.query_one("#remaining-summary", Static).update(
+            escape(f"{snapshot.remaining_total} remaining")
         )
+        self._sync_skip_control()
         self.query_one("#history", Static).update(
             render_panel(
                 [entry.display for entry in snapshot.history],
@@ -561,6 +659,8 @@ class ChooserApp(App[None]):
             self._clear_all_entries()
         elif event.button.id == "clear-filters":
             self._clear_filters_all()
+        elif event.button.id == "skip":
+            self._skip_now()
         elif event.button.id == "recent-use":
             self._use_recent_path()
         elif event.button.id == "recent-remove":
@@ -720,6 +820,12 @@ class ChooserApp(App[None]):
             return
         self._refresh_panels(rebuild_filters=False)
 
+    def on_option_list_option_highlighted(
+        self, event: OptionList.OptionHighlighted
+    ) -> None:
+        if event.option_list.id == "remaining-list":
+            self._sync_skip_control()
+
     def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
         if event.checkbox.id == "include-hidden":
             self._refresh_panels(rebuild_filters=True)
@@ -878,6 +984,7 @@ class ChooserApp(App[None]):
                 dry_run=dry_run,
                 selection=self._filter_selection(),
                 **self._picker_flags(),
+                skips=self._skip_selection(),
             )
         except ServiceError as e:
             self._set_status(e.message)
@@ -893,6 +1000,8 @@ class ChooserApp(App[None]):
                 self._set_status(FILTERED_EXHAUSTED_TEXT)
             elif outcome.status == "exhausted":
                 self._set_status("All choices have been selected. Delete log to reset.")
+            elif outcome.status == "all_skipped":
+                self._set_status(ALL_SKIPPED_TEXT)
             else:
                 self._set_status("Path Empty.")
             self._refresh_panels()
