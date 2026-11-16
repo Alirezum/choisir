@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { mountHost } from '../test-helpers.ts'
 import {
   SKIP_COOLDOWN_MS,
+  formatRemaining,
   useSkip,
   type SkipBinding,
 } from '../../../src/state/use-skip.ts'
@@ -142,6 +143,123 @@ describe('useSkip', () => {
 
     expect(harness.result.records.value).toEqual([])
     expect(harness.result.names.value).toEqual([])
+    harness.unmount()
+  })
+
+
+  it('formats a remaining cooldown as m:ss', () => {
+    expect(formatRemaining(600_000)).toBe('10:00')
+    expect(formatRemaining(599_001)).toBe('10:00')
+    expect(formatRemaining(59_000)).toBe('0:59')
+    expect(formatRemaining(1_000)).toBe('0:01')
+    expect(formatRemaining(0)).toBe('0:00')
+    expect(formatRemaining(-5)).toBe('0:00')
+  })
+
+  it('sorts skipped rows by expiry and updates their countdown on the tick', async () => {
+    vi.useFakeTimers()
+    try {
+      const harness = setup()
+      await harness.result.skip('alpha.txt')
+      harness.setNow(30_000)
+      harness.remaining.add('beta.txt')
+      await harness.result.skip('beta.txt')
+
+      expect(harness.result.skippedRows.value).toEqual([
+        { name: 'alpha.txt', returnsIn: '9:30' },
+        { name: 'beta.txt', returnsIn: '10:00' },
+      ])
+
+      harness.setNow(31_000)
+      vi.advanceTimersByTime(1000)
+      expect(harness.result.skippedRows.value).toEqual([
+        { name: 'alpha.txt', returnsIn: '9:29' },
+        { name: 'beta.txt', returnsIn: '9:59' },
+      ])
+      harness.unmount()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('restores one skipped entry and leaves the others', async () => {
+    const harness = setup()
+    await harness.result.skip('alpha.txt')
+    harness.setNow(1000)
+    harness.remaining.add('beta.txt')
+    await harness.result.skip('beta.txt')
+
+    await harness.result.restore('alpha.txt')
+
+    expect(harness.result.names.value).toEqual(['beta.txt'])
+    expect(harness.setStatus).toHaveBeenLastCalledWith('Restored alpha.txt.')
+    expect(harness.refresh).toHaveBeenCalledTimes(3)
+    harness.unmount()
+  })
+
+  it('refuses to restore an unknown entry', async () => {
+    const harness = setup()
+
+    await harness.result.restore('gone.txt')
+
+    expect(harness.result.records.value).toEqual([])
+    expect(harness.setStatus).toHaveBeenCalledWith(
+      'Could not restore gone.txt: it is no longer available.',
+    )
+    expect(harness.refresh).not.toHaveBeenCalled()
+    harness.unmount()
+  })
+
+  it('restores all skipped entries with the singular message', async () => {
+    const harness = setup()
+    await harness.result.skip('alpha.txt')
+
+    await harness.result.restoreAll()
+
+    expect(harness.result.records.value).toEqual([])
+    expect(harness.setStatus).toHaveBeenLastCalledWith('Restored 1 skipped item.')
+    harness.unmount()
+  })
+
+  it('restores all skipped entries with the plural message', async () => {
+    const harness = setup()
+    await harness.result.skip('alpha.txt')
+    harness.setNow(1000)
+    harness.remaining.add('beta.txt')
+    await harness.result.skip('beta.txt')
+
+    await harness.result.restoreAll()
+
+    expect(harness.result.records.value).toEqual([])
+    expect(harness.setStatus).toHaveBeenLastCalledWith(
+      'Restored 2 skipped items.',
+    )
+    harness.unmount()
+  })
+
+  it('refuses to restore all when nothing is skipped', async () => {
+    const harness = setup()
+
+    await harness.result.restoreAll()
+
+    expect(harness.setStatus).toHaveBeenCalledWith(
+      'Could not restore skipped items: nothing is available.',
+    )
+    expect(harness.refresh).not.toHaveBeenCalled()
+    harness.unmount()
+  })
+
+  it('never writes to browser storage while restoring', async () => {
+    const setItem = vi.spyOn(Storage.prototype, 'setItem')
+    const harness = setup()
+    await harness.result.skip('alpha.txt')
+    await harness.result.restore('alpha.txt')
+    harness.setNow(1000)
+    harness.remaining.add('beta.txt')
+    await harness.result.skip('beta.txt')
+    await harness.result.restoreAll()
+    expect(setItem).not.toHaveBeenCalled()
+    setItem.mockRestore()
     harness.unmount()
   })
 
