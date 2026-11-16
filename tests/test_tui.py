@@ -18,6 +18,7 @@ from choosier.services import (
     pick,
 )
 from choosier.services.state import PANEL_MAX_LINES
+from choosier.skip import SKIP_COOLDOWN_SECONDS, SkipSelection
 
 try:
     from textual.widgets import (
@@ -35,6 +36,7 @@ try:
     from choosier.filters import FilterOptions, FilterSelection
     from choosier.storage import read_log_entries
     from choosier.tui import (
+        ALL_SKIPPED_TEXT,
         FILTERED_EMPTY_TEXT,
         FILTERED_EXHAUSTED_TEXT,
         NO_CHOICE_TEXT,
@@ -1368,6 +1370,196 @@ class TuiPathMemoryScenarioTest(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn("a.txt", self._remaining(app))
             history = _plain(app.query_one("#history", Static).content)
             self.assertIn("a.txt", history)
+
+
+@unittest.skipUnless(HAS_TEXTUAL, "ui extra (textual) not installed")
+class TuiSkipScenarioTest(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.target = Path(self.tmp.name) / "target"
+        self.target.mkdir()
+        self.log = self.target / ".choosier.jsonl"
+
+    def _touch(self, *names: str) -> None:
+        for name in names:
+            (self.target / name).touch()
+
+    def _status(self, app: "ChooserApp") -> str:
+        return _plain(app.query_one("#status", Static).content)
+
+    def _summary(self, app: "ChooserApp") -> str:
+        return _plain(app.query_one("#remaining-summary", Static).content)
+
+    def _remaining_names(self, app: "ChooserApp") -> list[str]:
+        remaining_list = app.query_one("#remaining-list", OptionList)
+        return [_plain(option.prompt) for option in remaining_list.options]
+
+    def _highlight(self, app: "ChooserApp", name: str) -> None:
+        remaining_list = app.query_one("#remaining-list", OptionList)
+        remaining_list.highlighted = self._remaining_names(app).index(name)
+
+    async def test_skip_button_defers_the_highlighted_entry(self) -> None:
+        self._touch("a.txt", "b.txt", "c.txt")
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            self.assertEqual(self._summary(app), "3 remaining")
+
+            self._highlight(app, "b.txt")
+            await pilot.pause()
+            skip = app.query_one("#skip", Button)
+            self.assertFalse(skip.disabled)
+            self.assertEqual(_plain(skip.label), "Not now: b.txt")
+
+            skip.press()
+            await pilot.pause()
+
+            self.assertEqual(self._remaining_names(app), ["a.txt", "c.txt"])
+            self.assertEqual(self._summary(app), "2 remaining")
+            self.assertEqual(
+                self._status(app),
+                "Skipped b.txt. It returns in ten minutes or when this session ends.",
+            )
+            self.assertEqual(set(app._skips), {"b.txt"})
+            self.assertFalse(self.log.exists())
+            self.assertEqual(_plain(skip.label), "Not now: a.txt")
+
+    async def test_skip_leaves_existing_history_bytes_unchanged(self) -> None:
+        self._touch("a.txt", "b.txt")
+        HistoryService(self.log).append("b.txt")
+        before = self.log.read_bytes()
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            self.assertEqual(self._remaining_names(app), ["a.txt"])
+
+            self._highlight(app, "a.txt")
+            app.query_one("#skip", Button).press()
+            await pilot.pause()
+
+            self.assertEqual(self.log.read_bytes(), before)
+            self.assertEqual(self._remaining_names(app), [])
+            self.assertEqual(self._summary(app), "0 remaining")
+
+    async def test_skipped_entry_is_never_picked_and_other_picks_still_log(
+        self,
+    ) -> None:
+        self._touch("a.txt", "b.txt", "c.txt")
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            self._highlight(app, "b.txt")
+            app.query_one("#skip", Button).press()
+            await pilot.pause()
+
+            with patch("choosier.tui.pick", wraps=pick) as pick_mock:
+                app.query_one("#dry-run", Checkbox).value = True
+                for seed in range(20):
+                    app.query_one("#seed-input", Input).value = str(seed)
+                    app.do_pick()
+                    await pilot.pause()
+                    self.assertIsNotNone(app._current_choice)
+                    self.assertNotEqual(app._current_choice, self.target / "b.txt")
+                    self.assertEqual(
+                        pick_mock.call_args.kwargs["skips"],
+                        SkipSelection(frozenset({"b.txt"})),
+                    )
+
+                app.query_one("#dry-run", Checkbox).value = False
+                app.do_pick()
+                await pilot.pause()
+
+        logged = [entry.item for entry in read_log_entries(self.log)]
+        self.assertEqual(len(logged), 1)
+        self.assertIn(logged[0], {"a.txt", "c.txt"})
+        self.assertNotEqual(logged[0], "b.txt")
+
+    async def test_expired_skip_returns_without_another_action(self) -> None:
+        self._touch("a.txt", "b.txt")
+        app = ChooserApp(str(self.target))
+        app._skip_clock = lambda: 1000.0
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            self._highlight(app, "a.txt")
+            app.query_one("#skip", Button).press()
+            await pilot.pause()
+            self.assertEqual(self._remaining_names(app), ["b.txt"])
+            self.assertEqual(app._skips["a.txt"], 1000.0 + SKIP_COOLDOWN_SECONDS)
+
+            app._skip_clock = lambda: 1599.0
+            app._expire_skips()
+            await pilot.pause()
+            self.assertEqual(self._remaining_names(app), ["b.txt"])
+
+            app._skip_clock = lambda: 1600.0
+            app._expire_skips()
+            await pilot.pause()
+            self.assertEqual(self._remaining_names(app), ["a.txt", "b.txt"])
+            self.assertEqual(self._summary(app), "2 remaining")
+            self.assertNotIn("a.txt", app._skips)
+
+    async def test_folder_and_log_changes_clear_session_skips(self) -> None:
+        self._touch("a.txt", "b.txt")
+        other = Path(self.tmp.name) / "other"
+        other.mkdir()
+        (other / "x.txt").touch()
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            self._highlight(app, "a.txt")
+            app.query_one("#skip", Button).press()
+            await pilot.pause()
+            self.assertEqual(set(app._skips), {"a.txt"})
+
+            app.query_one("#path-input", Input).value = str(other)
+            await pilot.pause()
+            self.assertEqual(app._skips, {})
+
+            app._refresh_panels()
+            await pilot.pause()
+            self.assertEqual(self._remaining_names(app), ["x.txt"])
+
+            self._highlight(app, "x.txt")
+            app.query_one("#skip", Button).press()
+            await pilot.pause()
+            self.assertEqual(set(app._skips), {"x.txt"})
+
+            app.query_one("#log-input", Input).value = str(other / "custom.jsonl")
+            await pilot.pause()
+            self.assertEqual(app._skips, {})
+
+    async def test_all_skipped_pick_reports_the_distinct_message(self) -> None:
+        self._touch("a.txt", "b.txt")
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app._skips = {
+                "a.txt": app._skip_clock() + SKIP_COOLDOWN_SECONDS,
+                "b.txt": app._skip_clock() + SKIP_COOLDOWN_SECONDS,
+            }
+            app._refresh_panels()
+            await pilot.pause()
+
+            self.assertEqual(self._remaining_names(app), [])
+            self.assertEqual(self._summary(app), "0 remaining")
+            self.assertTrue(app.query_one("#skip", Button).disabled)
+
+            app.do_pick()
+            await pilot.pause()
+
+            self.assertEqual(self._status(app), ALL_SKIPPED_TEXT)
+            self.assertFalse(self.log.exists())
+            self.assertIsNone(app._current_choice)
+
+    async def test_empty_folder_disables_the_skip_action(self) -> None:
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            skip = app.query_one("#skip", Button)
+            self.assertTrue(skip.disabled)
+            self.assertEqual(_plain(skip.label), "Not now")
+            self.assertEqual(self._summary(app), "0 remaining")
 
 
 if __name__ == "__main__":
