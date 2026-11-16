@@ -56,7 +56,12 @@ const {
   tabCounts,
 
   pick,
-  skip,
+  skipEntry,
+  skipped,
+  skippedTotal,
+  allSkipped,
+  restoreSkipped,
+  restoreAllSkipped,
   openCurrent,
   openHistoryItem,
   archiveHistory,
@@ -145,7 +150,12 @@ void pathInput
             <RemainingPanel
               :items="state?.remaining ?? []"
               :total="state?.remaining_total ?? 0"
-              @skip="skip.skip"
+              :skipped="skipped"
+              :skipped-total="skippedTotal"
+              :all-skipped="allSkipped"
+              @skip="skipEntry"
+              @restore="restoreSkipped"
+              @restore-all="restoreAllSkipped"
             />
           </div>
 

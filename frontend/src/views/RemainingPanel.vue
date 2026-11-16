@@ -1,15 +1,39 @@
 <script setup lang="ts">
 import EmptyState from '../components/EmptyState.vue'
 import PanelShell from '../components/PanelShell.vue'
+import type { SkippedRow } from '../state/use-skip'
 
-const props = defineProps<{ items: string[]; total: number }>()
-const emit = defineEmits<{ skip: [name: string] }>()
+const props = defineProps<{
+  items: string[]
+  total: number
+  skipped: readonly SkippedRow[]
+  skippedTotal: number
+  allSkipped: boolean
+}>()
+const emit = defineEmits<{
+  skip: [name: string]
+  restore: [name: string]
+  'restore-all': []
+}>()
 
 function header(): string {
   if (props.items.length < props.total) {
     return `${props.total} remaining (showing the first ${props.items.length})`
   }
   return `${props.total} remaining`
+}
+
+function emptyMessage(): string {
+  if (props.allSkipped) {
+    return 'Every available item is skipped. Restore skipped items to pick again.'
+  }
+  if (props.total === 0 && props.skippedTotal > 0) {
+    return 'No items are available right now.'
+  }
+  if (props.total === 0) {
+    return 'Everything in this folder has been picked.'
+  }
+  return 'No items match the current options.'
 }
 </script>
 
@@ -30,12 +54,38 @@ function header(): string {
         </button>
       </li>
     </ul>
-    <EmptyState v-else>
-      {{
-        total === 0
-          ? 'Everything in this folder has been picked.'
-          : 'No items match the current options.'
-      }}
-    </EmptyState>
+    <EmptyState v-else>{{ emptyMessage() }}</EmptyState>
+
+    <section class="skipped-section" aria-label="Skipped items">
+      <h3 class="skipped-heading">Skipped</h3>
+      <ul v-if="skipped.length > 0" class="list skipped-list">
+        <li
+          v-for="row in skipped"
+          :key="row.name"
+          class="skipped-row"
+          :title="row.name"
+        >
+          <span class="skipped-text">
+            {{ row.name }} — returns in {{ row.returnsIn }}
+          </span>
+          <button
+            type="button"
+            class="restore-button"
+            :aria-label="`Restore ${row.name}, returns in ${row.returnsIn}`"
+            @click="emit('restore', row.name)"
+          >
+            Restore
+          </button>
+        </li>
+      </ul>
+      <button
+        type="button"
+        class="restore-all"
+        :disabled="skippedTotal === 0"
+        @click="emit('restore-all')"
+      >
+        Restore all
+      </button>
+    </section>
   </PanelShell>
 </template>
