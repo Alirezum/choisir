@@ -3,6 +3,7 @@ import EmptyState from '../components/EmptyState.vue'
 import PanelShell from '../components/PanelShell.vue'
 
 const props = defineProps<{ items: string[]; total: number }>()
+const emit = defineEmits<{ skip: [name: string] }>()
 
 function header(): string {
   if (props.items.length < props.total) {
@@ -17,7 +18,16 @@ function header(): string {
     <template #header>{{ header() }}</template>
     <ul v-if="items.length > 0" class="list">
       <li v-for="name in items" :key="name" class="name-row" :title="name">
-        {{ name }}
+        <span class="name">{{ name }}</span>
+        <button
+          type="button"
+          class="skip-button"
+          :aria-label="'Skip ' + name"
+          @click="emit('skip', name)"
+          @keydown.enter.prevent="emit('skip', name)"
+        >
+          Not now
+        </button>
       </li>
     </ul>
     <EmptyState v-else>
