@@ -121,7 +121,7 @@ message plus restore-all.
 ### Web skipped view
 
 - [X] T034 [US2] Update `frontend/src/views/RemainingPanel.vue` with a separate `Skipped` section below the remaining list: each row shows the name and its countdown with a native `Restore` button whose `aria-label` is `Restore <item>, returns in <time>`, plus a `Restore all` button disabled when the list is empty; apply the empty-state precedence from `contracts/skip-snooze.md` — `all_skipped` shows `Every available item is skipped. Restore skipped items to pick again.` with restore-all visible, `total === 0 && skippedTotal > 0` shows `No items are available right now.` with the skipped section visible, and the existing invalid/empty/exhausted/filtered messages are unchanged; style the new controls with the existing secondary-action and panel classes in `frontend/src/styles.css` without a new palette, typeface, card, or animation.
-- [ ] T035 [P] [US2] Extend `frontend/tests/ui/views/RemainingPanel.test.ts` for the skipped section: rows and countdowns render, `Restore` and `Restore all` emit with the right names, accessible names include the return time, restore-all is disabled when empty, and all three empty-state branches render the exact messages.
+- [X] T035 [P] [US2] Extend `frontend/tests/ui/views/RemainingPanel.test.ts` for the skipped section: rows and countdowns render, `Restore` and `Restore all` emit with the right names, accessible names include the return time, restore-all is disabled when empty, and all three empty-state branches render the exact messages.
 
 ### TUI skipped view
 
