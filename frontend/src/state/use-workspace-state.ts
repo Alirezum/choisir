@@ -1,4 +1,11 @@
-import { onUnmounted, ref, watch, type ComputedRef, type Ref } from 'vue'
+import {
+  computed,
+  onUnmounted,
+  ref,
+  watch,
+  type ComputedRef,
+  type Ref,
+} from 'vue'
 
 import { api } from '../api.ts'
 import type {
@@ -12,12 +19,16 @@ export interface WorkspaceStateDeps {
   logFile: Ref<string>
   folderFlags: ComputedRef<FolderFlags>
   filterExclusions: ComputedRef<FilterExclusions>
+  skippedEntries?: ComputedRef<readonly string[]>
   status: {
     reportError: (error: unknown) => void
   }
   onPathChange?: () => void
   onLogChange?: () => void
-  onState?: (response: FilteredStateResponse | null) => void
+  onState?: (
+    response: FilteredStateResponse | null,
+    sentSkips: readonly string[],
+  ) => void
 }
 
 export interface WorkspaceStateBinding {
@@ -37,6 +48,7 @@ export function useWorkspaceState(
   deps: WorkspaceStateDeps,
 ): WorkspaceStateBinding {
   const state = ref<FilteredStateResponse | null>(null)
+  const skippedEntries = deps.skippedEntries ?? computed(() => [])
   let refreshTimer: number | undefined
   let requestNumber = 0
 
@@ -44,20 +56,22 @@ export function useWorkspaceState(
     if (deps.path.value.trim() === '') {
       requestNumber += 1
       state.value = null
-      deps.onState?.(null)
+      deps.onState?.(null, [])
       return
     }
     const current = ++requestNumber
+    const sentSkips = [...skippedEntries.value]
     try {
       const response = await api.stateFiltered({
         path: deps.path.value,
         log_file: deps.logFile.value,
         ...deps.folderFlags.value,
         ...deps.filterExclusions.value,
+        skipped_entries: sentSkips,
       })
       if (current !== requestNumber) return
       state.value = response
-      deps.onState?.(response)
+      deps.onState?.(response, sentSkips)
     } catch (error) {
       if (current !== requestNumber) return
       deps.status.reportError(error)
