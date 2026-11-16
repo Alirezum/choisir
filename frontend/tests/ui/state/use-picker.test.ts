@@ -47,6 +47,12 @@ function setup() {
     focus: vi.fn(),
   } as unknown as HTMLInputElement)
   const undo = { setReceipt: vi.fn(), clear: vi.fn() }
+  const skipNames = ref<string[]>([])
+  const skips = {
+    names: computed(() => [...skipNames.value]),
+    remove: vi.fn(),
+    skipping: ref(false),
+  }
 
   const result = usePicker({
     options,
@@ -57,6 +63,7 @@ function setup() {
     pathInput,
     filterExclusions: { exclusions, revision },
     undo,
+    skips,
   })
 
   return {
@@ -71,6 +78,8 @@ function setup() {
     excludedTypes,
     excludedEntries,
     undo,
+    skipNames,
+    skips,
     result,
   }
 }
@@ -134,6 +143,7 @@ describe('usePicker', () => {
       dirs_only: false,
       excluded_types: ['dir'],
       excluded_entries: ['notes.md'],
+      skipped_entries: [],
     })
     expect(choice.choice.value).toEqual({
       item: 'alpha.txt',
@@ -434,5 +444,72 @@ describe('usePicker', () => {
     await result.openCurrent()
 
     expect(open).toHaveBeenCalledWith('/tmp/choosier/alpha.txt')
+  })
+
+  it('sends the active skip names with the pick', async () => {
+    const { options, result, skipNames } = setup()
+    const pick = vi.spyOn(api, 'pick').mockResolvedValue(pickResponse())
+    options.path.value = '/tmp/choosier'
+    skipNames.value = ['beta.txt']
+
+    await result.pick()
+
+    expect(pick).toHaveBeenCalledWith(
+      expect.objectContaining({ skipped_entries: ['beta.txt'] }),
+    )
+  })
+
+  it('reports the distinct all-skipped outcome', async () => {
+    const { options, choice, result, setStatus, skipNames } = setup()
+    vi.spyOn(api, 'pick').mockResolvedValue(
+      pickResponse({ status: 'all_skipped', item: null, logged: false, preview: null }),
+    )
+    options.path.value = '/tmp/choosier'
+    skipNames.value = ['beta.txt']
+
+    await result.pick()
+
+    expect(setStatus).toHaveBeenCalledWith(
+      'Every available item is skipped. Restore skipped items to pick again.',
+    )
+    expect(choice.choice.value).toBeNull()
+  })
+
+  it('refuses to pick while a skip action is in flight', async () => {
+    const { options, result, setStatus, skips } = setup()
+    const pick = vi.spyOn(api, 'pick')
+    options.path.value = '/tmp/choosier'
+    skips.skipping.value = true
+
+    await result.pick()
+
+    expect(pick).not.toHaveBeenCalled()
+    expect(setStatus).toHaveBeenCalledWith('Wait for the skip action to finish.')
+  })
+
+  it('removes the skip of an item that was picked anyway', async () => {
+    const { options, result, skipNames, skips } = setup()
+    vi.spyOn(api, 'pick').mockResolvedValue(pickResponse({ item: 'beta.txt' }))
+    options.path.value = '/tmp/choosier'
+    skipNames.value = ['beta.txt']
+
+    await result.pick()
+
+    expect(skips.remove).toHaveBeenCalledWith('beta.txt')
+  })
+
+  it('exposes the in-flight flag around a pick', async () => {
+    const { options, result } = setup()
+    let seen = false
+    vi.spyOn(api, 'pick').mockImplementation(async () => {
+      seen = result.picking.value
+      return pickResponse()
+    })
+    options.path.value = '/tmp/choosier'
+
+    await result.pick()
+
+    expect(seen).toBe(true)
+    expect(result.picking.value).toBe(false)
   })
 })
