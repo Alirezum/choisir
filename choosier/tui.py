@@ -512,6 +512,14 @@ class ChooserApp(App[None]):
             button.tooltip = f"Restore {name}"
         self.query_one("#restore-all", Button).disabled = not self._displayed_skips
 
+    def _focus_control(self, preferred: str) -> None:
+        """Focus the preferred control, falling back through the skip actions."""
+        for widget_id in (preferred, "#skip", "#restore", "#restore-all"):
+            widget = self.query_one(widget_id, Button)
+            if not widget.disabled:
+                widget.focus()
+                return
+
     def _restore_selected(self) -> None:
         """Return the highlighted skipped entry to the remaining pool."""
         name = self._selected_skipped_name()
@@ -525,6 +533,7 @@ class ChooserApp(App[None]):
         del self._skips[name]
         self._set_status(f"Restored {name}.")
         self._refresh_panels()
+        self._focus_control("#restore")
 
     def _restore_all(self) -> None:
         """Return every session skip to the remaining pool."""
@@ -537,6 +546,7 @@ class ChooserApp(App[None]):
             f"Restored {count} skipped {'item' if count == 1 else 'items'}."
         )
         self._refresh_panels()
+        self._focus_control("#skip")
 
     def _sync_skip_control(self) -> None:
         """Label the skip action with the highlighted remaining entry."""
@@ -573,6 +583,7 @@ class ChooserApp(App[None]):
             f"Skipped {name}. It returns in ten minutes or when this session ends."
         )
         self._refresh_panels()
+        self._focus_control("#skip")
 
     def _expire_skips(self) -> None:
         """Return entries whose cooldown elapsed while the session is open."""
