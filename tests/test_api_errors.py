@@ -531,14 +531,10 @@ class FilterValidationApiTest(unittest.TestCase):
         for body in ({"skipped_entries": "a.txt"}, {"skipped_entries": [1]}):
             with self.subTest(body=body):
                 response = self._post("state", **body)
-                error = assert_error_envelope(
-                    self, response, 422, "validation_error"
-                )
+                error = assert_error_envelope(self, response, 422, "validation_error")
                 issues = error["error"]["details"]["issues"]
                 self.assertTrue(
-                    any(
-                        "skipped_entries" in issue["location"] for issue in issues
-                    ),
+                    any("skipped_entries" in issue["location"] for issue in issues),
                     issues,
                 )
 

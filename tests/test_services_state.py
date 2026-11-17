@@ -253,9 +253,7 @@ class StateSkipTest(unittest.TestCase):
             max_lines=None,
             skips=SkipSelection(frozenset({"beta.txt"})),
         )
-        self.assertEqual(
-            state.remaining, ("alpha.txt", "gamma", "sub")
-        )
+        self.assertEqual(state.remaining, ("alpha.txt", "gamma", "sub"))
         self.assertEqual(state.remaining_total, 3)
         self.assertEqual(state.skipped, ("beta.txt",))
         self.assertEqual(state.skipped_total, 1)

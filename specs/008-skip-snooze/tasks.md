@@ -164,7 +164,7 @@ history" promise is enforced by tests rather than inspection.
 
 - [X] T045 Add a `Skip and snooze` section to `README.md` after the Undo section: the Not now action, the fixed ten-minute cooldown capped by session end, the separate skipped list with restore and restore-all, the all-skipped outcome, per-session/per-tab independence, and that no history, target, filter, seed, dry-run, choice, or path-memory state changes; state that the CLI is unchanged.
 - [X] T046 Add an entry under `CHANGELOG.md` `## Unreleased` describing the TUI and web skip behavior, the separate skipped list and restore actions, the all-skipped outcome, and the additive API fields without a new route or persistent state.
-- [ ] T047 Run the complete quality gate from `specs/008-skip-snooze/quickstart.md` `## Automated checks`: all pytest suites, `ruff check`, `ruff format --check`, `mypy`, `npm run check:api`, `npm run test:api`, `npm run check:ui`, `npm run test:ui`, `npm run build`, and `uv build`; confirm the frontend build writes `choosier/web_static` and every command passes.
+- [X] T047 Run the complete quality gate from `specs/008-skip-snooze/quickstart.md` `## Automated checks`: all pytest suites, `ruff check`, `ruff format --check`, `mypy`, `npm run check:api`, `npm run test:api`, `npm run check:ui`, `npm run test:ui`, `npm run build`, and `uv build`; confirm the frontend build writes `choosier/web_static` and every command passes.
 - [ ] T048 [P] Verify the frozen boundaries: `specs/001-standardize-api-responses/contracts/api-contract.json` still has exactly 17 routes and the same error codes, `git diff --stat pyproject.toml` is empty, no new dependency or route exists, and `frontend/src/api-contract.generated.ts` matches `npm run generate:api` output.
 
 ---

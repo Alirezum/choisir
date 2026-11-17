@@ -348,7 +348,8 @@ class HistoryConsistencyTest(unittest.TestCase):
             payload.update(body)
             response = self.client.post("/api/state", json=payload)
             self.assertEqual(response.status_code, 200)
-            return response.json()
+            body_json: dict[str, Any] = response.json()
+            return body_json
 
         skipped = state(skipped_entries=["delta"])
         self.assertNotIn("delta", skipped["remaining"])
@@ -375,9 +376,7 @@ class HistoryConsistencyTest(unittest.TestCase):
 
         other_log = self.root / "web" / "other.jsonl"
         changed_log = state(log_file=str(other_log))
-        self.assertEqual(
-            changed_log["remaining"], ["alpha", "beta", "delta", "gamma"]
-        )
+        self.assertEqual(changed_log["remaining"], ["alpha", "beta", "delta", "gamma"])
         self.assertEqual(changed_log["skipped"], [])
 
         memory_before = memory_file.read_bytes() if memory_file.exists() else None

@@ -15,7 +15,7 @@ import type {
   PreviewModel,
 } from './types.ts'
 
-export type { FolderFlags }
+export type { FolderFlags, SkippedRow }
 
 export type TabId = 'remaining' | 'history' | 'browse' | 'options'
 export type Mode = 'all' | 'files' | 'dirs'

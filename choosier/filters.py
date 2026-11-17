@@ -180,9 +180,7 @@ def validate_entry_name(value: object, field: str) -> str:
             f"entry names must be at most {MAX_VALUE_LENGTH} characters",
         )
     if value in ("", ".", ".."):
-        raise FilterValidationError(
-            field, "entry names must not be empty, '.' or '..'"
-        )
+        raise FilterValidationError(field, "entry names must not be empty, '.' or '..'")
     if "/" in value or "\x00" in value:
         raise FilterValidationError(field, "entry names must not contain '/' or NUL")
     return value

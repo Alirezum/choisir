@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import EmptyState from '../components/EmptyState.vue'
 import PanelShell from '../components/PanelShell.vue'
-import type { SkippedRow } from '../state/use-skip'
+import type { SkippedRow } from '../view-models.ts'
 
 const props = defineProps<{
   items: string[]

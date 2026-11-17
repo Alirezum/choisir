@@ -114,7 +114,10 @@ class ApiContractTest(unittest.TestCase):
     def test_additive_skip_contract_matches_openapi(self) -> None:
         self.assertEqual(len(self.contract["routes"]), 17)
         self.assertFalse(
-            any(route["path"].startswith("/api/skip") for route in self.contract["routes"])
+            any(
+                route["path"].startswith("/api/skip")
+                for route in self.contract["routes"]
+            )
         )
 
         state_fields = {
@@ -126,7 +129,9 @@ class ApiContractTest(unittest.TestCase):
         get_state = contract_route(self.contract, "GET", "/api/state")
         post_state = contract_route(self.contract, "POST", "/api/state")
         self.assertTrue(state_fields.issubset(get_state["success"]["schema"]["fields"]))
-        self.assertTrue(state_fields.issubset(post_state["success"]["schema"]["fields"]))
+        self.assertTrue(
+            state_fields.issubset(post_state["success"]["schema"]["fields"])
+        )
 
         components = self.openapi["components"]["schemas"]
         for model in ("StateRequest", "PickRequest"):

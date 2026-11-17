@@ -83,9 +83,7 @@ def build_state(
     skipped_present = tuple(
         sorted(name for name in skip_names if name in _present_names(target))
     )
-    skipped = tuple(
-        name for name in skipped_present if name not in snapshot.logged
-    )
+    skipped = tuple(name for name in skipped_present if name not in snapshot.logged)
     eligible = [
         candidate.name
         for candidate in filtered
