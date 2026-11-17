@@ -331,6 +331,125 @@ class HistoryConsistencyTest(unittest.TestCase):
         self.assertFalse(again["removed"])
         self.assertFalse(service.clear())
 
+    def test_skip_actions_never_rewrite_history_or_target(self) -> None:
+        web_log = self.logs["web"]
+        session_log = self.logs["service"]
+        history_before = hashlib.sha256(web_log.read_bytes()).hexdigest()
+        target_before = sorted(
+            (entry.name, entry.read_bytes()) for entry in self.target.iterdir()
+        )
+        memory_file = Path(os.environ["CHOOSIER_PATH_MEMORY_FILE"])
+
+        def state(**body: object) -> dict[str, Any]:
+            payload: dict[str, object] = {
+                "path": str(self.target),
+                "log_file": str(web_log),
+            }
+            payload.update(body)
+            response = self.client.post("/api/state", json=payload)
+            self.assertEqual(response.status_code, 200)
+            return response.json()
+
+        skipped = state(skipped_entries=["delta"])
+        self.assertNotIn("delta", skipped["remaining"])
+        self.assertEqual(skipped["skipped"], ["delta"])
+
+        for seed in range(10):
+            response = self.client.post(
+                "/api/pick",
+                json={
+                    "path": str(self.target),
+                    "log_file": str(web_log),
+                    "seed": seed,
+                    "dry_run": True,
+                    "skipped_entries": ["delta"],
+                },
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertNotEqual(response.json()["item"], "delta")
+
+        restored = state()
+        self.assertIn("delta", restored["remaining"])
+        expired = state()
+        self.assertEqual(expired["remaining"], restored["remaining"])
+
+        other_log = self.root / "web" / "other.jsonl"
+        changed_log = state(log_file=str(other_log))
+        self.assertEqual(
+            changed_log["remaining"], ["alpha", "beta", "delta", "gamma"]
+        )
+        self.assertEqual(changed_log["skipped"], [])
+
+        memory_before = memory_file.read_bytes() if memory_file.exists() else None
+        all_skipped = self.client.post(
+            "/api/pick",
+            json={
+                "path": str(self.target),
+                "log_file": str(web_log),
+                "seed": 1,
+                "skipped_entries": ["alpha", "beta", "gamma", "delta"],
+            },
+        ).json()
+        self.assertEqual(all_skipped["status"], "all_skipped")
+        self.assertFalse(all_skipped["logged"])
+        self.assertIsNone(all_skipped["item"])
+
+        self.assertEqual(
+            hashlib.sha256(web_log.read_bytes()).hexdigest(), history_before
+        )
+        self.assertEqual(
+            sorted((entry.name, entry.read_bytes()) for entry in self.target.iterdir()),
+            target_before,
+        )
+        self.assertEqual(
+            memory_file.read_bytes() if memory_file.exists() else None,
+            memory_before,
+        )
+        self.assertEqual(list(self.root.rglob("*.lock")), [])
+        self.assertFalse(
+            any(
+                "skip" in entry.name.lower() or "cooldown" in entry.name.lower()
+                for entry in self.root.rglob("*")
+            )
+        )
+
+        seed_for_delta = next(
+            seed
+            for seed in range(100)
+            if self.client.post(
+                "/api/pick",
+                json={
+                    "path": str(self.target),
+                    "log_file": str(session_log),
+                    "seed": seed,
+                    "dry_run": True,
+                },
+            ).json()["item"]
+            == "delta"
+        )
+        second_session = self.client.post(
+            "/api/pick",
+            json={
+                "path": str(self.target),
+                "log_file": str(session_log),
+                "seed": seed_for_delta,
+            },
+        ).json()
+        self.assertEqual(second_session["status"], "picked")
+        self.assertEqual(second_session["item"], "delta")
+
+        first_session = state(
+            log_file=str(session_log), skipped_entries=["delta", "beta"]
+        )
+        self.assertNotIn("delta", first_session["skipped"])
+        self.assertIn("delta", first_session["skipped_present"])
+        self.assertIn("beta", first_session["skipped"])
+        self.assertNotIn("delta", first_session["remaining"])
+        self.assertEqual(first_session["history_total"], len(EXPECTED_ENTRIES) + 1)
+        self.assertEqual(
+            hashlib.sha256(web_log.read_bytes()).hexdigest(), history_before
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
