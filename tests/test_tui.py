@@ -1685,6 +1685,112 @@ class TuiSkipScenarioTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(self._skipped_names(app), ["b.txt"])
             self.assertFalse(app.query_one("#restore-all", Button).disabled)
 
+    async def test_keyboard_tab_reaches_every_skip_control(self) -> None:
+        self._touch("a.txt", "b.txt")
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            self._highlight(app, "a.txt")
+            app.query_one("#skip", Button).press()
+            await pilot.pause()
+
+            focus_order = [
+                "#remaining-list",
+                "#skip",
+                "#skipped-list",
+                "#restore",
+                "#restore-all",
+            ]
+            widgets = [app.query_one(widget_id) for widget_id in focus_order]
+            for widget in widgets:
+                self.assertTrue(widget.can_focus)
+
+            app.set_focus(app.query_one("#remaining-list"))
+            await pilot.pause()
+            for widget_id in focus_order[1:]:
+                await pilot.press("tab")
+                self.assertIs(app.focused, app.query_one(widget_id))
+
+            self.assertTrue(
+                _plain(app.query_one("#skip", Button).label).startswith("Not now: ")
+            )
+            self.assertIn("a.txt", _plain(app.query_one("#restore", Button).label))
+
+    async def test_stale_actions_refuse_and_leave_history_and_target_unchanged(
+        self,
+    ) -> None:
+        self._touch("a.txt", "b.txt", "c.txt")
+        HistoryService(self.log).append("b.txt")
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            self.assertEqual(self._remaining_names(app), ["a.txt", "c.txt"])
+
+            (self.target / "a.txt").unlink()
+            history_before = self.log.read_bytes()
+            target_before = sorted(
+                (entry.name, entry.read_bytes()) for entry in self.target.iterdir()
+            )
+
+            self._highlight(app, "a.txt")
+            app._skip_now()
+            await pilot.pause()
+
+            self.assertEqual(
+                self._status(app),
+                "Could not skip a.txt: it is no longer available.",
+            )
+            self.assertEqual(self.log.read_bytes(), history_before)
+            self.assertEqual(
+                sorted(
+                    (entry.name, entry.read_bytes()) for entry in self.target.iterdir()
+                ),
+                target_before,
+            )
+
+            app._skips = {"c.txt": app._skip_clock() + SKIP_COOLDOWN_SECONDS}
+            app._refresh_panels()
+            await pilot.pause()
+            self.assertEqual(self._skipped_names(app), ["c.txt"])
+            del app._skips["c.txt"]
+
+            app._restore_selected()
+            await pilot.pause()
+
+            self.assertEqual(
+                self._status(app),
+                "Could not restore c.txt: it is no longer available.",
+            )
+            self.assertEqual(self.log.read_bytes(), history_before)
+            self.assertEqual(
+                sorted(
+                    (entry.name, entry.read_bytes()) for entry in self.target.iterdir()
+                ),
+                target_before,
+            )
+
+    async def test_focus_moves_to_a_sensible_control_after_restoring(self) -> None:
+        self._touch("a.txt", "b.txt", "c.txt")
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app._skips = {
+                "a.txt": app._skip_clock() + SKIP_COOLDOWN_SECONDS,
+                "b.txt": app._skip_clock() + SKIP_COOLDOWN_SECONDS,
+            }
+            app._refresh_panels()
+            await pilot.pause()
+
+            self._highlight_skipped(app, "a.txt")
+            await pilot.pause()
+            app.query_one("#restore", Button).press()
+            await pilot.pause()
+            self.assertIs(app.focused, app.query_one("#restore", Button))
+
+            app.query_one("#restore-all", Button).press()
+            await pilot.pause()
+            self.assertIs(app.focused, app.query_one("#skip", Button))
+
 
 if __name__ == "__main__":
     unittest.main()
