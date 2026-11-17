@@ -187,6 +187,24 @@ describe('RemainingPanel', () => {
     expect(wrapper.findAll('.skipped-row')).toHaveLength(1)
   })
 
+  it('gives every control an accessible name in DOM order', () => {
+    const wrapper = mountPanel({
+      items: ['alpha.txt'],
+      total: 1,
+      skipped: [{ name: 'beta.txt', returnsIn: '9:59' }],
+      skippedTotal: 1,
+    })
+
+    const names = wrapper.findAll('button').map((button) => {
+      return button.attributes('aria-label') ?? button.text()
+    })
+    expect(names).toEqual([
+      'Skip alpha.txt',
+      'Restore beta.txt, returns in 9:59',
+      'Restore all skipped items',
+    ])
+  })
+
   it('renders no skip buttons when the remaining list is empty', () => {
     const wrapper = mountPanel({ items: [], total: 0 })
 

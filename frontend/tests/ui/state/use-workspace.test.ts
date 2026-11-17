@@ -494,6 +494,40 @@ describe('useWorkspace', () => {
     wrapper.unmount()
   })
 
+  it('leaves the current choice and history untouched by skip and restore', async () => {
+    const { workspace, wrapper } = setup({ path: '/tmp/choosier', log_file: '' })
+    vi.mocked(api.stateFiltered).mockImplementation(async (request) => {
+      const skipped = [...(request.skipped_entries ?? [])]
+      return filteredStateResponse({
+        remaining: ['alpha.txt'],
+        remaining_total: 1,
+        skipped,
+        skipped_total: skipped.length,
+        skipped_present: skipped,
+      })
+    })
+    await flushPromises()
+
+    const choice = {
+      item: 'picked.txt',
+      path: '/tmp/choosier/picked.txt',
+      preview: textPreview('picked'),
+    }
+    workspace.choice.value = choice
+    const historyBefore = workspace.state.value?.history
+
+    await workspace.skip.skip('alpha.txt')
+    expect(workspace.choice.value).toEqual(choice)
+    expect(workspace.state.value?.history).toEqual(historyBefore)
+
+    await workspace.skip.restore('alpha.txt')
+    expect(workspace.choice.value).toEqual(choice)
+    expect(workspace.state.value?.history).toEqual(historyBefore)
+    expect(workspace.skip.names.value).toEqual([])
+
+    wrapper.unmount()
+  })
+
   it('prunes exclusions the server no longer reports after a refresh', async () => {
     const first = filteredStateResponse({
       filter_options: {
