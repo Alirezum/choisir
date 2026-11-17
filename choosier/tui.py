@@ -1,5 +1,6 @@
 """Terminal UI for choosier (requires the `ui` extra)."""
 
+import math
 import time
 from collections.abc import Callable, Collection
 from pathlib import Path
@@ -246,6 +247,18 @@ class ChooserApp(App[None]):
         margin-top: 1;
         width: auto;
     }
+    .skipped-label {
+        margin-top: 1;
+        color: #dde4e2;
+        text-style: bold;
+    }
+    #skipped-list {
+        height: 6;
+        border: solid #2a343a;
+    }
+    #skipped-actions {
+        height: 3;
+    }
     """
 
     BINDINGS = [
@@ -269,6 +282,7 @@ class ChooserApp(App[None]):
         self._undo_receipt: UndoReceipt | None = None
         self._skips: dict[str, float] = {}
         self._skip_clock: Callable[[], float] = time.monotonic
+        self._displayed_skips: tuple[str, ...] = ()
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -294,6 +308,11 @@ class ChooserApp(App[None]):
                     yield Static("", id="remaining-summary")
                     yield OptionList(id="remaining-list")
                     yield Button("Not now", id="skip", disabled=True)
+                    yield Static("Skipped", classes="skipped-label")
+                    yield OptionList(id="skipped-list")
+                    with Horizontal(id="skipped-actions"):
+                        yield Button("Restore", id="restore", disabled=True)
+                        yield Button("Restore all", id="restore-all", disabled=True)
                 with TabPane("History", id="history-tab"):
                     yield Static("(no history yet)", id="history")
                     yield Button("Archive history", id="archive")
@@ -454,6 +473,71 @@ class ChooserApp(App[None]):
         prompt = remaining_list.get_option_at_index(index).prompt
         return prompt.plain if isinstance(prompt, Text) else str(prompt)
 
+    def _format_remaining(self, expires_at: float) -> str:
+        """Render one cooldown as m:ss, rounding up to the next second."""
+        seconds = max(0, math.ceil(expires_at - self._skip_clock()))
+        return f"{seconds // 60}:{seconds % 60:02d}"
+
+    def _skipped_row_text(self, name: str) -> str:
+        """One skipped-list row with its live cooldown."""
+        expires_at = self._skips.get(name, self._skip_clock())
+        return f"{name} — returns in {self._format_remaining(expires_at)}"
+
+    def _selected_skipped_name(self) -> str | None:
+        """The highlighted skipped entry, or None when the list is empty."""
+        skipped_list = self.query_one("#skipped-list", OptionList)
+        if skipped_list.option_count == 0:
+            return None
+        index = skipped_list.highlighted
+        if index is None:
+            index = 0
+        prompt = skipped_list.get_option_at_index(index).prompt
+        text = prompt.plain if isinstance(prompt, Text) else str(prompt)
+        return text.split(" — returns in ", 1)[0]
+
+    def _sync_restore_controls(self) -> None:
+        """Match the restore controls to the displayed skipped entries."""
+        name = self._selected_skipped_name()
+        button = self.query_one("#restore", Button)
+        if name is None:
+            button.disabled = True
+            button.label = "Restore"
+            button.tooltip = "No skipped entry to restore"
+        else:
+            expires_at = self._skips.get(name, self._skip_clock())
+            button.disabled = False
+            button.label = (
+                f"Restore: {name} (returns in {self._format_remaining(expires_at)})"
+            )
+            button.tooltip = f"Restore {name}"
+        self.query_one("#restore-all", Button).disabled = not self._displayed_skips
+
+    def _restore_selected(self) -> None:
+        """Return the highlighted skipped entry to the remaining pool."""
+        name = self._selected_skipped_name()
+        if name is None:
+            self._set_status("No skipped item to restore.")
+            return
+        if name not in self._skips:
+            self._set_status(f"Could not restore {name}: it is no longer available.")
+            self._refresh_panels()
+            return
+        del self._skips[name]
+        self._set_status(f"Restored {name}.")
+        self._refresh_panels()
+
+    def _restore_all(self) -> None:
+        """Return every session skip to the remaining pool."""
+        if not self._displayed_skips or not self._skips:
+            self._set_status("Could not restore skipped items: nothing is available.")
+            return
+        count = len(self._skips)
+        self._skips.clear()
+        self._set_status(
+            f"Restored {count} skipped {'item' if count == 1 else 'items'}."
+        )
+        self._refresh_panels()
+
     def _sync_skip_control(self) -> None:
         """Label the skip action with the highlighted remaining entry."""
         button = self.query_one("#skip", Button)
@@ -597,10 +681,22 @@ class ChooserApp(App[None]):
         remaining_list.clear_options()
         remaining_list.add_options(list(snapshot.remaining))
         remaining_list.disabled = not snapshot.remaining
-        self.query_one("#remaining-summary", Static).update(
-            escape(f"{snapshot.remaining_total} remaining")
+        if snapshot.all_skipped:
+            summary_text = ALL_SKIPPED_TEXT
+        elif snapshot.remaining_total == 0 and snapshot.skipped:
+            summary_text = "No items are available right now."
+        else:
+            summary_text = f"{snapshot.remaining_total} remaining"
+        self.query_one("#remaining-summary", Static).update(escape(summary_text))
+        self._displayed_skips = snapshot.skipped
+        skipped_list = self.query_one("#skipped-list", OptionList)
+        skipped_list.clear_options()
+        skipped_list.add_options(
+            self._skipped_row_text(name) for name in snapshot.skipped
         )
+        skipped_list.disabled = not snapshot.skipped
         self._sync_skip_control()
+        self._sync_restore_controls()
         self.query_one("#history", Static).update(
             render_panel(
                 [entry.display for entry in snapshot.history],
@@ -661,6 +757,10 @@ class ChooserApp(App[None]):
             self._clear_filters_all()
         elif event.button.id == "skip":
             self._skip_now()
+        elif event.button.id == "restore":
+            self._restore_selected()
+        elif event.button.id == "restore-all":
+            self._restore_all()
         elif event.button.id == "recent-use":
             self._use_recent_path()
         elif event.button.id == "recent-remove":
@@ -825,6 +925,8 @@ class ChooserApp(App[None]):
     ) -> None:
         if event.option_list.id == "remaining-list":
             self._sync_skip_control()
+        elif event.option_list.id == "skipped-list":
+            self._sync_restore_controls()
 
     def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
         if event.checkbox.id == "include-hidden":

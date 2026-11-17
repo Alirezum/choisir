@@ -1440,7 +1440,7 @@ class TuiSkipScenarioTest(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual(self.log.read_bytes(), before)
             self.assertEqual(self._remaining_names(app), [])
-            self.assertEqual(self._summary(app), "0 remaining")
+            self.assertEqual(self._summary(app), ALL_SKIPPED_TEXT)
 
     async def test_skipped_entry_is_never_picked_and_other_picks_still_log(
         self,
@@ -1542,8 +1542,9 @@ class TuiSkipScenarioTest(unittest.IsolatedAsyncioTestCase):
             await pilot.pause()
 
             self.assertEqual(self._remaining_names(app), [])
-            self.assertEqual(self._summary(app), "0 remaining")
+            self.assertEqual(self._summary(app), ALL_SKIPPED_TEXT)
             self.assertTrue(app.query_one("#skip", Button).disabled)
+            self.assertFalse(app.query_one("#restore-all", Button).disabled)
 
             app.do_pick()
             await pilot.pause()
