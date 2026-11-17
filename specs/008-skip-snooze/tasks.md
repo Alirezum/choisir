@@ -126,7 +126,7 @@ message plus restore-all.
 ### TUI skipped view
 
 - [X] T036 [US2] Update `choosier/tui.py`: add a `#skipped-list` OptionList and `#restore` / `#restore-all` Buttons inside the Remaining tab, rendering `<name> — returns in <m:ss>` rows from the snapshot's `skipped` order; label the buttons `Restore: <item> (returns in <time>)` and `Restore all`, disable them when nothing is skipped, and add `on_button_pressed` branches plus `_restore_selected()` / `_restore_all()`; when `all_skipped` is true the remaining summary shows `Every available item is skipped. Restore skipped items to pick again.` and keeps restore-all enabled; when nothing remains but skips are displayed the summary says `No items are available right now.`; use the exact restore messages from `contracts/skip-snooze.md` and refresh panels after each action.
-- [ ] T037 [P] [US2] Extend `tests/test_tui.py` for US2: skipped rows show names and countdowns, restore one returns only that entry, restore all clears the list, both messages match exactly, restore-all is disabled when empty, the all-skipped summary and restore-all availability appear when everything is skipped, and the neutral no-items message replaces the picked-out message.
+- [X] T037 [P] [US2] Extend `tests/test_tui.py` for US2: skipped rows show names and countdowns, restore one returns only that entry, restore all clears the list, both messages match exactly, restore-all is disabled when empty, the all-skipped summary and restore-all availability appear when everything is skipped, and the neutral no-items message replaces the picked-out message.
 
 **Checkpoint**: US1 and US2 work independently. Deferred entries are visible,
 counted, restorable, and never mistaken for picked or filtered entries.

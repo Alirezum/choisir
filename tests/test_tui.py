@@ -1399,6 +1399,21 @@ class TuiSkipScenarioTest(unittest.IsolatedAsyncioTestCase):
         remaining_list = app.query_one("#remaining-list", OptionList)
         remaining_list.highlighted = self._remaining_names(app).index(name)
 
+    def _skipped_names(self, app: "ChooserApp") -> list[str]:
+        skipped_list = app.query_one("#skipped-list", OptionList)
+        return [
+            _plain(option.prompt).split(" — returns in ", 1)[0]
+            for option in skipped_list.options
+        ]
+
+    def _skipped_rows(self, app: "ChooserApp") -> list[str]:
+        skipped_list = app.query_one("#skipped-list", OptionList)
+        return [_plain(option.prompt) for option in skipped_list.options]
+
+    def _highlight_skipped(self, app: "ChooserApp", name: str) -> None:
+        skipped_list = app.query_one("#skipped-list", OptionList)
+        skipped_list.highlighted = self._skipped_names(app).index(name)
+
     async def test_skip_button_defers_the_highlighted_entry(self) -> None:
         self._touch("a.txt", "b.txt", "c.txt")
         app = ChooserApp(str(self.target))
@@ -1561,6 +1576,114 @@ class TuiSkipScenarioTest(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(skip.disabled)
             self.assertEqual(_plain(skip.label), "Not now")
             self.assertEqual(self._summary(app), "0 remaining")
+
+    async def test_skipped_rows_show_names_and_countdowns(self) -> None:
+        self._touch("a.txt", "b.txt")
+        app = ChooserApp(str(self.target))
+        app._skip_clock = lambda: 1000.0
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            self._highlight(app, "a.txt")
+            app.query_one("#skip", Button).press()
+            await pilot.pause()
+
+            self.assertEqual(self._skipped_rows(app), ["a.txt — returns in 10:00"])
+            app._skip_clock = lambda: 1010.0
+            app._refresh_panels()
+            await pilot.pause()
+            self.assertEqual(self._skipped_rows(app), ["a.txt — returns in 9:50"])
+
+            self._highlight_skipped(app, "a.txt")
+            await pilot.pause()
+            restore = app.query_one("#restore", Button)
+            self.assertFalse(restore.disabled)
+            self.assertEqual(_plain(restore.label), "Restore: a.txt (returns in 9:50)")
+            self.assertFalse(app.query_one("#restore-all", Button).disabled)
+
+    async def test_restore_returns_only_the_highlighted_entry(self) -> None:
+        self._touch("a.txt", "b.txt", "c.txt")
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app._skips = {
+                "a.txt": app._skip_clock() + SKIP_COOLDOWN_SECONDS,
+                "b.txt": app._skip_clock() + SKIP_COOLDOWN_SECONDS,
+            }
+            app._refresh_panels()
+            await pilot.pause()
+            self.assertEqual(self._skipped_names(app), ["a.txt", "b.txt"])
+            self.assertEqual(self._remaining_names(app), ["c.txt"])
+
+            self._highlight_skipped(app, "a.txt")
+            await pilot.pause()
+            app.query_one("#restore", Button).press()
+            await pilot.pause()
+
+            self.assertEqual(self._status(app), "Restored a.txt.")
+            self.assertEqual(self._skipped_names(app), ["b.txt"])
+            self.assertEqual(self._remaining_names(app), ["a.txt", "c.txt"])
+
+    async def test_restore_all_returns_every_skipped_entry(self) -> None:
+        self._touch("a.txt", "b.txt")
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app._skips = {
+                "a.txt": app._skip_clock() + SKIP_COOLDOWN_SECONDS,
+                "b.txt": app._skip_clock() + SKIP_COOLDOWN_SECONDS,
+            }
+            app._refresh_panels()
+            await pilot.pause()
+            self.assertEqual(self._remaining_names(app), [])
+
+            app.query_one("#restore-all", Button).press()
+            await pilot.pause()
+
+            self.assertEqual(self._status(app), "Restored 2 skipped items.")
+            self.assertEqual(self._skipped_names(app), [])
+            self.assertEqual(self._remaining_names(app), ["a.txt", "b.txt"])
+            self.assertTrue(app.query_one("#restore-all", Button).disabled)
+            self.assertTrue(app.query_one("#restore", Button).disabled)
+
+    async def test_restore_all_uses_the_singular_message(self) -> None:
+        self._touch("a.txt", "b.txt")
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            self._highlight(app, "a.txt")
+            app.query_one("#skip", Button).press()
+            await pilot.pause()
+
+            app.query_one("#restore-all", Button).press()
+            await pilot.pause()
+
+            self.assertEqual(self._status(app), "Restored 1 skipped item.")
+            self.assertEqual(self._remaining_names(app), ["a.txt", "b.txt"])
+
+    async def test_restore_actions_are_disabled_without_skips(self) -> None:
+        self._touch("a.txt")
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            self.assertTrue(app.query_one("#restore", Button).disabled)
+            self.assertTrue(app.query_one("#restore-all", Button).disabled)
+            self.assertEqual(self._skipped_rows(app), [])
+
+    async def test_neutral_message_when_only_hidden_skips_remain(self) -> None:
+        self._touch("a.txt", "b.txt")
+        HistoryService(self.log).append("a.txt")
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app._excluded_entries = {"b.txt"}
+            app._skips = {"b.txt": app._skip_clock() + SKIP_COOLDOWN_SECONDS}
+            app._refresh_panels()
+            await pilot.pause()
+
+            self.assertEqual(self._remaining_names(app), [])
+            self.assertEqual(self._summary(app), "No items are available right now.")
+            self.assertEqual(self._skipped_names(app), ["b.txt"])
+            self.assertFalse(app.query_one("#restore-all", Button).disabled)
 
 
 if __name__ == "__main__":
