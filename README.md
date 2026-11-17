@@ -235,7 +235,7 @@ bytes and MIME types; the video endpoint keeps `200`/`206` streaming and
 answers malformed or unsatisfiable `Range` headers with the JSON envelope
 (400/416) instead of plain text.
 
-The machine-readable inventory (16 `/api` routes and all error codes) lives in
+The machine-readable inventory (17 `/api` routes and all error codes) lives in
 [`specs/001-standardize-api-responses/contracts/api-contract.json`](specs/001-standardize-api-responses/contracts/api-contract.json),
 with a human-readable audit in
 [`api-contract.md`](specs/001-standardize-api-responses/contracts/api-contract.md).
