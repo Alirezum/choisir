@@ -129,6 +129,30 @@ class CliTest(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 0)
         self.assertNotIn("undo", buf.getvalue().lower())
 
+    def test_help_has_no_skip_or_snooze_option(self) -> None:
+        buf = io.StringIO()
+        with self.assertRaises(SystemExit) as ctx, redirect_stdout(buf):
+            main(["--help"])
+        self.assertEqual(ctx.exception.code, 0)
+        output = buf.getvalue()
+        lowered = output.lower()
+        self.assertNotIn("skip", lowered)
+        self.assertNotIn("snooze", lowered)
+        for flag in (
+            "--log-file",
+            "--reset",
+            "--dry-run",
+            "--seed",
+            "--include-hidden",
+            "--files-only",
+            "--dirs-only",
+            "--list",
+            "--ui",
+            "--web",
+            "--port",
+        ):
+            self.assertIn(flag, output)
+
     def test_a_cli_pick_can_be_undone_by_the_service(self) -> None:
         code, _ = self._run(str(self.target), "--seed", "1")
         self.assertEqual(code, 0)
