@@ -168,6 +168,33 @@ reports that history changed. The action never changes user files or folders,
 the active path, the log-file setting, filters, seed, dry-run mode, or
 remembered folders, and the one-shot CLI gains no undo flag or command.
 
+## Skip and snooze
+
+Both interactive interfaces offer *Not now* on each remaining item. Skipping
+defers an item without picking it: no history line is written, no file or
+folder changes, and the item returns after a fixed ten-minute cooldown or when
+the session ends, whichever comes first. The cooldown is not configurable and
+never prompts.
+
+Skipped items appear in their own list beside the remaining items, with the
+time left, a per-item *Restore* action, and *Restore all*. When every available
+item is skipped, the interface reports that distinct outcome instead of an
+empty or exhausted folder, writes no history, does not pick or restore
+automatically, and offers restore-all. Skip state is session-only: it clears
+when the active folder or history-log setting changes, a web page load or
+reload starts fresh, and browser tabs never share skips. It lives only in
+interface memory — never in history, browser storage, or cookies.
+
+Skipping and restoring never change user files or folders, the target contents,
+history, the active path, the log-file setting, filters, seed, dry-run mode, the
+current choice, or remembered folders. The one-shot CLI keeps its flags, prompt,
+output, and exit codes: it has no skip or snooze option.
+
+`POST /api/state` and `POST /api/pick` accept optional `skipped_entries`. State
+responses add `skipped`, `skipped_total`, `skipped_present`, and `all_skipped`;
+picks can return the additive `all_skipped` status. No route is added, and the
+server stores no skip state.
+
 ## API contract
 
 Every failed `/api/*` request returns the same JSON envelope:
