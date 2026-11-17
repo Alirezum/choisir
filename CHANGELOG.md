@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- TUI and web UI: remaining items can be deferred with *Not now*. A skip never
+  picks or logs: the item returns after a fixed ten-minute cooldown or at
+  session end, and skips are independent per session and per browser tab. A
+  separate skipped list shows the time left and offers Restore and Restore all;
+  when every available item is skipped, both interfaces report a distinct
+  all-skipped outcome, write no history, and offer restore-all. Skips clear on
+  folder or log-file changes and on web page reloads, and never change user
+  files, history, target contents, filters, seed, dry-run mode, the current
+  choice, or remembered folders. Web API: added optional `skipped_entries` on
+  `POST /api/state` and `POST /api/pick`, the additive state fields `skipped`,
+  `skipped_total`, `skipped_present`, and `all_skipped`, and the additive
+  `all_skipped` pick status. No route was added and the server keeps no skip
+  state. The one-shot CLI is unchanged.
 - TUI and web UI: Undo removes exactly the history line written by the latest
   successful logged pick in the current session and makes that item eligible
   again. It is single-level and session-only: dry runs, failed, empty,
