@@ -81,6 +81,7 @@ function emptyMessage(): string {
       <button
         type="button"
         class="restore-all"
+        aria-label="Restore all skipped items"
         :disabled="skippedTotal === 0"
         @click="emit('restore-all')"
       >
