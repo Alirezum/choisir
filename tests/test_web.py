@@ -1373,9 +1373,7 @@ class WebSkipApiTest(unittest.TestCase):
         self.assertFalse(body["all_skipped"])
 
     def test_post_state_all_skipped(self) -> None:
-        body = self._post_state(
-            skipped_entries=["alpha.txt", "beta.txt", "gamma.txt"]
-        )
+        body = self._post_state(skipped_entries=["alpha.txt", "beta.txt", "gamma.txt"])
         self.assertEqual(body["remaining"], [])
         self.assertEqual(body["remaining_total"], 0)
         self.assertEqual(body["skipped_total"], 3)
@@ -1433,6 +1431,55 @@ class WebSkipApiTest(unittest.TestCase):
         self.assertNotIn(picked, body["skipped"])
         self.assertIn(picked, body["skipped_present"])
         self.assertNotIn(picked, body["remaining"])
+
+    def test_second_client_can_pick_a_name_skipped_by_the_first(self) -> None:
+        first = TestClient(create_app())
+        second = TestClient(create_app())
+        skipped = first.post(
+            "/api/state",
+            json={"path": str(self.target), "skipped_entries": ["beta.txt"]},
+        ).json()
+        self.assertNotIn("beta.txt", skipped["remaining"])
+        self.assertEqual(skipped["skipped"], ["beta.txt"])
+
+        seed = next(
+            seed
+            for seed in range(50)
+            if second.post(
+                "/api/pick",
+                json={
+                    "path": str(self.target),
+                    "seed": seed,
+                    "dry_run": True,
+                },
+            ).json()["item"]
+            == "beta.txt"
+        )
+        picked = second.post(
+            "/api/pick",
+            json={"path": str(self.target), "seed": seed},
+        ).json()
+        self.assertEqual(picked["status"], "picked")
+        self.assertEqual(picked["item"], "beta.txt")
+
+        refreshed = first.post(
+            "/api/state",
+            json={"path": str(self.target), "skipped_entries": ["beta.txt"]},
+        ).json()
+        self.assertNotIn("beta.txt", refreshed["skipped"])
+        self.assertEqual(refreshed["skipped_present"], ["beta.txt"])
+        self.assertEqual(refreshed["history_total"], 1)
+        self.assertNotIn("beta.txt", refreshed["remaining"])
+
+    def test_state_reports_only_the_snapshot_it_was_sent(self) -> None:
+        first = self._post_state(skipped_entries=["alpha.txt"])
+        self.assertEqual(first["skipped_present"], ["alpha.txt"])
+        self.assertEqual(first["skipped_total"], 1)
+
+        later = self._post_state(skipped_entries=["alpha.txt", "beta.txt"])
+        self.assertEqual(later["skipped_present"], ["alpha.txt", "beta.txt"])
+        self.assertEqual(later["skipped_total"], 2)
+        self.assertEqual(later["skipped"], ["alpha.txt", "beta.txt"])
 
 
 if __name__ == "__main__":
