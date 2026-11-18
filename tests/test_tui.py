@@ -558,6 +558,595 @@ class TuiUndoScenarioTest(unittest.IsolatedAsyncioTestCase):
 
 
 @unittest.skipUnless(HAS_TEXTUAL, "ui extra (textual) not installed")
+class TuiSnoozeScenarioTest(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.target = Path(self.tmp.name) / "target"
+        self.target.mkdir()
+        self.log = self.target / ".choosier.jsonl"
+
+    def _status(self, app: "ChooserApp") -> str:
+        return _plain(app.query_one("#status", Static).content)
+
+    def _remaining(self, app: "ChooserApp") -> list[str]:
+        remaining_list = app.query_one("#remaining-list", OptionList)
+        return [_plain(option.prompt) for option in remaining_list.options]
+
+    def _skipped(self, app: "ChooserApp") -> list[str]:
+        skipped_list = app.query_one("#skipped-list", OptionList)
+        return [_plain(option.prompt) for option in skipped_list.options]
+
+    def _history(self, app: "ChooserApp") -> list[str]:
+        return [entry.item for entry in read_log_entries(self.log)]
+
+    def _summary(self, app: "ChooserApp") -> str:
+        return _plain(app.query_one("#remaining-summary", Static).content)
+
+    async def test_snooze_removes_the_latest_line_and_defers_the_item(self) -> None:
+        for name in ("alpha.txt", "beta.txt", "gamma.txt"):
+            (self.target / name).touch()
+        HistoryService(self.log).append("older.txt")
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            snooze = app.query_one("#snooze", Button)
+            undo = app.query_one("#undo", Button)
+            self.assertTrue(snooze.disabled)
+            self.assertEqual(_plain(snooze.label), "Snooze")
+            self.assertEqual(snooze.tooltip, "Nothing to snooze")
+            self.assertTrue(undo.disabled)
+
+            app.query_one("#seed-input", Input).value = "7"
+            app.query_one("#include-hidden", Checkbox).value = True
+            app.do_pick()
+            await pilot.pause()
+
+            self.assertIsNotNone(app._current_choice)
+            assert app._current_choice is not None
+            item = app._current_choice.name
+            summary_before = self._summary(app)
+            remaining_before = self._remaining(app)
+            memory_before = PathMemory().snapshot().recent
+            self.assertEqual(self._history(app), ["older.txt", item])
+            self.assertEqual(len(remaining_before), 2)
+            self.assertEqual(summary_before, "2 remaining")
+            self.assertEqual(self._skipped(app), [])
+            self.assertFalse(snooze.disabled)
+            self.assertEqual(_plain(snooze.label), f"Snooze: {item}")
+            self.assertEqual(
+                snooze.tooltip,
+                f"Snooze {item} and undo its pick",
+            )
+            self.assertFalse(undo.disabled)
+
+            snooze.press()
+            await pilot.pause()
+
+            self.assertEqual(self._history(app), ["older.txt"])
+            self.assertEqual(self._summary(app), "2 remaining")
+            self.assertEqual(self._remaining(app), remaining_before)
+            rows = self._skipped(app)
+            self.assertEqual(len(rows), 1)
+            self.assertTrue(rows[0].startswith(f"{item} — returns in "))
+            self.assertTrue(rows[0].endswith("10:00"))
+            self.assertIn(item, app._skips)
+            self.assertNotIn(item, self._remaining(app))
+            self.assertEqual(
+                self._status(app),
+                f"Snoozed {item}. Its pick was removed; "
+                "it returns in ten minutes or when this session ends.",
+            )
+            self.assertEqual(
+                _plain(app.query_one("#choice", Static).content),
+                NO_CHOICE_TEXT,
+            )
+            self.assertEqual(
+                _plain(app.query_one("#preview", Static).content),
+                "(preview appears here)",
+            )
+            self.assertTrue(app.query_one("#open", Button).disabled)
+            self.assertTrue(snooze.disabled)
+            self.assertEqual(_plain(snooze.label), "Snooze")
+            self.assertEqual(snooze.tooltip, "Nothing to snooze")
+            self.assertTrue(undo.disabled)
+            self.assertIs(app.focused, app.query_one("#pick", Button))
+            self.assertIsNone(app._current_choice)
+            self.assertEqual(PathMemory().snapshot().recent, memory_before)
+            self.assertEqual(app.query_one("#seed-input", Input).value, "7")
+            self.assertFalse(app.query_one("#dry-run", Checkbox).value)
+            self.assertTrue(app.query_one("#include-hidden", Checkbox).value)
+            self.assertEqual(app._excluded_types, set())
+            self.assertEqual(app._excluded_entries, set())
+
+            state = build_state(
+                self.target,
+                self.log,
+                max_lines=None,
+                skips=SkipSelection(frozenset(app._skips)),
+            )
+            self.assertEqual(state.history_total, 1)
+            self.assertEqual(state.remaining_total, 2)
+            self.assertEqual(state.skipped, (item,))
+
+            app.do_pick()
+            await pilot.pause()
+            self.assertIsNotNone(app._current_choice)
+            assert app._current_choice is not None
+            self.assertFalse(snooze.disabled)
+            self.assertEqual(
+                _plain(snooze.label), f"Snooze: {app._current_choice.name}"
+            )
+            self.assertFalse(undo.disabled)
+
+            current_clock = app._skip_clock()
+            app._skip_clock = lambda: current_clock + SKIP_COOLDOWN_SECONDS + 1
+            history_before = self.log.read_bytes()
+            app._expire_skips()
+            await pilot.pause()
+
+            self.assertNotIn(item, app._skips)
+            self.assertIn(item, self._remaining(app))
+            self.assertEqual(self.log.read_bytes(), history_before)
+
+    async def test_snooze_supports_folders_videos_images_and_special_names(
+        self,
+    ) -> None:
+        names = (
+            "folder",
+            "clip.mp4",
+            "still.png",
+            "notes with space.txt",
+            "café ☕",
+        )
+        for index, name in enumerate(names):
+            with self.subTest(item=name):
+                case = Path(self.tmp.name) / f"case{index}"
+                case.mkdir()
+                entry = case / name
+                if name == "folder":
+                    entry.mkdir()
+                else:
+                    entry.touch()
+                log = case / ".choosier.jsonl"
+                app = ChooserApp(str(case))
+                async with app.run_test() as pilot:
+                    await pilot.pause()
+                    app.do_pick()
+                    await pilot.pause()
+
+                    self.assertEqual(app._current_choice, entry)
+                    snooze = app.query_one("#snooze", Button)
+                    self.assertFalse(snooze.disabled)
+                    snooze.press()
+                    await pilot.pause()
+
+                    self.assertEqual(read_log_entries(log), [])
+                    self.assertIn(name, app._skips)
+                    self.assertNotIn(name, self._remaining(app))
+                    self.assertEqual(len(self._skipped(app)), 1)
+                    self.assertTrue(self._skipped(app)[0].startswith(name))
+                    self.assertEqual(
+                        self._status(app),
+                        f"Snoozed {name}. Its pick was removed; "
+                        "it returns in ten minutes or when this session ends.",
+                    )
+                    self.assertTrue(snooze.disabled)
+                    self.assertTrue(app.query_one("#undo", Button).disabled)
+                    self.assertIsNone(app._current_choice)
+
+    async def test_snoozing_the_last_entry_offers_restore_without_a_pick(
+        self,
+    ) -> None:
+        (self.target / "only.txt").touch()
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            app.query_one("#snooze", Button).press()
+            await pilot.pause()
+
+            self.assertEqual(self._summary(app), ALL_SKIPPED_TEXT)
+            self.assertEqual(self._remaining(app), [])
+            self.assertEqual(len(self._skipped(app)), 1)
+            restore = app.query_one("#restore", Button)
+            self.assertFalse(restore.disabled)
+            self.assertIsNone(app._current_choice)
+
+            app.query_one("#pick", Button).press()
+            await pilot.pause()
+            self.assertEqual(self._status(app), ALL_SKIPPED_TEXT)
+            self.assertIsNone(app._current_choice)
+            self.assertEqual(self._history(app), [])
+            self.assertEqual(len(self._skipped(app)), 1)
+
+            restore.press()
+            await pilot.pause()
+
+            self.assertEqual(self._skipped(app), [])
+            self.assertIn("only.txt", self._remaining(app))
+            self.assertEqual(self._history(app), [])
+            self.assertTrue(app.query_one("#undo", Button).disabled)
+            self.assertTrue(app.query_one("#snooze", Button).disabled)
+
+
+@unittest.skipUnless(HAS_TEXTUAL, "ui extra (textual) not installed")
+class TuiSnoozeTrustTest(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.target = Path(self.tmp.name) / "target"
+        self.target.mkdir()
+        self.log = self.target / ".choosier.jsonl"
+
+    def _status(self, app: "ChooserApp") -> str:
+        return _plain(app.query_one("#status", Static).content)
+
+    def _remaining(self, app: "ChooserApp") -> list[str]:
+        remaining_list = app.query_one("#remaining-list", OptionList)
+        return [_plain(option.prompt) for option in remaining_list.options]
+
+    async def test_dry_run_and_consumed_receipts_stay_unavailable(self) -> None:
+        (self.target / "alpha.txt").touch()
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.query_one("#dry-run", Checkbox).value = True
+            app.do_pick()
+            await pilot.pause()
+
+            snooze = app.query_one("#snooze", Button)
+            self.assertTrue(snooze.disabled)
+            self.assertFalse(self.log.exists())
+
+            app._snooze_pick()
+            await pilot.pause()
+
+            self.assertEqual(self._status(app), "Nothing to snooze.")
+            self.assertFalse(self.log.exists())
+            self.assertEqual(app._skips, {})
+            self.assertIsNotNone(app._current_choice)
+
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            app.query_one("#undo", Button).press()
+            await pilot.pause()
+
+            self.assertTrue(app.query_one("#undo", Button).disabled)
+            self.assertTrue(app.query_one("#snooze", Button).disabled)
+            app._snooze_pick()
+            await pilot.pause()
+            self.assertEqual(self._status(app), "Nothing to snooze.")
+            self.assertEqual(app._skips, {})
+
+    async def test_conflicts_and_missing_history_refuse_completely(self) -> None:
+        (self.target / "alpha.txt").touch()
+        (self.target / "beta.txt").touch()
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            assert app._current_choice is not None
+            item = app._current_choice.name
+            with open(self.log, "a", encoding="utf-8") as handle:
+                handle.write('{"ts": "t", "item": "external"}\n')
+            before = self.log.read_bytes()
+
+            app.query_one("#snooze", Button).press()
+            await pilot.pause()
+
+            self.assertEqual(
+                self._status(app),
+                f"Could not snooze {item}: history changed.",
+            )
+            self.assertEqual(self.log.read_bytes(), before)
+            self.assertEqual(app._skips, {})
+            self.assertTrue(app.query_one("#snooze", Button).disabled)
+            self.assertTrue(app.query_one("#undo", Button).disabled)
+
+        gone = Path(self.tmp.name) / "gone"
+        gone.mkdir()
+        (gone / "only.txt").touch()
+        log = gone / ".choosier.jsonl"
+        app = ChooserApp(str(gone))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            log.unlink()
+
+            app.query_one("#snooze", Button).press()
+            await pilot.pause()
+
+            self.assertEqual(
+                self._status(app),
+                "Could not snooze only.txt: history is empty.",
+            )
+            self.assertFalse(log.exists())
+            self.assertEqual(app._skips, {})
+            self.assertTrue(app.query_one("#snooze", Button).disabled)
+            self.assertTrue(app.query_one("#undo", Button).disabled)
+
+    async def test_snooze_failure_keeps_the_receipt_for_retry(self) -> None:
+        (self.target / "alpha.txt").touch()
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            receipt = app._undo_receipt
+            self.assertIsNotNone(receipt)
+
+            with patch.object(
+                HistoryService,
+                "undo",
+                side_effect=ServiceError(
+                    FailureKind.IO_ERROR,
+                    "Error undoing pick: denied",
+                ),
+            ):
+                app.query_one("#snooze", Button).press()
+                await pilot.pause()
+
+            self.assertEqual(self._status(app), "Error undoing pick: denied")
+            self.assertIs(app._undo_receipt, receipt)
+            self.assertFalse(app.query_one("#snooze", Button).disabled)
+            self.assertFalse(app.query_one("#undo", Button).disabled)
+            self.assertEqual(app._skips, {})
+            self.assertIsNotNone(app._current_choice)
+
+    async def test_repeated_snooze_and_restore_leave_history_removed(self) -> None:
+        (self.target / "alpha.txt").touch()
+        (self.target / "beta.txt").touch()
+        HistoryService(self.log).append("older.txt")
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            assert app._current_choice is not None
+            item = app._current_choice.name
+
+            app.query_one("#snooze", Button).press()
+            await pilot.pause()
+            self.assertEqual(
+                [entry.item for entry in read_log_entries(self.log)], ["older.txt"]
+            )
+            self.assertEqual(len(app._skips), 1)
+
+            app._snooze_pick()
+            await pilot.pause()
+            self.assertEqual(self._status(app), "Nothing to snooze.")
+            self.assertEqual(
+                [entry.item for entry in read_log_entries(self.log)],
+                ["older.txt"],
+            )
+            self.assertEqual(len(app._skips), 1)
+
+            app.query_one("#restore", Button).press()
+            await pilot.pause()
+
+            self.assertIn(item, self._remaining(app))
+            self.assertEqual(
+                [entry.item for entry in read_log_entries(self.log)],
+                ["older.txt"],
+            )
+            self.assertEqual(app._skips, {})
+            self.assertTrue(app.query_one("#undo", Button).disabled)
+            self.assertTrue(app.query_one("#snooze", Button).disabled)
+
+    async def test_archive_clear_and_rotation_follow_the_receipt_scope(self) -> None:
+        for name in ("alpha.txt", "beta.txt", "gamma.txt"):
+            (self.target / name).touch()
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            assert app._current_choice is not None
+            snoozed = app._current_choice.name
+            app.query_one("#snooze", Button).press()
+            await pilot.pause()
+            self.assertIn(snoozed, app._skips)
+
+            app.do_pick()
+            await pilot.pause()
+            self.assertFalse(app.query_one("#snooze", Button).disabled)
+            app._archive_history()
+            await pilot.pause()
+            self.assertFalse(self.log.exists())
+            self.assertTrue(app.query_one("#undo", Button).disabled)
+            self.assertTrue(app.query_one("#snooze", Button).disabled)
+            self.assertIn(snoozed, app._skips)
+
+            app.do_pick()
+            await pilot.pause()
+            self.assertFalse(app.query_one("#snooze", Button).disabled)
+            app._do_clear(True)
+            await pilot.pause()
+            self.assertFalse(self.log.exists())
+            self.assertTrue(app.query_one("#undo", Button).disabled)
+            self.assertTrue(app.query_one("#snooze", Button).disabled)
+            self.assertIn(snoozed, app._skips)
+
+            app.do_pick()
+            await pilot.pause()
+            receipt = app._undo_receipt
+            self.assertIsNotNone(receipt)
+            self.log.unlink()
+            app._archive_history()
+            await pilot.pause()
+            self.assertIs(app._undo_receipt, receipt)
+            self.assertFalse(app.query_one("#snooze", Button).disabled)
+            app._do_clear(True)
+            await pilot.pause()
+            self.assertIs(app._undo_receipt, receipt)
+            self.assertFalse(app.query_one("#snooze", Button).disabled)
+            self.assertEqual(app._skips, {snoozed: app._skips[snoozed]})
+
+            app.do_pick()
+            await pilot.pause()
+            assert app._current_choice is not None
+            item = app._current_choice.name
+            rotated = self.log.with_suffix(".jsonl.old")
+            self.log.rename(rotated)
+            with open(self.log, "w", encoding="utf-8") as handle:
+                handle.write('{"ts": "t", "item": "external"}\n')
+            before = self.log.read_bytes()
+            skips_before = dict(app._skips)
+
+            app.query_one("#snooze", Button).press()
+            await pilot.pause()
+
+            self.assertEqual(
+                self._status(app),
+                f"Could not snooze {item}: history changed.",
+            )
+            self.assertEqual(self.log.read_bytes(), before)
+            self.assertEqual(app._skips, skips_before)
+            self.assertTrue(app.query_one("#snooze", Button).disabled)
+            self.assertTrue(app.query_one("#undo", Button).disabled)
+
+    async def test_deleted_item_refuses_without_touching_history_or_skips(self) -> None:
+        (self.target / "alpha.txt").touch()
+        (self.target / "beta.txt").touch()
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            assert app._current_choice is not None
+            item = app._current_choice.name
+            receipt = app._undo_receipt
+            (self.target / item).unlink()
+            before = self.log.read_bytes()
+
+            app.query_one("#snooze", Button).press()
+            await pilot.pause()
+
+            self.assertEqual(
+                self._status(app),
+                f"Could not snooze {item}: it is no longer available.",
+            )
+            self.assertEqual(self.log.read_bytes(), before)
+            self.assertEqual(app._skips, {})
+            self.assertIs(app._undo_receipt, receipt)
+            self.assertIsNotNone(app._current_choice)
+            self.assertFalse(app.query_one("#snooze", Button).disabled)
+            self.assertFalse(app.query_one("#undo", Button).disabled)
+
+            with patch(
+                "choosier.tui.os.scandir",
+                side_effect=OSError("scan denied"),
+            ):
+                app.query_one("#snooze", Button).press()
+                await pilot.pause()
+
+            self.assertEqual(self._status(app), "scan denied")
+            self.assertEqual(self.log.read_bytes(), before)
+            self.assertEqual(app._skips, {})
+            self.assertIs(app._undo_receipt, receipt)
+            self.assertFalse(app.query_one("#snooze", Button).disabled)
+
+    async def test_scope_changes_clear_both_controls_until_a_new_pick(self) -> None:
+        (self.target / "alpha.txt").touch()
+        (self.target / "beta.txt").touch()
+        other = Path(self.tmp.name) / "other"
+        other.mkdir()
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            self.assertFalse(app.query_one("#undo", Button).disabled)
+            self.assertFalse(app.query_one("#snooze", Button).disabled)
+
+            app.query_one("#path-input", Input).value = str(other)
+            await pilot.pause()
+            self.assertIsNone(app._undo_receipt)
+            self.assertTrue(app.query_one("#undo", Button).disabled)
+            self.assertTrue(app.query_one("#snooze", Button).disabled)
+            self.assertEqual(_plain(app.query_one("#snooze", Button).label), "Snooze")
+
+            app.query_one("#path-input", Input).value = str(self.target)
+            await pilot.pause()
+            self.assertTrue(app.query_one("#undo", Button).disabled)
+            self.assertTrue(app.query_one("#snooze", Button).disabled)
+
+            app.do_pick()
+            await pilot.pause()
+            self.assertFalse(app.query_one("#undo", Button).disabled)
+            self.assertFalse(app.query_one("#snooze", Button).disabled)
+
+            app.query_one("#log-input", Input).value = str(self.target / "custom.jsonl")
+            await pilot.pause()
+            self.assertIsNone(app._undo_receipt)
+            self.assertTrue(app.query_one("#undo", Button).disabled)
+            self.assertTrue(app.query_one("#snooze", Button).disabled)
+
+    async def test_snooze_is_keyboard_reachable_after_undo(self) -> None:
+        (self.target / "alpha.txt").touch()
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            snooze = app.query_one("#snooze", Button)
+            self.assertEqual(_plain(snooze.label), "Snooze: alpha.txt")
+            self.assertEqual(snooze.tooltip, "Snooze alpha.txt and undo its pick")
+
+            app.query_one("#pick", Button).focus()
+            await pilot.pause()
+            await pilot.press("tab")
+            await pilot.pause()
+            self.assertIs(app.focused, app.query_one("#open", Button))
+            await pilot.press("tab")
+            await pilot.pause()
+            self.assertIs(app.focused, app.query_one("#undo", Button))
+            await pilot.press("tab")
+            await pilot.pause()
+            self.assertIs(app.focused, snooze)
+
+            await pilot.press("enter")
+            await pilot.pause()
+
+            self.assertEqual(
+                self._status(app),
+                "Snoozed alpha.txt. Its pick was removed; "
+                "it returns in ten minutes or when this session ends.",
+            )
+            self.assertIs(app.focused, app.query_one("#pick", Button))
+            self.assertTrue(app.query_one("#undo", Button).disabled)
+            self.assertTrue(snooze.disabled)
+
+    async def test_restart_keeps_the_history_removal_and_no_skip(self) -> None:
+        (self.target / "alpha.txt").touch()
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.do_pick()
+            await pilot.pause()
+            app.query_one("#snooze", Button).press()
+            await pilot.pause()
+            self.assertEqual(read_log_entries(self.log), [])
+
+        app = ChooserApp(str(self.target))
+        async with app.run_test() as pilot:
+            await pilot.pause()
+
+            self.assertEqual(read_log_entries(self.log), [])
+            self.assertEqual(app._skips, {})
+            self.assertIn("alpha.txt", self._remaining(app))
+            self.assertTrue(app.query_one("#undo", Button).disabled)
+            self.assertTrue(app.query_one("#snooze", Button).disabled)
+
+
+@unittest.skipUnless(HAS_TEXTUAL, "ui extra (textual) not installed")
 class TuiFilterScenarioTest(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()

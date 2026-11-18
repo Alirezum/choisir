@@ -1,6 +1,7 @@
 """Terminal UI for choosier (requires the `ui` extra)."""
 
 import math
+import os
 import time
 from collections.abc import Callable, Collection
 from pathlib import Path
@@ -300,6 +301,7 @@ class ChooserApp(App[None]):
                     yield Button("Pick", id="pick", variant="primary")
                     yield Button("Open", id="open")
                     yield Button("Undo", id="undo", disabled=True)
+                    yield Button("Snooze", id="snooze", disabled=True)
                 yield Static("", id="status")
             with TabbedContent(id="tabs"):
                 with TabPane("Browse", id="browse-tab"):
@@ -451,6 +453,21 @@ class ChooserApp(App[None]):
             f"Undo the pick of {receipt.item}"
             if receipt is not None
             else "Nothing to undo"
+        )
+
+    def _sync_snooze_control(self) -> None:
+        """Match the Snooze control to the receipt and displayed choice."""
+        button = self.query_one("#snooze", Button)
+        receipt = self._undo_receipt
+        matches = (
+            receipt is not None and self._current_choice == self._target / receipt.item
+        )
+        button.disabled = not matches
+        button.label = f"Snooze: {receipt.item}" if receipt is not None else "Snooze"
+        button.tooltip = (
+            f"Snooze {receipt.item} and undo its pick"
+            if receipt is not None
+            else "Nothing to snooze"
         )
 
     def _filter_selection(self) -> FilterSelection:
@@ -673,6 +690,7 @@ class ChooserApp(App[None]):
     def _refresh_panels(self, rebuild_filters: bool = True) -> None:
         self._sync_filter_scope()
         self._sync_undo_control()
+        self._sync_snooze_control()
         snapshot = build_state(
             self._target,
             self._current_log_path(),
@@ -752,6 +770,8 @@ class ChooserApp(App[None]):
             self._open_current()
         elif event.button.id == "undo":
             self._undo_pick()
+        elif event.button.id == "snooze":
+            self._snooze_pick()
         elif event.button.id == "archive":
             self._archive_history()
         elif event.button.id == "clear":
@@ -954,6 +974,7 @@ class ChooserApp(App[None]):
             self._clear_filter_lists()
             self._update_filter_widgets()
             self._sync_undo_control()
+            self._sync_snooze_control()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id in ("path-input", "seed-input", "log-input"):
@@ -1047,11 +1068,57 @@ class ChooserApp(App[None]):
         else:
             self._set_status(f"Could not undo {outcome.item}: history is empty.")
         self._undo_receipt = None
-        if self._current_choice == self._target / outcome.item:
-            self._current_choice = None
-            self.query_one("#choice", Static).update(NO_CHOICE_TEXT)
-            self.query_one("#preview", Static).update("(preview appears here)")
-            self.query_one("#open", Button).disabled = True
+        self._clear_choice_if(outcome.item)
+        self._refresh_panels()
+
+    def _clear_choice_if(self, item: str) -> None:
+        """Clear the board and preview only when they still show this item."""
+        if self._current_choice != self._target / item:
+            return
+        self._current_choice = None
+        self.query_one("#choice", Static).update(NO_CHOICE_TEXT)
+        self.query_one("#preview", Static).update("(preview appears here)")
+        self.query_one("#open", Button).disabled = True
+
+    def _snooze_pick(self) -> None:
+        """Remove the latest logged pick and defer that same item."""
+        receipt = self._undo_receipt
+        if receipt is None or self._current_choice != self._target / receipt.item:
+            self._set_status("Nothing to snooze.")
+            return
+        try:
+            with os.scandir(self._target) as entries:
+                present = any(entry.name == receipt.item for entry in entries)
+        except OSError as e:
+            self._set_status(str(e))
+            return
+        if not present:
+            self._set_status(
+                f"Could not snooze {receipt.item}: it is no longer available."
+            )
+            return
+        try:
+            outcome = HistoryService(self._current_log_path()).undo(receipt)
+        except ServiceError as e:
+            self._set_status(e.message)
+            self._refresh_panels()
+            return
+        self._undo_receipt = None
+        if outcome.status == "undone":
+            self._skips[outcome.item] = self._skip_clock() + SKIP_COOLDOWN_SECONDS
+            self._set_status(
+                f"Snoozed {outcome.item}. Its pick was removed; "
+                "it returns in ten minutes or when this session ends."
+            )
+            self._clear_choice_if(outcome.item)
+            self._refresh_panels()
+            self._focus_control("#pick")
+            return
+        if outcome.status == "changed":
+            self._set_status(f"Could not snooze {outcome.item}: history changed.")
+        else:
+            self._set_status(f"Could not snooze {outcome.item}: history is empty.")
+        self._clear_choice_if(outcome.item)
         self._refresh_panels()
 
     def _open_current(self) -> None:
@@ -1074,6 +1141,7 @@ class ChooserApp(App[None]):
         self._undo_receipt = None
         self._sync_filter_scope()
         self._sync_undo_control()
+        self._sync_snooze_control()
         target = self._target
         if not target.is_dir():
             self._set_status("Invalid Path.")

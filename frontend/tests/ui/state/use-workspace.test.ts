@@ -9,6 +9,7 @@ import type {
   PickResponse,
   PreviewModel,
   RemoveHistoryItemsResponse,
+  UndoHistoryResponse,
 } from '../../../src/types.ts'
 import {
   deferred,
@@ -740,8 +741,7 @@ describe('useWorkspace', () => {
     wrapper.unmount()
   })
 
-  it('composes undo from the latest pick and clears it on path or log changes', async () => {
-    const receipt = {
+  it('composes undo from the latest pick and clears it on path or log changes', async () => {    const receipt = {
       item: 'alpha.txt',
       entry: '{"ts": "t", "item": "alpha.txt"}',
       digest: 'd'.repeat(64),
@@ -823,6 +823,234 @@ describe('useWorkspace', () => {
     await nextTick()
     expect(workspace.canUndo.value).toBe(false)
     expect(undoHistory.mock.calls.length).toBe(undoCalls)
+
+    wrapper.unmount()
+  })
+
+  it('snoozes the latest pick through the workspace binding', async () => {
+    const receipt = {
+      item: 'alpha.txt',
+      entry: '{"ts": "t", "item": "alpha.txt"}',
+      digest: 'd'.repeat(64),
+    }
+    const picked: PickResponse = {
+      status: 'picked',
+      log_file: '/tmp/choosier/.choosier.jsonl',
+      item: 'alpha.txt',
+      logged: true,
+      preview: textPreview('alpha'),
+      path_memory_notice: null,
+      undo: receipt,
+    }
+    vi.spyOn(api, 'pick').mockResolvedValue(picked)
+    const pending = deferred<UndoHistoryResponse>()
+    const undoHistory = vi
+      .spyOn(api, 'undoHistory')
+      .mockReturnValue(pending.promise)
+    const { workspace, wrapper } = setup({
+      path: '/tmp/choosier',
+      log_file: '',
+      path_warning: null,
+    })
+    vi.mocked(api.browse).mockResolvedValue({
+      path: '/tmp/choosier',
+      parent: '/tmp',
+      entries: [{ name: 'alpha.txt', is_dir: false }],
+    })
+    vi.mocked(api.stateFiltered).mockImplementation(async (request) => {
+      const skipped = [...(request.skipped_entries ?? [])]
+      return filteredStateResponse({
+        remaining: [],
+        remaining_total: 0,
+        skipped,
+        skipped_total: skipped.length,
+        skipped_present: skipped,
+      })
+    })
+    await flushPromises()
+
+    expect(workspace.canSnooze.value).toBe(false)
+    expect(workspace.snoozeLabel.value).toBe(
+      'Snooze last pick (nothing to snooze)',
+    )
+
+    await workspace.pick()
+
+    expect(workspace.canSnooze.value).toBe(true)
+    expect(workspace.snoozeLabel.value).toBe('Snooze last pick: alpha.txt')
+    expect(workspace.snoozing.value).toBe(false)
+
+    const refreshes = vi.mocked(api.stateFiltered).mock.calls.length
+    const snoozing = workspace.snooze()
+    await flushPromises()
+    expect(workspace.snoozing.value).toBe(true)
+    expect(workspace.canSnooze.value).toBe(false)
+
+    pending.resolve({
+      log_file: '/tmp/choosier/.choosier.jsonl',
+      status: 'undone',
+      item: 'alpha.txt',
+      removed: true,
+    })
+    await snoozing
+
+    expect(undoHistory).toHaveBeenCalledWith({
+      path: '/tmp/choosier',
+      log_file: null,
+      receipt,
+    })
+    expect(workspace.skip.names.value).toEqual(['alpha.txt'])
+    expect(workspace.skippedTotal.value).toBe(1)
+    expect(workspace.status.value).toBe(
+      'Snoozed alpha.txt. Its pick was removed; it returns in ten minutes or when this session ends.',
+    )
+    expect(workspace.canUndo.value).toBe(false)
+    expect(workspace.undoLabel.value).toBe('Undo last pick (nothing to undo)')
+    expect(workspace.canSnooze.value).toBe(false)
+    expect(workspace.snoozing.value).toBe(false)
+    expect(workspace.choice.value).toBeNull()
+    expect(vi.mocked(api.stateFiltered).mock.calls.length).toBeGreaterThan(
+      refreshes,
+    )
+
+    wrapper.unmount()
+  })
+
+  it('leaves a different current choice untouched and refuses to snooze', async () => {
+    const receipt = {
+      item: 'alpha.txt',
+      entry: '{"ts": "t", "item": "alpha.txt"}',
+      digest: 'd'.repeat(64),
+    }
+    const picked: PickResponse = {
+      status: 'picked',
+      log_file: '/tmp/choosier/.choosier.jsonl',
+      item: 'alpha.txt',
+      logged: true,
+      preview: textPreview('alpha'),
+      path_memory_notice: null,
+      undo: receipt,
+    }
+    vi.spyOn(api, 'pick').mockResolvedValue(picked)
+    const undoHistory = vi.spyOn(api, 'undoHistory')
+    const { workspace, wrapper } = setup({
+      path: '/tmp/choosier',
+      log_file: '',
+      path_warning: null,
+    })
+    await flushPromises()
+    await workspace.pick()
+
+    workspace.choice.value = {
+      item: 'beta.txt',
+      path: '/tmp/choosier/beta.txt',
+      preview: textPreview('beta'),
+    }
+
+    expect(workspace.canSnooze.value).toBe(false)
+    await workspace.snooze()
+
+    expect(undoHistory).not.toHaveBeenCalled()
+    expect(workspace.status.value).toBe('Nothing to snooze.')
+    expect(workspace.choice.value?.item).toBe('beta.txt')
+    expect(workspace.skip.names.value).toEqual([])
+
+    wrapper.unmount()
+  })
+
+  it('clears snooze, undo, and skips across scope changes until a new pick', async () => {
+    const receipt = {
+      item: 'alpha.txt',
+      entry: '{"ts": "t", "item": "alpha.txt"}',
+      digest: 'd'.repeat(64),
+    }
+    const picked: PickResponse = {
+      status: 'picked',
+      log_file: '/tmp/choosier/.choosier.jsonl',
+      item: 'alpha.txt',
+      logged: true,
+      preview: textPreview('alpha'),
+      path_memory_notice: null,
+      undo: receipt,
+    }
+    vi.spyOn(api, 'pick').mockResolvedValue(picked)
+    vi.spyOn(api, 'undoHistory').mockResolvedValue({
+      log_file: '/tmp/choosier/.choosier.jsonl',
+      status: 'undone',
+      item: 'alpha.txt',
+      removed: true,
+    })
+    const { workspace, wrapper } = setup({
+      path: '/tmp/choosier',
+      log_file: '',
+      path_warning: null,
+    })
+    vi.mocked(api.browse).mockResolvedValue({
+      path: '/tmp/choosier',
+      parent: '/tmp',
+      entries: [{ name: 'alpha.txt', is_dir: false }],
+    })
+    vi.mocked(api.stateFiltered).mockImplementation(async (request) => {
+      const skipped = [...(request.skipped_entries ?? [])]
+      const remaining = skipped.length > 0 ? [] : ['alpha.txt']
+      return filteredStateResponse({
+        remaining,
+        remaining_total: remaining.length,
+        skipped,
+        skipped_total: skipped.length,
+        skipped_present: skipped,
+      })
+    })
+    await flushPromises()
+    await workspace.pick()
+
+    expect(workspace.canUndo.value).toBe(true)
+    expect(workspace.canSnooze.value).toBe(true)
+
+    workspace.path.value = '/tmp/choosier/next'
+    await nextTick()
+
+    expect(workspace.canUndo.value).toBe(false)
+    expect(workspace.canSnooze.value).toBe(false)
+    expect(workspace.skip.names.value).toEqual([])
+
+    workspace.path.value = '/tmp/choosier'
+    await nextTick()
+
+    expect(workspace.canUndo.value).toBe(false)
+    expect(workspace.canSnooze.value).toBe(false)
+
+    await workspace.pick()
+    expect(workspace.canUndo.value).toBe(true)
+    expect(workspace.canSnooze.value).toBe(true)
+
+    await workspace.snooze()
+
+    expect(workspace.canUndo.value).toBe(false)
+    expect(workspace.canSnooze.value).toBe(false)
+    expect(workspace.skip.names.value).toEqual(['alpha.txt'])
+    expect(workspace.state.value?.skipped_present).toEqual(['alpha.txt'])
+
+    await workspace.restoreSkipped('alpha.txt')
+
+    expect(workspace.skip.names.value).toEqual([])
+    expect(workspace.state.value?.remaining).toEqual(['alpha.txt'])
+    expect(workspace.canUndo.value).toBe(false)
+    expect(workspace.canSnooze.value).toBe(false)
+    expect(workspace.status.value).toBe('Restored alpha.txt.')
+
+    await workspace.pick()
+    expect(workspace.canUndo.value).toBe(true)
+    expect(workspace.canSnooze.value).toBe(true)
+    await workspace.snooze()
+    expect(workspace.skip.names.value).toEqual(['alpha.txt'])
+
+    workspace.logFile.value = '/tmp/choosier/custom.jsonl'
+    await nextTick()
+
+    expect(workspace.canUndo.value).toBe(false)
+    expect(workspace.canSnooze.value).toBe(false)
+    expect(workspace.skip.names.value).toEqual([])
 
     wrapper.unmount()
   })

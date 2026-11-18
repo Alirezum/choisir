@@ -6,6 +6,13 @@ import type { ChoiceBinding } from './use-choice.ts'
 import type { FolderOptionsBinding } from './use-folder-options.ts'
 import type { StatusBinding } from './use-status.ts'
 
+export type UndoOutcome =
+  | { kind: 'unavailable' }
+  | { kind: 'failed'; error: unknown }
+  | { kind: 'undone'; item: string }
+  | { kind: 'changed'; item: string }
+  | { kind: 'nothing_to_undo'; item: string }
+
 export interface UndoDeps {
   options: Pick<FolderOptionsBinding, 'path' | 'logFile'>
   choice: Pick<ChoiceBinding, 'choice' | 'invalidate'>
@@ -20,6 +27,7 @@ export interface UndoBinding {
   undoLabel: ComputedRef<string>
   setReceipt: (receipt: UndoReceipt | null) => void
   clear: () => void
+  performUndo: () => Promise<UndoOutcome>
   undo: () => Promise<void>
 }
 
@@ -48,9 +56,13 @@ export function useUndo(deps: UndoDeps): UndoBinding {
     receipt.value = null
   }
 
-  async function undo(): Promise<void> {
+  /**
+   * Attempt the call without choosing Undo's presentation. The receipt is
+   * captured once so a newer pick installed mid-flight stays intact.
+   */
+  async function performUndo(): Promise<UndoOutcome> {
     const current = receipt.value
-    if (current === null || undoing.value) return
+    if (current === null || undoing.value) return { kind: 'unavailable' }
     undoing.value = true
     try {
       const result = await api.undoHistory({
@@ -59,22 +71,42 @@ export function useUndo(deps: UndoDeps): UndoBinding {
         receipt: current,
       })
       if (result.status === 'undone') {
-        status.setStatus(`Undid pick of ${result.item}.`)
-      } else if (result.status === 'changed') {
-        status.setStatus(`Could not undo ${result.item}: history changed.`)
-      } else {
-        status.setStatus(`Could not undo ${result.item}: history is empty.`)
+        consume(current)
+        return { kind: 'undone', item: result.item }
       }
-      receipt.value = null
-      if (choice.choice.value?.item === current.item) {
-        choice.invalidate()
+      if (result.status === 'changed') {
+        consume(current)
+        return { kind: 'changed', item: result.item }
       }
+      consume(current)
+      return { kind: 'nothing_to_undo', item: result.item }
     } catch (error) {
-      status.reportError(error)
+      return { kind: 'failed', error }
     } finally {
       undoing.value = false
-      await deps.refresh()
     }
+  }
+
+  function consume(current: UndoReceipt): void {
+    const stillCurrent = receipt.value === current
+    if (!stillCurrent) return
+    receipt.value = null
+    if (choice.choice.value?.item === current.item) choice.invalidate()
+  }
+
+  async function undo(): Promise<void> {
+    const outcome = await performUndo()
+    if (outcome.kind === 'unavailable') return
+    if (outcome.kind === 'undone') {
+      status.setStatus(`Undid pick of ${outcome.item}.`)
+    } else if (outcome.kind === 'changed') {
+      status.setStatus(`Could not undo ${outcome.item}: history changed.`)
+    } else if (outcome.kind === 'nothing_to_undo') {
+      status.setStatus(`Could not undo ${outcome.item}: history is empty.`)
+    } else {
+      status.reportError(outcome.error)
+    }
+    await deps.refresh()
   }
 
   return {
@@ -84,6 +116,7 @@ export function useUndo(deps: UndoDeps): UndoBinding {
     undoLabel,
     setReceipt,
     clear,
+    performUndo,
     undo,
   }
 }

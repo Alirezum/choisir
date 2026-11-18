@@ -1481,6 +1481,83 @@ class WebSkipApiTest(unittest.TestCase):
         self.assertEqual(later["skipped_total"], 2)
         self.assertEqual(later["skipped"], ["alpha.txt", "beta.txt"])
 
+    def test_two_session_snooze_shape(self) -> None:
+        second = TestClient(create_app())
+        first_pick = self.client.post(
+            "/api/pick",
+            json={"path": str(self.target), "seed": 1},
+        ).json()
+        second_pick = second.post(
+            "/api/pick",
+            json={"path": str(self.target), "seed": 1},
+        ).json()
+        self.assertEqual(first_pick["status"], "picked")
+        self.assertEqual(second_pick["status"], "picked")
+        self.assertNotEqual(first_pick["item"], second_pick["item"])
+        item = second_pick["item"]
+
+        refused = self.client.post(
+            "/api/history/undo",
+            json={
+                "path": str(self.target),
+                "receipt": first_pick["undo"],
+            },
+        ).json()
+        self.assertEqual(refused["status"], "changed")
+
+        undone = second.post(
+            "/api/history/undo",
+            json={
+                "path": str(self.target),
+                "receipt": second_pick["undo"],
+            },
+        ).json()
+        self.assertEqual(undone["status"], "undone")
+        self.assertEqual(undone["item"], item)
+
+        seed = next(
+            seed
+            for seed in range(100)
+            if self.client.post(
+                "/api/pick",
+                json={
+                    "path": str(self.target),
+                    "seed": seed,
+                    "dry_run": True,
+                },
+            ).json()["item"]
+            == item
+        )
+        repicked = self.client.post(
+            "/api/pick",
+            json={"path": str(self.target), "seed": seed},
+        ).json()
+        self.assertEqual(repicked["status"], "picked")
+        self.assertEqual(repicked["item"], item)
+
+        hidden = self._post_state(skipped_entries=[item])
+        self.assertNotIn(item, hidden["skipped"])
+        self.assertIn(item, hidden["skipped_present"])
+        self.assertNotIn(item, hidden["remaining"])
+        self.assertEqual(hidden["history_total"], 2)
+        self.assertEqual(hidden["skipped_total"], 0)
+
+        removed = self.client.post(
+            "/api/history/undo",
+            json={
+                "path": str(self.target),
+                "receipt": repicked["undo"],
+            },
+        ).json()
+        self.assertEqual(removed["status"], "undone")
+
+        shown = self._post_state(skipped_entries=[item])
+        self.assertEqual(shown["skipped"], [item])
+        self.assertEqual(shown["skipped_total"], 1)
+        self.assertIn(item, shown["skipped_present"])
+        self.assertNotIn(item, shown["remaining"])
+        self.assertEqual(shown["history_total"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

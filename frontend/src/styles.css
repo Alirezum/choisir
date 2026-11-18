@@ -398,7 +398,8 @@ kbd {
   background: rgba(217, 162, 58, 0.1);
 }
 
-.board-undo {
+.board-undo,
+.board-snooze {
   padding: 4px 10px;
   border-color: #3a464e;
   background: transparent;
@@ -406,7 +407,8 @@ kbd {
   font-size: 12px;
 }
 
-.board-undo:hover:not(:disabled) {
+.board-undo:hover:not(:disabled),
+.board-snooze:hover:not(:disabled) {
   border-color: #5a6a73;
   background: rgba(184, 196, 201, 0.08);
 }

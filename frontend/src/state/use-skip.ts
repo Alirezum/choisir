@@ -28,6 +28,7 @@ export interface SkipBinding {
   skippedRows: ComputedRef<readonly SkippedRow[]>
   skipping: Ref<boolean>
   skip: (name: string) => Promise<void>
+  add: (name: string) => void
   restore: (name: string) => Promise<void>
   restoreAll: () => Promise<void>
   remove: (name: string) => void
@@ -67,6 +68,21 @@ export function useSkip(deps: SkipDeps): SkipBinding {
     if (active.length === records.value.length) return false
     records.value = active
     return true
+  }
+
+  /**
+   * Insert a session record after a successful Snooze. Unlike `skip`, the item
+   * is no longer remaining, so there is no eligibility check or presentation;
+   * the caller owns the status message and the single refresh.
+   */
+  function add(name: string): void {
+    const current = now()
+    clock.value = current
+    pruneExpired(current)
+    records.value = [
+      ...records.value.filter((record) => record.name !== name),
+      { name, expiresAt: current + SKIP_COOLDOWN_MS },
+    ]
   }
 
   async function skip(name: string): Promise<void> {
@@ -177,6 +193,7 @@ export function useSkip(deps: SkipDeps): SkipBinding {
     skippedRows,
     skipping,
     skip,
+    add,
     restore,
     restoreAll,
     remove,

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- TUI and web UI: a *Snooze* action beside *Undo* removes exactly the latest
+  history line written by the current session's last successful logged pick and
+  adds that same item to the existing session skipped list, so it returns after
+  the fixed ten-minute cooldown or at session end. It picks no replacement,
+  clears the board only when it still shows the item, leaves Undo visible but
+  disabled until the next successful logged pick, and refuses completely with
+  no history or skip change when the pick is ineligible, the item is gone, the
+  history log changed or is empty, the folder or log-file scope changed, or
+  another action is running. Restoring or expiring the skip never restores the
+  history line. Both interfaces expose the action by keyboard with an
+  item-specific accessible name or tooltip. No route, API field, CLI option,
+  dependency, or persistent state was added.
 - TUI and web UI: remaining items can be deferred with *Not now*. A skip never
   picks or logs: the item returns after a fixed ten-minute cooldown or at
   session end, and skips are independent per session and per browser tab. A

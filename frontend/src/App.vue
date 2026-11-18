@@ -51,6 +51,10 @@ const {
   undoLabel,
   undo,
 
+  canSnooze,
+  snoozeLabel,
+  snooze,
+
   browserListing,
   browserError,
   tabCounts,
@@ -119,9 +123,12 @@ void pathInput
         :serial="pickSerial"
         :can-undo="canUndo"
         :undo-label="undoLabel"
+        :can-snooze="canSnooze"
+        :snooze-label="snoozeLabel"
         @pick="pick"
         @open="openCurrent"
         @undo="undo"
+        @snooze="snooze"
       />
 
       <div class="workspace">

@@ -210,4 +210,125 @@ describe('useUndo', () => {
     expect(result.undoing.value).toBe(false)
     expect(result.receipt.value).toBeNull()
   })
+
+  it('performUndo returns unavailable without a receipt or while pending', async () => {
+    const { result } = setup()
+    const undoHistory = vi.spyOn(api, 'undoHistory')
+
+    await expect(result.performUndo()).resolves.toEqual({ kind: 'unavailable' })
+    expect(undoHistory).not.toHaveBeenCalled()
+
+    result.setReceipt(receipt)
+    const pending = deferred<UndoHistoryResponse>()
+    undoHistory.mockReturnValue(pending.promise)
+
+    const first = result.performUndo()
+    await flushPromises()
+    await expect(result.performUndo()).resolves.toEqual({ kind: 'unavailable' })
+    expect(undoHistory).toHaveBeenCalledTimes(1)
+
+    pending.resolve(undoResponse())
+    await expect(first).resolves.toEqual({ kind: 'undone', item: 'alpha.txt' })
+  })
+
+  it.each(['undone', 'changed', 'nothing_to_undo'] as const)(
+    'performUndo returns %s and clears the receipt',
+    async (status) => {
+      const { result } = setup()
+      result.setReceipt(receipt)
+      vi.spyOn(api, 'undoHistory').mockResolvedValue(
+        undoResponse({ status, removed: status === 'undone' }),
+      )
+
+      await expect(result.performUndo()).resolves.toEqual({
+        kind: status,
+        item: 'alpha.txt',
+      })
+      expect(result.receipt.value).toBeNull()
+    },
+  )
+
+  it('performUndo invalidates the matching choice silently', async () => {
+    const { choice, result, setStatus, reportError, refresh } = setup()
+    choice.setPicked({
+      item: 'alpha.txt',
+      path: '/tmp/choosier/alpha.txt',
+      preview: null,
+    })
+    result.setReceipt(receipt)
+    vi.spyOn(api, 'undoHistory').mockResolvedValue(undoResponse())
+
+    await expect(result.performUndo()).resolves.toEqual({
+      kind: 'undone',
+      item: 'alpha.txt',
+    })
+
+    expect(choice.choice.value).toBeNull()
+    expect(setStatus).not.toHaveBeenCalled()
+    expect(reportError).not.toHaveBeenCalled()
+    expect(refresh).not.toHaveBeenCalled()
+  })
+
+  it('performUndo leaves a different choice and a newer receipt intact', async () => {
+    const { choice, result } = setup()
+    choice.setPicked({
+      item: 'beta.txt',
+      path: '/tmp/choosier/beta.txt',
+      preview: null,
+    })
+    result.setReceipt(receipt)
+    vi.spyOn(api, 'undoHistory').mockResolvedValue(undoResponse())
+
+    await result.performUndo()
+
+    expect(choice.choice.value?.item).toBe('beta.txt')
+  })
+
+  it('performUndo reports a failed outcome without presentation or refresh', async () => {
+    const { result, setStatus, reportError, refresh } = setup()
+    const failure = new Error('undo failed')
+    result.setReceipt(receipt)
+    vi.spyOn(api, 'undoHistory').mockRejectedValue(failure)
+
+    await expect(result.performUndo()).resolves.toEqual({
+      kind: 'failed',
+      error: failure,
+    })
+
+    expect(result.receipt.value).toEqual(receipt)
+    expect(setStatus).not.toHaveBeenCalled()
+    expect(reportError).not.toHaveBeenCalled()
+    expect(refresh).not.toHaveBeenCalled()
+  })
+
+  it('keeps a receipt and choice installed while performUndo is pending', async () => {
+    const { choice, result } = setup()
+    const newer: UndoReceipt = {
+      item: 'beta.txt',
+      entry: '{"ts": "later", "item": "beta.txt"}',
+      digest: 'b'.repeat(64),
+    }
+    const pending = deferred<UndoHistoryResponse>()
+    choice.setPicked({
+      item: 'alpha.txt',
+      path: '/tmp/choosier/alpha.txt',
+      preview: null,
+    })
+    result.setReceipt(receipt)
+    vi.spyOn(api, 'undoHistory').mockReturnValue(pending.promise)
+
+    const first = result.performUndo()
+    await flushPromises()
+    result.setReceipt(newer)
+    choice.setPicked({
+      item: 'beta.txt',
+      path: '/tmp/choosier/beta.txt',
+      preview: null,
+    })
+    pending.resolve(undoResponse())
+
+    await expect(first).resolves.toEqual({ kind: 'undone', item: 'alpha.txt' })
+    expect(result.receipt.value).toEqual(newer)
+    expect(choice.choice.value?.item).toBe('beta.txt')
+  })
 })

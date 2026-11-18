@@ -8,9 +8,11 @@ const props = defineProps<{
   serial: number
   canUndo: boolean
   undoLabel: string
+  canSnooze: boolean
+  snoozeLabel: string
 }>()
 
-const emit = defineEmits<{ pick: []; open: []; undo: [] }>()
+const emit = defineEmits<{ pick: []; open: []; undo: []; snooze: [] }>()
 
 function characters(): string[] {
   if (props.item === null) return []
@@ -79,6 +81,15 @@ function emptyMeta(): string {
           @click="canUndo && emit('undo')"
         >
           Undo
+        </button>
+        <button
+          class="board-snooze"
+          type="button"
+          :disabled="!canSnooze"
+          :aria-label="snoozeLabel"
+          @click="canSnooze && emit('snooze')"
+        >
+          Snooze
         </button>
       </div>
     </div>

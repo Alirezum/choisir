@@ -13,6 +13,7 @@ import { usePathMemory } from './use-path-memory.ts'
 import { usePicker } from './use-picker.ts'
 import { useShortcuts } from './use-shortcuts.ts'
 import { useSkip, type SkipBinding } from './use-skip.ts'
+import { useSnooze } from './use-snooze.ts'
 import { useStatus } from './use-status.ts'
 import { useTabs } from './use-tabs.ts'
 import { useUndo } from './use-undo.ts'
@@ -98,6 +99,14 @@ export function useWorkspace(): WorkspaceBinding {
     options,
     choice,
     status,
+    refresh: workspaceState.refresh,
+  })
+  const snooze = useSnooze({
+    options,
+    choice,
+    status,
+    undo,
+    skips: skip,
     refresh: workspaceState.refresh,
   })
   const picker = usePicker({
@@ -209,6 +218,11 @@ export function useWorkspace(): WorkspaceBinding {
     canUndo: undo.canUndo,
     undoLabel: undo.undoLabel,
     undo: undo.undo,
+
+    canSnooze: snooze.canSnooze,
+    snoozing: snooze.snoozing,
+    snoozeLabel: snooze.snoozeLabel,
+    snooze: snooze.snooze,
 
     browserListing: browser.listing,
     browserError: browser.error,

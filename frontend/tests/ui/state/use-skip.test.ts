@@ -271,4 +271,76 @@ describe('useSkip', () => {
     setItem.mockRestore()
     harness.unmount()
   })
+
+  it('adds a record without announcing, refreshing, or toggling skipping', () => {
+    const harness = setup()
+
+    harness.result.add('alpha.txt')
+
+    expect(harness.result.records.value).toEqual([
+      { name: 'alpha.txt', expiresAt: 600_000 },
+    ])
+    expect(harness.result.skipping.value).toBe(false)
+    expect(harness.setStatus).not.toHaveBeenCalled()
+    expect(harness.refresh).not.toHaveBeenCalled()
+    harness.unmount()
+  })
+
+  it('replaces an existing record and restarts its expiry through add', () => {
+    const harness = setup()
+    harness.result.add('alpha.txt')
+    harness.setNow(1000)
+
+    harness.result.add('alpha.txt')
+
+    expect(harness.result.records.value).toEqual([
+      { name: 'alpha.txt', expiresAt: 601_000 },
+    ])
+    harness.unmount()
+  })
+
+  it('prunes expired records before adding', () => {
+    const harness = setup()
+    harness.result.add('expired.txt')
+    harness.setNow(600_000)
+
+    harness.result.add('alpha.txt')
+
+    expect(harness.result.records.value).toEqual([
+      { name: 'alpha.txt', expiresAt: 1_200_000 },
+    ])
+    harness.unmount()
+  })
+
+  it('adds folders, videos, images, spaced, and Unicode names even when not remaining', () => {
+    const harness = setup()
+    const names = [
+      'delta',
+      'clip.mp4',
+      'preview.png',
+      'notes with space.txt',
+      'café ☕',
+    ]
+
+    for (const name of names) harness.result.add(name)
+
+    expect(harness.result.names.value).toEqual(names)
+    expect(harness.setStatus).not.toHaveBeenCalled()
+    expect(harness.refresh).not.toHaveBeenCalled()
+    expect(harness.result.skipping.value).toBe(false)
+    harness.unmount()
+  })
+
+  it('adds without touching browser storage or cookies', () => {
+    const setItem = vi.spyOn(Storage.prototype, 'setItem')
+    const cookieBefore = document.cookie
+    const harness = setup()
+
+    harness.result.add('alpha.txt')
+
+    expect(setItem).not.toHaveBeenCalled()
+    expect(document.cookie).toBe(cookieBefore)
+    setItem.mockRestore()
+    harness.unmount()
+  })
 })

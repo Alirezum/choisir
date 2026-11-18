@@ -194,6 +194,11 @@ export interface WorkspaceBinding {
   undoLabel: ComputedRef<string>
   undo: () => Promise<void>
 
+  canSnooze: ComputedRef<boolean>
+  snoozing: Ref<boolean>
+  snoozeLabel: ComputedRef<string>
+  snooze: () => Promise<void>
+
   browserListing: Ref<BrowseResponse | null>
   browserError: Ref<string>
 

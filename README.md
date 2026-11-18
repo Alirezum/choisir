@@ -185,10 +185,27 @@ when the active folder or history-log setting changes, a web page load or
 reload starts fresh, and browser tabs never share skips. It lives only in
 interface memory — never in history, browser storage, or cookies.
 
-Skipping and restoring never change user files or folders, the target contents,
-history, the active path, the log-file setting, filters, seed, dry-run mode, the
-current choice, or remembered folders. The one-shot CLI keeps its flags, prompt,
-output, and exit codes: it has no skip or snooze option.
+*Snooze* sits beside *Undo* on the board. It removes exactly the latest history
+line written by the current session's last successful logged pick — the same
+one-line removal Undo performs — and adds that same item to the skipped list,
+where it follows the normal ten-minute cooldown and restore behavior. Snooze
+picks no replacement. The board and preview clear only when they still show the
+snoozed item, and Undo stays visible but disabled until the next successful
+logged pick.
+
+Snooze refuses completely, changing neither history nor the skipped list, when
+there is no eligible pick, the item is no longer in the folder, the history log
+changed externally or is empty, the active folder or log-file setting changed,
+or another action is still running. Both interactive interfaces behave the
+same. Restoring a snoozed item, restoring all, or letting the cooldown expire
+only makes the item eligible again; it never restores the removed history line.
+Snooze adds no route, API field, persistent state, or CLI option.
+
+Skipping, snoozing, and restoring never change user files or folders, the
+target contents, history beyond Snooze's documented removal, the active path,
+the log-file setting, filters, seed, dry-run mode, the current choice, or
+remembered folders. The one-shot CLI keeps its flags, prompt, output, and exit
+codes: it has no skip or snooze option.
 
 `POST /api/state` and `POST /api/pick` accept optional `skipped_entries`. State
 responses add `skipped`, `skipped_total`, `skipped_present`, and `all_skipped`;

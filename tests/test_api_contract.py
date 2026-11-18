@@ -225,6 +225,63 @@ class ApiContractTest(unittest.TestCase):
             ["undone", "nothing_to_undo", "changed"],
         )
 
+    def test_snooze_adds_no_route_or_schema_change(self) -> None:
+        self.assertEqual(len(self.contract["routes"]), 17)
+        for route in self.contract["routes"]:
+            self.assertNotIn("snooze", route["path"].lower())
+        for path, methods in self.openapi["paths"].items():
+            self.assertNotIn("snooze", path.lower())
+            for operation in methods.values():
+                self.assertNotIn("snooze", operation["operationId"].lower())
+
+        components = self.openapi["components"]["schemas"]
+        self.assertEqual(
+            set(components["UndoHistoryRequest"]["properties"]),
+            {"path", "log_file", "receipt"},
+        )
+        self.assertEqual(
+            components["UndoHistoryRequest"]["required"],
+            ["path", "receipt"],
+        )
+        self.assertEqual(
+            set(components["PickRequest"]["properties"]),
+            {
+                "excluded_types",
+                "excluded_entries",
+                "skipped_entries",
+                "path",
+                "log_file",
+                "seed",
+                "dry_run",
+                "include_hidden",
+                "files_only",
+                "dirs_only",
+            },
+        )
+
+        undo = contract_route(self.contract, "POST", "/api/history/undo")
+        fields = undo["success"]["schema"]["fields"]
+        self.assertEqual(set(fields), {"log_file", "status", "item", "removed"})
+        self.assertEqual(
+            fields["status"]["enum"],
+            ["undone", "nothing_to_undo", "changed"],
+        )
+
+        pick = contract_route(self.contract, "POST", "/api/pick")
+        self.assertEqual(
+            set(pick["success"]["schema"]["fields"]),
+            {
+                "status",
+                "log_file",
+                "item",
+                "logged",
+                "preview",
+                "path_memory_notice",
+                "undo",
+            },
+        )
+        self.assertNotIn("snooze", repr(self.contract).lower())
+
     def test_undo_validation_errors(self) -> None:
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
